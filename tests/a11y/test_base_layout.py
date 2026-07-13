@@ -110,6 +110,25 @@ def test_bolus_timing_is_inputtable_not_only_presets(page: Page) -> None:
     assert field.get_attribute("inputmode") == "numeric", "timing field needs inputmode=numeric"
 
 
+def test_bolus_timing_supports_signed_before_and_after(page: Page) -> None:
+    """bolus_offset_min is SIGNED — negative = pre-bolus, positive = after eating.
+    The custom entry must let her express both directions, and (REQ-003) must not
+    silently default one: no direction is pre-selected."""
+    dirs = page.eval_on_selector_all(
+        "fieldset.timing [data-dir], [aria-label='Bolus timing'] [data-dir]",
+        "els => els.map(e => e.getAttribute('data-dir'))",
+    )
+    assert "before" in dirs, "expected a 'before eating' (pre-bolus, negative) choice"
+    assert "after" in dirs, "expected an 'after eating' (positive) choice"
+    pressed = page.eval_on_selector_all(
+        "fieldset.timing [data-dir], [aria-label='Bolus timing'] [data-dir]",
+        "els => els.map(e => e.getAttribute('aria-pressed'))",
+    )
+    assert all(p != "true" for p in pressed), (
+        "timing direction must not be pre-selected/defaulted (REQ-003)"
+    )
+
+
 def test_no_horizontal_overflow_at_200pct_zoom(page: Page) -> None:
     """Usable at 200% zoom — content reflows, no horizontal page scroll (05b §2)."""
     page.set_viewport_size({"width": 390, "height": 844})

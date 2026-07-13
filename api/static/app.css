@@ -80,6 +80,12 @@ input[data-field-kind] {
   gap: 0.6rem;
 }
 .timing-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0;
+}
+.timing-custom .field {
   margin-bottom: 0;
 }
 .chip {

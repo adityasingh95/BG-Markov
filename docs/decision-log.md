@@ -122,8 +122,14 @@ cannot express every offset. On operator request the S-102 shell now shows the
 presets **plus** a numeric offset field (`name="bolus_offset_min"`,
 `inputmode="numeric"`, "minutes before eating"). A11y test
 `test_bolus_timing_is_inputtable_not_only_presets` guards it (RED-first).
-**Scope:** this is the *inputtable primitive* only. The authoritative
-bolus-timing capture — full signed handling incl. the after-meal (positive)
-direction, and the **cannot-be-skipped / never-silently-defaulted** rule
-(REQ-003) — remains **S-302** (EPIC 3). The shell field currently frames offset
-as "minutes before eating"; S-302 formalises the sign/direction UX.
+**Update (same session):** the sign/direction UX was pulled forward into the
+shell on operator request. The custom entry is now a **magnitude field
+(`minutes`) + an explicit `before eating` / `after eating` direction** (buttons
+carry `data-dir`), so both signs are expressible (negative = pre-bolus, positive
+= after eating) and **neither direction is pre-selected** (REQ-003
+never-silently-defaulted). Guarded by
+`test_bolus_timing_supports_signed_before_and_after`.
+**Still S-302's scope:** the authoritative capture — server-side validation,
+sign computation from magnitude+direction, and hard enforcement of the
+**cannot-be-skipped** rule on submit — remains **S-302** (EPIC 3). The shell
+provides the accessible primitive; it does not yet enforce the rule on submit.

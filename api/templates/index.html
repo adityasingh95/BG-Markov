@@ -50,25 +50,37 @@
         <button type="button" class="chip">Just before</button>
         <button type="button" class="chip">With food</button>
       </div>
-      {# Presets are quick-picks; bolus_offset_min is a signed continuous value
-         (REQ-003), so it must also be inputtable for any offset the presets
-         don't cover. S-302 owns the full signed / cannot-be-skipped capture. #}
-      <label class="field timing-custom" for="f-bolus_offset_min">
-        <span class="field-label">Or enter minutes before eating</span>
-        <span class="field-input">
-          <input
-            class="num-input"
-            id="f-bolus_offset_min"
-            name="bolus_offset_min"
-            type="text"
-            inputmode="numeric"
-            data-field-kind="timing"
-            autocomplete="off"
-            value=""
-          />
-          <span class="field-suffix" aria-hidden="true">min before</span>
-        </span>
-      </label>
+      {# Presets are quick-picks; bolus_offset_min is a SIGNED continuous value
+         (REQ-003: negative = pre-bolus, positive = after eating). The custom
+         entry captures a magnitude plus an explicit before/after direction, so
+         both signs are expressible and neither is silently defaulted. S-302
+         owns the authoritative capture (validation, cannot-be-skipped). #}
+      <div class="timing-custom">
+        <label class="field" for="f-bolus_offset_min">
+          <span class="field-label">Or enter exact timing</span>
+          <span class="field-input">
+            <input
+              class="num-input"
+              id="f-bolus_offset_min"
+              name="bolus_offset_min"
+              type="text"
+              inputmode="numeric"
+              data-field-kind="timing"
+              autocomplete="off"
+              value=""
+            />
+            <span class="field-suffix" aria-hidden="true">minutes</span>
+          </span>
+        </label>
+        <div class="chips" role="group" aria-label="Before or after eating">
+          <button type="button" class="chip" data-dir="before" aria-pressed="false">
+            before eating
+          </button>
+          <button type="button" class="chip" data-dir="after" aria-pressed="false">
+            after eating
+          </button>
+        </div>
+      </div>
     </fieldset>
   </section>
 
