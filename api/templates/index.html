@@ -44,10 +44,31 @@
 
     <fieldset class="timing" role="group" aria-label="Bolus timing">
       <legend>Bolus timing</legend>
-      <button type="button" class="chip">15 min before</button>
-      <button type="button" class="chip">10 min before</button>
-      <button type="button" class="chip">Just before</button>
-      <button type="button" class="chip">With food</button>
+      <div class="chips">
+        <button type="button" class="chip">15 min before</button>
+        <button type="button" class="chip">10 min before</button>
+        <button type="button" class="chip">Just before</button>
+        <button type="button" class="chip">With food</button>
+      </div>
+      {# Presets are quick-picks; bolus_offset_min is a signed continuous value
+         (REQ-003), so it must also be inputtable for any offset the presets
+         don't cover. S-302 owns the full signed / cannot-be-skipped capture. #}
+      <label class="field timing-custom" for="f-bolus_offset_min">
+        <span class="field-label">Or enter minutes before eating</span>
+        <span class="field-input">
+          <input
+            class="num-input"
+            id="f-bolus_offset_min"
+            name="bolus_offset_min"
+            type="text"
+            inputmode="numeric"
+            data-field-kind="timing"
+            autocomplete="off"
+            value=""
+          />
+          <span class="field-suffix" aria-hidden="true">min before</span>
+        </span>
+      </label>
     </fieldset>
   </section>
 

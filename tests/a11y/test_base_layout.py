@@ -94,6 +94,22 @@ def test_no_select_for_dish_selection(page: Page) -> None:
     )
 
 
+def test_bolus_timing_is_inputtable_not_only_presets(page: Page) -> None:
+    """bolus_offset_min is a signed continuous value (REQ-003): the timing group
+    must offer a numeric entry field, not only preset quick-pick chips. The
+    presets are for speed; the field is for any offset the presets don't cover.
+    (Full signed / cannot-be-skipped capture is S-302; here it must at least be
+    inputtable and accessible.)"""
+    timing = page.query_selector("fieldset.timing, [aria-label='Bolus timing']")
+    assert timing is not None, "expected a bolus-timing group"
+    # Preset quick-picks still present.
+    assert timing.query_selector("button") is not None, "expected preset timing chips"
+    # ...and a numeric offset field alongside them.
+    field = page.query_selector("input[name='bolus_offset_min']")
+    assert field is not None, "bolus timing must be inputtable (a numeric offset field)"
+    assert field.get_attribute("inputmode") == "numeric", "timing field needs inputmode=numeric"
+
+
 def test_no_horizontal_overflow_at_200pct_zoom(page: Page) -> None:
     """Usable at 200% zoom — content reflows, no horizontal page scroll (05b §2)."""
     page.set_viewport_size({"width": 390, "height": 844})

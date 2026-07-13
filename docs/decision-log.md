@@ -112,3 +112,18 @@ prescriptive module (S-901) all read these, and validating them at load (not at
 first use) keeps the "reject malformed clinical input at load" contract whole.
 `patient_profile` versioning (REQ-054) remains the DB table's job (S-201); this
 is the process config, not the versioned record.
+
+## DL-009 — Bolus timing is inputtable, not preset-only (operator request)
+**Story:** S-102 shell (refinement) · **Type:** UX clarification · **Approved by:** operator (this session)
+`05b §3` sketches bolus timing as four quick-pick chips
+(`15 before / 10 before / just before / with food`). `bolus_offset_min` is,
+however, a **signed continuous** value (REQ-003 / glossary), and the presets
+cannot express every offset. On operator request the S-102 shell now shows the
+presets **plus** a numeric offset field (`name="bolus_offset_min"`,
+`inputmode="numeric"`, "minutes before eating"). A11y test
+`test_bolus_timing_is_inputtable_not_only_presets` guards it (RED-first).
+**Scope:** this is the *inputtable primitive* only. The authoritative
+bolus-timing capture — full signed handling incl. the after-meal (positive)
+direction, and the **cannot-be-skipped / never-silently-defaulted** rule
+(REQ-003) — remains **S-302** (EPIC 3). The shell field currently frames offset
+as "minutes before eating"; S-302 formalises the sign/direction UX.

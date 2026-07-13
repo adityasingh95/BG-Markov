@@ -60,14 +60,27 @@ input[data-field-kind] {
   white-space: nowrap;
 }
 
-/* --- Chips (recents, timing) -------------------------------------------- */
+/* --- Chips (recents, timing quick-picks) -------------------------------- */
 .recents,
-.timing {
+.chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+.recents {
   border: 0;
   padding: 0;
+}
+/* Timing stacks its quick-picks above the free numeric offset field. */
+.timing {
+  border: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.timing-custom {
+  margin-bottom: 0;
 }
 .chip {
   width: auto;
