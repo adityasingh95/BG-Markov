@@ -21,6 +21,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      # S-102 accessibility tests drive a real Chromium via Playwright.
+      - name: Install Chromium (Playwright)
+        run: python -m playwright install --with-deps chromium
+
       # AC: ruff clean. Also proves the lint gate is wired into CI.
       - name: Lint (ruff)
         run: ruff check .

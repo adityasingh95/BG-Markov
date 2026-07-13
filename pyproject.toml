@@ -32,6 +32,11 @@ dev = [
     "hypothesis==6.122.3",
     "ruff==0.15.8",
     "mypy==1.19.1",
+    # Browser-driven accessibility tests (S-102). axe-core + real Chromium so
+    # computed styles / zoom are genuine, not asserted from source text.
+    "playwright==1.53.0",
+    "axe-playwright-python==0.1.4",
+    "httpx==0.28.1",
 ]
 
 [tool.setuptools.packages.find]
@@ -64,6 +69,9 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "a11y: browser-driven accessibility tests (Playwright + axe-core). Require a Chromium build; CI installs it via `playwright install --with-deps chromium`.",
+]
 # NOTE: coverage flags are intentionally NOT in addopts. pytest-cov is not
 # installable in the current egress-restricted session, and baking --cov here
 # would break local test runs. The 90%-on-core gate is enforced in CI, which
