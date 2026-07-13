@@ -10,6 +10,8 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | _(none — infra)_ | S-101 | `tests/unit/test_toolchain.py`, `tests/unit/test_version.py` | ✅ Done |
 | **`05b §2`** (Accessibility NFR; no `REQ-nnn`) | S-102 | `tests/a11y/test_base_layout.py` (axe, inputmode, 18px, 48px, no-dish-`select`, 200 %-zoom reflow, colour-not-sole-signal) | ✅ Done |
 | _(config infra; feeds REQ-041/042/054)_ | S-103 | `tests/unit/test_config.py`, `tests/safety/test_config_frozen.py` | ✅ Done |
+| _(safety module; INV-1..9)_ | S-104 | `tests/safety/test_safety_invariants.py`, `tests/safety/test_safety_module_hygiene.py` | ✅ Done |
+| _(forbidden-pattern guards; `09 §6`)_ | S-105 | `tests/forbidden/test_forbidden_patterns.py` | ✅ Done |
 
 > No `REQ-nnn` is claimed by S-101; it is an infrastructure story.
 > **S-102** also maps to no numbered REQ — the backlog cites its requirement
@@ -64,3 +66,15 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
   order. Each owning story must call its invariant and add the wiring test; do
   not let a feature ship guarding itself with an inline re-check instead of the
   `core/safety.py` function (the S-104 hygiene test forbids re-implementation).
+- **Forbidden-pattern guards for not-yet-written code (S-105):** the manual-IOB
+  and `pre_bg`-to-binner guards protect code that arrives in EPIC 4/5. When the
+  shared state-binner is named (S-404/S-501), **add its name to `BINNER_NAMES`**
+  in `tests/forbidden/test_forbidden_patterns.py`, or the pattern-8 guard scans
+  for a function that does not exist and passes vacuously.
+
+## Epic status
+- **EPIC 1 (Foundation) — COMPLETE.** S-101 (skeleton), S-102 (accessible base
+  layout), S-103 (frozen config loader), S-104 (safety invariants INV-1..9),
+  S-105 (forbidden-pattern suite) all Done, all green, RED-first throughout.
+  Next per BUILD ORDER: **EPIC 2 (Data Layer)** — S-201 schema+migrations, S-202
+  reported timestamps (ADR-8), S-203 validity engine + INV-7, S-204 dish table.
