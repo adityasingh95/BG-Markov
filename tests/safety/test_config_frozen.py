@@ -12,10 +12,11 @@ They test that the config cannot be used to *defeat* it.
 from __future__ import annotations
 
 import pytest
-from core.config import ClinicalConfig
 from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import ValidationError
+
+from core.config import ClinicalConfig
 
 
 @given(

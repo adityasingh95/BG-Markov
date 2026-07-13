@@ -44,6 +44,7 @@ def _chromium_executable() -> str | None:
 def live_server() -> Iterator[str]:
     """Run the FastAPI app on a background uvicorn thread; yield its base URL."""
     import uvicorn
+
     from api.app import app  # imported lazily: absent app ⇒ clear RED, not a collect error
 
     port = _free_port()

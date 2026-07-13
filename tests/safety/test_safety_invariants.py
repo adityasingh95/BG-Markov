@@ -10,9 +10,9 @@ from __future__ import annotations
 import inspect
 
 import pytest
-from core.safety import GateNotPassed, SafetyViolation
 
 from core import safety
+from core.safety import GateNotPassed, SafetyViolation
 
 # --- Exception hierarchy ---------------------------------------------------
 

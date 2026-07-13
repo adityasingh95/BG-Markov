@@ -12,6 +12,9 @@ from datetime import date, datetime
 from pathlib import Path
 
 import pytest
+from sqlalchemy import inspect
+from sqlalchemy.orm import Session
+
 from data.db import create_all, make_engine, session_factory
 from data.tables import (
     Base,
@@ -23,8 +26,6 @@ from data.tables import (
     PatientProfile,
     ProfileImmutableError,
 )
-from sqlalchemy import inspect
-from sqlalchemy.orm import Session
 
 _EXPECTED_TABLES = {
     "patient_profile",
@@ -168,8 +169,9 @@ def test_bolus_log_roundtrips(session: Session) -> None:
 
 def test_alembic_migration_creates_full_schema(tmp_path: Path) -> None:
     """The Alembic initial migration builds the whole schema on an empty DB."""
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
 
     repo_root = Path(__file__).resolve().parents[2]
     db_url = f"sqlite:///{tmp_path / 'migrated.db'}"
