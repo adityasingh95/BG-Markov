@@ -1,0 +1,104 @@
+/*
+ * app.css — accessibility design tokens for the shared UI shell (S-102).
+ * Loaded AFTER pico.min.css so these tokens win. Everything here exists to
+ * satisfy 05b §2: she may be logging while cognitively impaired by a low.
+ */
+
+/* Base font >= 18px. Higher specificity than Pico's own :root font-size
+   media-query rules, and later in source order, so this wins deterministically. */
+:root {
+  font-size: 18px;
+  --target-min: 48px;
+}
+
+/* --- Skip link ---------------------------------------------------------- */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  padding: 0.5rem 1rem;
+  background: var(--pico-primary-background);
+  color: var(--pico-primary-inverse);
+}
+.skip-link:focus {
+  left: 0;
+  z-index: 10;
+}
+
+/* --- Touch targets >= 48 x 48 px ---------------------------------------- */
+button,
+[role="button"],
+.chip,
+.num-input,
+input[data-field-kind] {
+  min-height: var(--target-min);
+  min-width: var(--target-min);
+}
+
+/* --- Numeric / clinical fields ------------------------------------------ */
+.field {
+  display: block;
+  margin-bottom: 1rem;
+}
+.field-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.field-input {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.num-input {
+  width: 100%;
+  max-width: 12rem;
+  margin-bottom: 0;
+}
+.field-suffix {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* --- Chips (recents, timing) -------------------------------------------- */
+.recents,
+.timing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border: 0;
+  padding: 0;
+}
+.chip {
+  width: auto;
+  padding: 0.5rem 1rem;
+}
+.primary {
+  width: 100%;
+}
+
+/* --- Risk cue: colour is never the sole signal (05b §2) ------------------ */
+/* Meaning lives in the icon + text; the tint/border only reinforce it, so the
+   cue is fully legible without colour vision. */
+.risk {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-left: 6px solid var(--pico-del-color, #b32d2e);
+  background: #fff8e1;
+  color: #1a1a1a;
+  border-radius: 4px;
+}
+.risk-icon {
+  font-size: 1.4rem;
+  line-height: 1.2;
+}
+
+/* --- Keep the layout single-column and overflow-free at 200% zoom -------- */
+img,
+input,
+textarea,
+select {
+  max-width: 100%;
+}

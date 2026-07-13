@@ -1,0 +1,30 @@
+{#
+  Accessible input primitives (S-102, 05b §2).
+
+  numeric_field(): the ONLY sanctioned way to render a BG / dose / clinical
+  numeric field. It guarantees, in one place:
+    - a <label> associated with the input (screen-reader + tap target),
+    - inputmode="numeric" so the phone shows a numeric keypad even at BG 55,
+    - data-field-kind so tests can find every clinical numeric field, and
+    - the 48px touch-target sizing (via .num-input in app.css).
+  Later logging stories reuse this macro rather than hand-authoring fields, so
+  the inputmode / label / sizing guarantees cannot be forgotten field-by-field.
+#}
+{% macro numeric_field(name, label, kind, suffix="", value="") %}
+<label class="field" for="f-{{ name }}">
+  <span class="field-label">{{ label }}</span>
+  <span class="field-input">
+    <input
+      class="num-input"
+      id="f-{{ name }}"
+      name="{{ name }}"
+      type="text"
+      inputmode="numeric"
+      data-field-kind="{{ kind }}"
+      autocomplete="off"
+      value="{{ value }}"
+    />
+    {% if suffix %}<span class="field-suffix" aria-hidden="true">{{ suffix }}</span>{% endif %}
+  </span>
+</label>
+{% endmacro %}

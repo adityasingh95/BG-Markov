@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Log a meal · BG-Markov{% endblock %}
+{% block content %}
+<h1>Log a meal</h1>
+
+{# Risk cue demo: meaning is carried by icon + text; colour only reinforces it
+   (05b §2 — colour is never the sole signal). Rendered here so the a11y suite
+   can prove the pattern; real risk readouts arrive post-Gate-1 (INV-2). #}
+<p class="risk risk--sample" role="status" data-risk-cue>
+  <span class="risk-icon" aria-hidden="true">⚠️</span>
+  <span class="risk-text"><strong>Example — Low risk:</strong> about a 1 in 7
+  chance of going low. This is an estimate, not advice.</span>
+</p>
+
+<form action="#" method="post" novalidate>
+  {# Dish selection: search + recents, never a <select> dropdown (05b §2). #}
+  <section aria-labelledby="dish-h">
+    <h2 id="dish-h">What did you eat?</h2>
+    <label class="field" for="dish-query">
+      <span class="field-label">Search dishes</span>
+      <input
+        class="dish-search"
+        id="dish-query"
+        name="dish_query"
+        type="search"
+        inputmode="search"
+        autocomplete="off"
+        placeholder="e.g. dal, roti, rajma"
+        data-dish-search
+      />
+    </label>
+    <div class="recents" role="group" aria-label="Recent meals">
+      <button type="button" class="chip">⭐ Same as usual</button>
+      <button type="button" class="chip">⭐ Dal + 2 roti + sabzi</button>
+      <button type="button" class="chip">⭐ Rice + rajma</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="numbers-h">
+    <h2 id="numbers-h">The numbers</h2>
+    {{ ui.numeric_field("bg_before", "BG before", "bg") }}
+    {{ ui.numeric_field("bolus_u", "Bolus", "dose", suffix="U") }}
+
+    <fieldset class="timing" role="group" aria-label="Bolus timing">
+      <legend>Bolus timing</legend>
+      <button type="button" class="chip">15 min before</button>
+      <button type="button" class="chip">10 min before</button>
+      <button type="button" class="chip">Just before</button>
+      <button type="button" class="chip">With food</button>
+    </fieldset>
+  </section>
+
+  {# Optional fields are collapsed and never block submission (05b §3). No
+     clinical numeric fields or buttons live inside the collapsed region. #}
+  <details class="optional">
+    <summary>Exercise, notes (optional)</summary>
+    <label class="field" for="notes">
+      <span class="field-label">Notes</span>
+      <textarea id="notes" name="notes" rows="3"></textarea>
+    </label>
+  </details>
+
+  <button type="submit" class="primary">Log meal</button>
+</form>
+{% endblock %}
