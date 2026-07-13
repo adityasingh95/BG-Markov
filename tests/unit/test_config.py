@@ -8,8 +8,9 @@ an unknown key that would silently do nothing.
 from __future__ import annotations
 
 import pytest
-from core.config import ClinicalConfig, load_config, load_config_file
 from pydantic import ValidationError
+
+from core.config import ClinicalConfig, load_config, load_config_file
 
 
 def test_defaults_match_clinical_spec() -> None:
@@ -56,6 +57,30 @@ def test_unknown_key_raises() -> None:
     """extra='forbid' — an unknown key is a config error, never silently dropped."""
     with pytest.raises(ValidationError):
         ClinicalConfig(icr=8.3, unknown_knob=1)  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("bad_icr", [0.0, -1.0, -8.3])
+def test_icr_non_positive_raises(bad_icr: float) -> None:
+    """A set icr <= 0 raises — icr is a denominator (carbs/icr) in the dose path."""
+    with pytest.raises(ValidationError):
+        ClinicalConfig(icr=bad_icr)
+
+
+@pytest.mark.parametrize(
+    ("field", "bad"),
+    [
+        ("iob_tp", 0.0),
+        ("iob_tp", -5.0),
+        ("basal_halflife_h", 0.0),
+        ("basal_halflife_h", -1.0),
+        ("target_bg", 0),
+        ("target_bg", -10),
+    ],
+)
+def test_non_positive_curve_constants_raise(field: str, bad: float) -> None:
+    """iob_tp, basal_halflife_h, target_bg must all be > 0."""
+    with pytest.raises(ValidationError):
+        ClinicalConfig(**{field: bad})
 
 
 def test_degenerate_iob_curve_raises() -> None:
