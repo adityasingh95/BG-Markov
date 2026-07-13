@@ -83,3 +83,32 @@ not depend on external hosts at request time anyway. Decision:
 `@picocss/pico@2.0.6` is fetched **once** from the npm registry and committed to
 `api/static/pico.min.css`; the app serves it locally. Pinned by the committed
 file's contents (the exact 2.0.6 minified build).
+
+## DL-007 — `max_bolus_u` config ceiling (25 U) is distinct from INV-3's cap (15 U)
+**Story:** S-103 · **Type:** clarification (a note for S-901, not a deviation)
+Two different bolus numbers exist and must not be conflated:
+- **INV-3 recommendation cap = 15 U.** A constant in `core/safety.py` (S-104)
+  and the final authority in the dose path (`07 §11`, REQ-042). A cap event is
+  *flagged as implausible input*, never silently clipped.
+- **`config.max_bolus_u` ceiling = 25 U** (`MAX_BOLUS_U_CEILING`). A config-field
+  sanity bound so a misconfiguration/typo cannot load an absurd per-dose cap.
+  The AC (`10-backlog.md` S-103) requires `max_bolus_u > 25` to raise.
+
+`config.max_bolus_u` defaults to 15 (= INV-3's cap) and can be set anywhere in
+`(0, 25]`. It can **never raise** the effective recommendation cap above INV-3's
+15 U, because the dose path (S-901) is gated by `core/safety.py`. **Directive for
+S-901:** clamp to `min(config.max_bolus_u, MAX_BOLUS_U)` and let INV-3 have the
+last word. Flagged here so S-901 does not wire `config.max_bolus_u` straight into
+the recommendation and thereby weaken INV-3.
+
+## DL-008 — S-103 config carries the full 07 §1 constant set
+**Story:** S-103 · **Type:** clarification (scope)
+The S-103 AC names only `icr`, `isf`, `max_bolus_u`. The delivered
+`ClinicalConfig` also carries `target_bg`, `iob_tp`, `iob_td`,
+`basal_halflife_h` — the remaining `07 §1` constants — each with a validator
+(`iob_td>iob_tp`, all curve constants `> 0`). Rationale: this is the clinical
+config; the IOB engine (S-401), effective basal (S-402), baseline (S-501) and
+prescriptive module (S-901) all read these, and validating them at load (not at
+first use) keeps the "reject malformed clinical input at load" contract whole.
+`patient_profile` versioning (REQ-054) remains the DB table's job (S-201); this
+is the process config, not the versioned record.
