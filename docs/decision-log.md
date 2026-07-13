@@ -43,3 +43,43 @@ spec deviation — it is an environment limitation to resolve before EPIC 2.
 Only `core/` exists at S-101. `[tool.coverage.run] source` lists `core` today
 and is to be widened as each package is introduced, so the gate never passes
 vacuously against a not-yet-existent package.
+
+## DL-004 — PyPI/npm egress is now OPEN; DL-002 constraint lifted
+**Story:** S-102 · **Type:** environment note (supersedes DL-002's constraint)
+The egress policy that returned **403** for `pypi.org` in the S-101 session
+(DL-002) is **no longer in effect**. This session installed the full pinned
+dependency set into a Python 3.12 venv with `pip install -e ".[dev]"` and it
+resolved cleanly (fastapi, statsmodels, pandas, pydantic, alembic, hypothesis,
+pytest-cov, coverage, …). Consequences:
+- Runtime + dev deps are now **installable and were verified locally** this
+  session, not only in CI. The coverage gate (`--cov=core --cov-fail-under=90`)
+  runs locally as well as in CI.
+- Egress is **host-scoped**: `pypi.org`, `files.pythonhosted.org` and
+  `registry.npmjs.org` are allowed; CDN hosts (`cdn.jsdelivr.net`,
+  `redirector.gvt1.com`) are **blocked**. So third-party browser assets are
+  vendored from npm, not a CDN (see DL-006), and Playwright uses the
+  pre-installed Chromium rather than downloading one.
+- DL-002 remains in the log as the historical record; its *blocking* impact on
+  EPIC 2+ is **resolved**.
+
+## DL-005 — Browser-driven accessibility tests (Playwright + axe-core)
+**Story:** S-102 · **Type:** test-infrastructure decision
+`05b §2` and the S-102 backlog make axe + 200 %-zoom testing **"not optional."**
+Asserting accessibility from template source text would be theatre — contrast,
+computed font size, target geometry and reflow only exist in a real browser.
+Decision: `tests/a11y/` drives **real Chromium via Playwright** against a live
+FastAPI server (uvicorn on a background thread), with `axe-playwright-python`
+providing axe-core. Pinned dev deps: `playwright==1.53.0`,
+`axe-playwright-python==0.1.4`, `httpx==0.28.1`. This session uses the
+pre-installed browser at `$PLAYWRIGHT_BROWSERS_PATH/chromium`; CI installs it
+via `playwright install --with-deps chromium`. The a11y suite runs in the same
+`pytest` invocation as the unit tests and is registered under the `a11y` marker.
+
+## DL-006 — Pico.css vendored from npm, not a CDN
+**Story:** S-102 · **Type:** clarification
+`06 §3` mandates Pico.css with **no build step**. CDN hosts are blocked by the
+egress policy (DL-004) and, per `06 §4`, this app runs on `127.0.0.1` and must
+not depend on external hosts at request time anyway. Decision:
+`@picocss/pico@2.0.6` is fetched **once** from the npm registry and committed to
+`api/static/pico.min.css`; the app serves it locally. Pinned by the committed
+file's contents (the exact 2.0.6 minified build).
