@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bg-markov"
+version = "0.1.0"
+description = "Glycaemic prediction and bolus support system (single patient, localhost, v1)."
+requires-python = ">=3.12"
+
+# Runtime dependencies are PINNED per S-101 AC. Versions are the latest stable
+# compatible with Python 3.12 at project start. See docs/decision-log.md DL-002
+# for why they are declared but not installed in the current session
+# (egress policy blocks PyPI; CI installs and verifies them).
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn==0.34.0",
+    "jinja2==3.1.4",
+    "pydantic==2.10.4",
+    "pydantic-settings==2.7.0",
+    "statsmodels==0.14.4",
+    "pandas==2.2.3",
+    "alembic==1.14.0",
+    "sqlalchemy==2.0.36",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.0.2",
+    "pytest-cov==6.0.0",
+    "coverage==7.6.10",
+    "hypothesis==6.122.3",
+    "ruff==0.15.8",
+    "mypy==1.19.1",
+]
+
+[tool.setuptools.packages.find]
+include = ["core*", "features*", "models*", "prescribe*", "data*", "api*", "cli*"]
+
+# --- Lint -----------------------------------------------------------------
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+# --- Types ----------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# Third-party clinical/stats libraries ship incomplete stubs; do not let their
+# gaps mask errors in our own code.
+[[tool.mypy.overrides]]
+module = ["statsmodels.*", "pandas.*"]
+ignore_missing_imports = true
+
+# --- Tests ----------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# NOTE: coverage flags are intentionally NOT in addopts. pytest-cov is not
+# installable in the current egress-restricted session, and baking --cov here
+# would break local test runs. The 90%-on-core gate is enforced in CI, which
+# invokes pytest with the --cov flags explicitly. See docs/decision-log.md.
+
+[tool.coverage.run]
+branch = true
+# Expand this list as features/, models/, prescribe/ are introduced by later
+# epics. The 90% gate applies to whatever is listed here.
+source = ["core"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90

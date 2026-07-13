@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install (pinned deps + dev tooling)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # AC: ruff clean. Also proves the lint gate is wired into CI.
+      - name: Lint (ruff)
+        run: ruff check .
+
+      # AC: mypy --strict clean on core.
+      - name: Types (mypy --strict)
+        run: mypy --strict core
+
+      # AC: pytest clean + coverage gate at 90% on core.
+      # The toolchain tests additionally assert the ruff/mypy gates BITE on a
+      # deliberate lint error and a deliberate type error (S-101 TDD).
+      - name: Tests + coverage gate
+        run: pytest --cov=core --cov-report=term-missing --cov-fail-under=90
