@@ -19,10 +19,23 @@ a visible gap. INV-n coverage is tracked in the second table.*
 
 ## INV → story → test
 
-| INV | First enforced by | Test(s) | Status |
-|-----|-------------------|---------|--------|
-| INV-1 *(precondition only)* | S-103 config; **enforced** live in S-104/S-703 | `tests/safety/test_config_frozen.py` (prescriptive_enabled can't be forced/injected; frozen) | 🟡 Precondition guarded; live gate pending S-104/S-703 |
-| INV-2..9 | S-104 (module), S-105 (patterns) | — | ⏳ Not yet started |
+Legend: **Module ✅** = the invariant function + its positive/negative tests
+exist in `core/safety.py` (S-104). **Wired** = called from the feature it
+guards (per later story). A green Module row is necessary but not sufficient —
+each invariant must still be *wired in* by the story that owns its feature.
+
+| INV | Function (`core/safety.py`) | Test(s) | Module | Wired into feature |
+|-----|-----------------------------|---------|--------|--------------------|
+| INV-1 | `inv1_prescriptive_requires_gate2` | `test_safety_invariants.py::test_inv1_*`; precondition also guarded in `test_config_frozen.py` | ✅ S-104 | ⏳ S-703 / S-901 |
+| INV-2 | `inv2_patient_output_requires_gate1` | `test_safety_invariants.py::test_inv2_*` | ✅ S-104 | ⏳ S-703 / S-804 |
+| INV-3 | `inv3_bolus_within_bounds` | `test_safety_invariants.py::test_inv3_*` | ✅ S-104 | ⏳ S-901 |
+| INV-4 | `inv4_bolus_allowed_at_bg` | `test_safety_invariants.py::test_inv4_*` | ✅ S-104 | ⏳ S-901 |
+| INV-5 | `inv5_monitoring_not_reduced` | `test_safety_invariants.py::test_inv5_*` | ✅ S-104 | ⏳ output/advice stories |
+| INV-6 | `inv6_predicted_bg_in_range` | `test_safety_invariants.py::test_inv6_*` | ✅ S-104 | ⏳ S-801 |
+| INV-7 | `inv7_rescued_excluded_and_retained` | `test_safety_invariants.py::test_inv7_*` | ✅ S-104 | ⏳ S-203 / S-305 |
+| INV-8 | `inv8_beta_insulin_non_negative` | `test_safety_invariants.py::test_inv8_*` | ✅ S-104 | ⏳ S-503 / S-603 |
+| INV-9 | `inv9_prediction_persisted` | `test_safety_invariants.py::test_inv9_*` | ✅ S-104 | ⏳ S-802 |
+| _module hygiene_ | no-`assert` (AST), zero internal imports (ADR-6), single-definition, `-O` still raises | `test_safety_module_hygiene.py` | ✅ S-104 | — |
 
 S-101 introduces no invariant logic. It provides the ruff/mypy/pytest/coverage
 gates that S-104 and S-105 rely on to be enforceable at all.
@@ -45,3 +58,9 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
   business logic (not just template wiring) lands under `api/`.
 - The a11y suite requires a Chromium build (DL-005). CI installs it; a runner
   without it turns the suite red rather than skipping silently — intentional.
+- **INV-1..9 exist as functions with tests (S-104) but are not yet *wired* into
+  the features they guard** (see the "Wired into feature" column). This is a
+  tracked, expected gap — the invariants ship before the features per the build
+  order. Each owning story must call its invariant and add the wiring test; do
+  not let a feature ship guarding itself with an inline re-check instead of the
+  `core/safety.py` function (the S-104 hygiene test forbids re-implementation).
