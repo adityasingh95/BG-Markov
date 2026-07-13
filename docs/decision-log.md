@@ -133,3 +133,37 @@ never-silently-defaulted). Guarded by
 sign computation from magnitude+direction, and hard enforcement of the
 **cannot-be-skipped** rule on submit — remains **S-302** (EPIC 3). The shell
 provides the accessible primitive; it does not yet enforce the rule on submit.
+
+## DL-010 — `data/` is outside the 90 % coverage gate
+**Story:** S-201 · **Type:** clarification
+`09-test-plan.md §2` scopes the ≥90 % coverage gate to
+`core/features/models/prescribe`. `data/` (repositories, ORM) is **not** in that
+set, so `[tool.coverage.run] source` stays `core` (DL-003 pattern). `data/` is
+still tested thoroughly by `tests/integration/test_schema.py` (round-trips +
+Alembic migration); the metric gate simply does not apply to it. mypy `--strict`
+**does** now cover `data` (CI), so typing is enforced even though coverage is not.
+
+## DL-011 — `net_carbs_g` is a DB-computed column, not Python-floored
+**Story:** S-201 · **Type:** design choice
+`net_carbs_g = max(carbs_g - fiber_g, 0)` is a SQLAlchemy `Computed(...,
+persisted=True)` column (SQLite STORED generated column), not a value written by
+application code. Rationale: the `carbs=30, fiber=40 ⇒ −10` bug the TDD guards
+becomes **structurally impossible** — there is no write path that can persist a
+negative net-carb value, and no Python flooring to forget on a future refactor.
+
+## DL-012 — `patient_profile` immutability is a data-layer guard, not a core INV
+**Story:** S-201 · **Type:** clarification (invariant boundary)
+REQ-054 ("constants versioned, never overwritten") is enforced by a SQLAlchemy
+`before_update` event on `PatientProfile` that raises `ProfileImmutableError`
+(defined in `data/tables.py`). This is deliberately **not** a `core/safety.py`
+invariant: it defines no `inv<n>` function and no `SafetyViolation` subclass, so
+the S-104/S-105 hygiene guards (single-definition, no re-implementation) stay
+green. It is a structural data guarantee, adjacent to but distinct from INV-1..9.
+
+## DL-013 — Alembic DB URL is never committed
+**Story:** S-201 · **Type:** security/config note
+`alembic.ini` ships an **empty** `sqlalchemy.url`. The real URL is supplied at
+run time — programmatically (tests) or via the `BGAPP_DB_URL` env var
+(`alembic/env.py`) — so a real patient DB path never lives in the repo. Consistent
+with `06 §5` (`app.db` lives outside any synced folder) and `.gitignore`
+excluding `*.db` / `app.db`.
