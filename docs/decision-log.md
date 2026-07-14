@@ -184,3 +184,13 @@ determinism gap that defeats the purpose of the gate.
    failure. A gate a cache can defeat is not a gate.
 Confirmed by a green CI run (#9, commit `9cd8710`). Verified locally with a wiped
 cache. No further action; recorded so the reasoning survives.
+
+## DL-015 — Dish seed is representative, pending the operator's IFCT-2017 data
+**Story:** S-204 · **Type:** deferred data · **Approved by:** _pending operator_
+S-204 delivers the **ingest path** and the portion/free-text logic; the shipped
+`IFCT_SEED` (roti, dal, rice, rajma, sabzi, idli) carries **placeholder** macro
+values, not verified IFCT-2017 figures. The operator loads the real IFCT-2017
+(NIN Hyderabad) values for her repertoire via `ingest_dishes(...)` before Gate 0
+data collection, and resolves queued free-text dishes (`needs_review=True`).
+Open item mirrored to `01-prd.md` §9. This is a data gap, not a code gap — the
+2×roti-doubles and free-text-⇒-60 guarantees hold regardless of the numbers.
