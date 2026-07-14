@@ -61,6 +61,10 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.ruff.lint.isort]
 known-first-party = ["core", "api", "data", "features", "models", "prescribe", "cli"]
 
+[tool.ruff.lint.per-file-ignores]
+# Demo/utility scripts bootstrap sys.path before importing the project.
+"scripts/*.py" = ["E402"]
+
 # --- Types ----------------------------------------------------------------
 
 [tool.mypy]

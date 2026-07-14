@@ -39,6 +39,40 @@ Every unusual constraint in this pack — the gates, the guardrails, the shadow 
 
 ---
 
+## Running & verifying the build (EPIC 1–2 shipped)
+
+Requires **Python 3.12** and (for the accessibility tests) an internet
+connection so Playwright can fetch a Chromium build the first time.
+
+```bash
+# 1. Verify everything the way CI does — one command.
+#    Creates .venv, installs pinned deps, runs ruff + mypy --strict +
+#    pytest with the 90%-on-core coverage gate.
+./scripts/verify.sh
+
+# 2. See the EPIC-2 safety behaviour on a real SQLite DB (readable walk-through:
+#    portion scaling, reported-vs-logged timestamps, and INV-7 keeping rescued
+#    lows out of training while retaining them as hypo events).
+. .venv/bin/activate
+python scripts/demo_epic2.py
+
+# 3. Run the accessible logging shell (S-102) and open it in a browser.
+./scripts/run_app.sh          # -> http://127.0.0.1:8000
+```
+
+What "green" means here: lint clean, `mypy --strict` clean on `core`/`api`/`data`,
+and every safety test (`tests/safety/`), forbidden-pattern guard
+(`tests/forbidden/`), validity/leakage guard, and browser accessibility check
+(`tests/a11y/`, real Chromium) passing. The build status is enforced in CI on
+every push (`.github/workflows/ci.yml`).
+
+**What is built so far:** EPIC 1 (foundation, safety invariants INV-1..9,
+forbidden-pattern suite) and EPIC 2 (schema + migrations, reported timestamps,
+validity engine + INV-7, dish table). EPIC 3 (logging & durability — the
+critical path) is next.
+
+---
+
 ## Operating rules for the executing agent
 
 **Session start — every session, no exceptions:**
