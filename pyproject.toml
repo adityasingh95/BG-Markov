@@ -96,3 +96,8 @@ source = ["core"]
 [tool.coverage.report]
 show_missing = true
 fail_under = 90
+# Protocol / stub method bodies are not executable code to cover.
+exclude_also = [
+    "^\\s*\\.\\.\\.$",
+    "if TYPE_CHECKING:",
+]
