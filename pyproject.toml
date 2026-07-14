@@ -54,6 +54,13 @@ extend-exclude = ["alembic/versions"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+# Declare first-party packages explicitly so import-sort (I001) is deterministic
+# across environments. Left to auto-detection, ruff grouped these differently in
+# a fresh CI checkout than in a warm local cache, so a locally-clean commit could
+# still fail CI's ruff gate. This pins the grouping everywhere.
+[tool.ruff.lint.isort]
+known-first-party = ["core", "api", "data", "features", "models", "prescribe", "cli"]
+
 # --- Types ----------------------------------------------------------------
 
 [tool.mypy]

@@ -85,15 +85,20 @@ def test_mypy_fails_on_deliberate_type_error(tmp_path: Path) -> None:
 
 
 def test_ruff_clean_on_project() -> None:
-    result = _run([_tool("ruff"), "check", "."])
+    # --no-cache so this matches CI's fresh checkout exactly. A cached "clean"
+    # once let non-canonical import ordering pass locally while CI (no cache)
+    # failed the same commit; a gate that can be masked by a stale cache is not
+    # a gate.
+    result = _run([_tool("ruff"), "check", "--no-cache", "."])
     assert result.returncode == 0, (
-        "The committed skeleton must be ruff-clean.\n"
+        "The committed project must be ruff-clean (fresh, no cache).\n"
         f"stdout={result.stdout!r} stderr={result.stderr!r}"
     )
 
 
 def test_mypy_strict_clean_on_core() -> None:
-    result = _run([_tool("mypy"), "--strict", "core"])
+    # --no-incremental for the same reason: match CI, never a warm-cache pass.
+    result = _run([_tool("mypy"), "--strict", "--no-incremental", "core"])
     assert result.returncode == 0, (
         "core/ must be mypy --strict clean.\n"
         f"stdout={result.stdout!r} stderr={result.stderr!r}"
