@@ -13,7 +13,9 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | _(safety module; INV-1..9)_ | S-104 | `tests/safety/test_safety_invariants.py`, `tests/safety/test_safety_module_hygiene.py` | ✅ Done |
 | _(forbidden-pattern guards; `09 §6`)_ | S-105 | `tests/forbidden/test_forbidden_patterns.py` | ✅ Done |
 | **REQ-002** (per-meal capture) | S-201 | `test_schema.py` (meal_event round-trips; `_meal` helper) | ✅ Schema done (form: S-301) |
-| **REQ-005** (`logged_at` ≠ `datetime`) | S-201 | `test_logged_at_is_distinct_from_reported_datetime`, `test_no_clinical_timestamp_has_a_now_default` | ✅ Schema done (capture: S-202) |
+| **REQ-004** (clinical timestamps reported, never `now()`) | S-202 | `test_reported_timestamps.py` (differ; now() bound only to logged_at), plus S-105 `detect_datetime_now_on_clinical_ts` scanning `data/` | ✅ Done |
+| **REQ-005** (`logged_at` ≠ `datetime`) | S-201, **S-202** | S-201 schema tests; **S-202** `test_reported_datetime_and_logged_at_differ`, `test_logged_at_uses_the_injected_clock` | ✅ Done (schema + write path) |
+| _(derived features from reported times)_ | S-202 | `tests/unit/test_timestamps.py` (`bolus_offset_min`, `elapsed_min`); `test_elapsed_min_uses_reported_reading_time_not_entry_time` | ✅ Done |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -84,7 +86,11 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
   - **S-201 (schema + migrations) — Done.** 9 tables, Alembic initial migration,
     signed offset, DB-computed floored net-carbs, `logged_at`≠`datetime` with no
     now() default on clinical timestamps, append-only `patient_profile`.
-  - Next: **S-202** reported timestamps (ADR-8 capture), **S-203** validity
-    engine + INV-7 (first wiring of an invariant into a feature), **S-204** dish
-    table. S-202 is the cheapest high-value story in the pack and is where the
-    `datetime`≠`logged_at` discipline actually gets exercised on the write path.
+  - **S-202 (reported timestamps, ADR-8) — Done.** Write-path discipline:
+    `datetime`=reported, `logged_at`=injected system clock, `bolus_offset_min` /
+    `elapsed_min` from reported times only. **First feature actively protected by
+    the S-105 guard** (`detect_datetime_now_on_clinical_ts` scans `data/`, so
+    `data/recording.py` cannot bind a now()-call to a clinical timestamp), plus a
+    targeted write-path AST test (now() → `logged_at` only).
+  - Next: **S-203** validity engine + INV-7 (the first *invariant* wired into a
+    feature — `get_training_set()` / `get_hypo_events()`), **S-204** dish table.
