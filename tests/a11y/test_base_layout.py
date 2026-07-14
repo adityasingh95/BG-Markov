@@ -50,11 +50,18 @@ def test_axe_no_violations(page: Page) -> None:
 
 
 def test_every_bg_dose_field_is_inputmode_numeric(page: Page) -> None:
-    """Every BG/dose field renders inputmode="numeric" (05b §2)."""
-    clinical = [el for el in _clinical_numeric_inputs(page) if _is_clinical_numeric(el)]
-    assert clinical, "expected at least one BG/dose field on the base layout"
+    """Every *visible* BG/dose field renders inputmode="numeric" (05b §2).
+
+    Hidden fields (e.g. macro values populated from a favourite) have no keyboard,
+    so inputmode does not apply to them."""
+    clinical = [
+        el
+        for el in _clinical_numeric_inputs(page)
+        if _is_clinical_numeric(el) and el.get("type") != "hidden"
+    ]
+    assert clinical, "expected at least one visible BG/dose field on the form"
     offenders = [el for el in clinical if el.get("inputmode") != "numeric"]
-    assert not offenders, f"BG/dose fields missing inputmode=numeric: {offenders}"
+    assert not offenders, f"visible BG/dose fields missing inputmode=numeric: {offenders}"
 
 
 def test_base_font_at_least_18px(page: Page) -> None:
@@ -142,10 +149,14 @@ def test_no_horizontal_overflow_at_200pct_zoom(page: Page) -> None:
     assert overflow <= 1, f"horizontal overflow of {overflow}px at 200% zoom"
 
 
-def test_warning_not_signalled_by_colour_alone(page: Page) -> None:
-    """A risk/warning cue is carried by text or icon, not colour alone (05b §2)."""
+def test_warning_not_signalled_by_colour_alone(page: Page, live_server: str) -> None:
+    """A risk/warning cue is carried by text or icon, not colour alone (05b §2).
+
+    The risk-cue pattern lives on /components, not the logging form — no model
+    output is shown to the patient before Gate 1 (INV-2, S-301)."""
+    page.goto(live_server + "/components", wait_until="networkidle")
     warning = page.query_selector("[data-risk-cue]")
-    assert warning is not None, "expected a risk/warning element on the base layout"
+    assert warning is not None, "expected a risk/warning element on /components"
     text = (warning.text_content() or "").strip()
     has_icon = warning.query_selector("[aria-hidden='true']") is not None
     assert text, "warning conveys nothing without colour: empty text"

@@ -1,21 +1,18 @@
-"""Fixtures for browser-driven accessibility tests (S-102).
+"""Fixtures for browser end-to-end flow tests (S-301).
 
-These tests drive a **real Chromium** against a **live FastAPI server** so that
-computed styles, contrast and zoom behaviour are genuine — asserting them from
-template source text would prove nothing. See docs/stories/S-102.md.
-
-The FastAPI app is served by uvicorn in a background thread (in-process, so it
-can be torn down cleanly). Chromium is resolved from the pre-installed browser
-at ``$PLAYWRIGHT_BROWSERS_PATH/chromium`` when present, else Playwright's own
-managed browser (CI installs it via ``playwright install --with-deps chromium``).
+Like the a11y fixtures, but the live server is pointed at a throwaway SQLite DB
+(via ``BGAPP_DB_URL``) so ``POST /api/meals`` actually persists.
 """
 
 from __future__ import annotations
 
+import os
 import socket
+import tempfile
 import threading
 import time
 from collections.abc import Iterator
+from pathlib import Path
 
 import httpx
 import pytest
@@ -30,14 +27,18 @@ def _free_port() -> int:
 
 @pytest.fixture(scope="session")
 def live_server() -> Iterator[str]:
-    """Run the FastAPI app on a background uvicorn thread; yield its base URL."""
     import uvicorn
 
-    from api.app import app  # imported lazily: absent app ⇒ clear RED, not a collect error
+    tmpdir = tempfile.mkdtemp(prefix="bge2e-")
+    os.environ["BGAPP_DB_URL"] = f"sqlite:///{Path(tmpdir) / 'e2e.db'}"
+
+    import api.deps as deps
+
+    deps._engine = None  # force re-init against the temp DB
+    from api.app import app
 
     port = _free_port()
-    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
-    server = uvicorn.Server(config)
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
 
@@ -51,10 +52,10 @@ def live_server() -> Iterator[str]:
             except httpx.HTTPError:
                 pass
         time.sleep(0.05)
-    else:  # pragma: no cover - only hit if the server never comes up
+    else:  # pragma: no cover
         server.should_exit = True
         thread.join(timeout=5)
-        raise RuntimeError("live server did not start within 15s")
+        raise RuntimeError("e2e live server did not start")
 
     try:
         yield base_url

@@ -41,8 +41,8 @@ if python -m playwright install chromium >/dev/null 2>&1 \
   echo "==> pytest (full suite incl. a11y) + coverage gate"
   pytest --cov=core --cov-report=term-missing --cov-fail-under=90
 else
-  echo "==> Chromium unavailable — skipping a11y; running the rest + coverage"
-  pytest -m "not a11y" --cov=core --cov-report=term-missing --cov-fail-under=90
+  echo "==> Chromium unavailable — skipping browser tests; running the rest + coverage"
+  pytest -m "not a11y and not e2e" --cov=core --cov-report=term-missing --cov-fail-under=90
 fi
 
 echo
