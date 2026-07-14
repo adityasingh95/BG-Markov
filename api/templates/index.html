@@ -4,71 +4,64 @@
 {% block content %}
 <h1>Log a meal</h1>
 
-{# Risk cue demo: meaning is carried by icon + text; colour only reinforces it
-   (05b §2 — colour is never the sole signal). Rendered here so the a11y suite
-   can prove the pattern; real risk readouts arrive post-Gate-1 (INV-2). #}
-<p class="risk risk--sample" role="status" data-risk-cue>
-  <span class="risk-icon" aria-hidden="true">⚠️</span>
-  <span class="risk-text"><strong>Example — Low risk:</strong> about a 1 in 7
-  chance of going low. This is an estimate, not advice.</span>
-</p>
+<form id="meal-form" action="/api/meals" method="post" novalidate>
+  <label class="field" for="meal-time">
+    <span class="field-label">Time</span>
+    <span class="field-input">
+      {# Pre-filled with the current time by app.js, but EDITABLE and sent as the
+         reported datetime. The server never substitutes now() (ADR-8). #}
+      <input class="num-input" id="meal-time" name="datetime" type="datetime-local"
+             data-meal-time autocomplete="off" />
+    </span>
+  </label>
 
-<form action="#" method="post" novalidate>
-  {# Dish selection: search + recents, never a <select> dropdown (05b §2). #}
+  {# Favourites: tapping one populates all macros — the adherence mechanism.
+     Dish selection is search + recents, never a <select> dropdown (05b §2). #}
   <section aria-labelledby="dish-h">
     <h2 id="dish-h">What did you eat?</h2>
-    <label class="field" for="dish-query">
-      <span class="field-label">Search dishes</span>
-      <input
-        class="dish-search"
-        id="dish-query"
-        name="dish_query"
-        type="search"
-        inputmode="search"
-        autocomplete="off"
-        placeholder="e.g. dal, roti, rajma"
-        data-dish-search
-      />
-    </label>
-    <div class="recents" role="group" aria-label="Recent meals">
-      <button type="button" class="chip">⭐ Same as usual</button>
-      <button type="button" class="chip">⭐ Dal + 2 roti + sabzi</button>
-      <button type="button" class="chip">⭐ Rice + rajma</button>
+    <div class="recents" role="group" aria-label="Favourite meals">
+      {% for fav in favourites %}
+      <button type="button" class="chip favourite"
+              data-favourite
+              data-name="{{ fav.name }}"
+              data-meal-type="{{ fav.meal_type }}"
+              data-carbs="{{ fav.carbs_g }}"
+              data-protein="{{ fav.protein_g }}"
+              data-fat="{{ fav.fat_g }}"
+              data-fiber="{{ fav.fiber_g }}">
+        <span class="chk" aria-hidden="true">✓ </span>⭐ {{ fav.name }}
+      </button>
+      {% endfor %}
     </div>
+    <label class="field" for="dish-query">
+      <span class="field-label">Or search dishes</span>
+      <input class="dish-search" id="dish-query" name="dish_query" type="search"
+             inputmode="search" autocomplete="off"
+             placeholder="e.g. dal, roti, rajma" data-dish-search />
+    </label>
+    <p class="chosen" data-chosen hidden></p>
   </section>
 
   <section aria-labelledby="numbers-h">
     <h2 id="numbers-h">The numbers</h2>
-    {{ ui.numeric_field("bg_before", "BG before", "bg") }}
-    {{ ui.numeric_field("bolus_u", "Bolus", "dose", suffix="U") }}
+    {{ ui.numeric_field("pre_bg", "BG before", "bg") }}
+    {{ ui.numeric_field("meal_bolus_units", "Bolus", "dose", suffix="U") }}
 
     <fieldset class="timing" role="group" aria-label="Bolus timing">
       <legend>Bolus timing</legend>
       <div class="chips">
-        <button type="button" class="chip">15 min before</button>
-        <button type="button" class="chip">10 min before</button>
-        <button type="button" class="chip">Just before</button>
-        <button type="button" class="chip">With food</button>
+        <button type="button" class="chip timing-preset" data-offset="-15">15 min before</button>
+        <button type="button" class="chip timing-preset" data-offset="-10">10 min before</button>
+        <button type="button" class="chip timing-preset" data-offset="0">Just before</button>
+        <button type="button" class="chip timing-preset" data-offset="0">With food</button>
       </div>
-      {# Presets are quick-picks; bolus_offset_min is a SIGNED continuous value
-         (REQ-003: negative = pre-bolus, positive = after eating). The custom
-         entry captures a magnitude plus an explicit before/after direction, so
-         both signs are expressible and neither is silently defaulted. S-302
-         owns the authoritative capture (validation, cannot-be-skipped). #}
       <div class="timing-custom">
         <label class="field" for="f-bolus_offset_min">
           <span class="field-label">Or enter exact timing</span>
           <span class="field-input">
-            <input
-              class="num-input"
-              id="f-bolus_offset_min"
-              name="bolus_offset_min"
-              type="text"
-              inputmode="numeric"
-              data-field-kind="timing"
-              autocomplete="off"
-              value=""
-            />
+            <input class="num-input" id="f-bolus_offset_min" name="bolus_offset_min" type="text"
+                   inputmode="numeric" data-field-kind="timing" data-offset-field
+                   autocomplete="off" />
             <span class="field-suffix" aria-hidden="true">minutes</span>
           </span>
         </label>
@@ -84,16 +77,27 @@
     </fieldset>
   </section>
 
-  {# Optional fields are collapsed and never block submission (05b §3). No
-     clinical numeric fields or buttons live inside the collapsed region. #}
   <details class="optional">
-    <summary>Exercise, notes (optional)</summary>
+    <summary>Correction, notes (optional)</summary>
+    {{ ui.numeric_field("correction_bolus_units", "Correction bolus", "dose", suffix="U") }}
     <label class="field" for="notes">
       <span class="field-label">Notes</span>
       <textarea id="notes" name="notes" rows="3"></textarea>
     </label>
   </details>
 
+  {# Hidden macro fields, populated from the chosen favourite. #}
+  <input type="hidden" name="carbs_g" data-macro="carbs_g" value="" />
+  <input type="hidden" name="protein_g" data-macro="protein_g" value="" />
+  <input type="hidden" name="fat_g" data-macro="fat_g" value="" />
+  <input type="hidden" name="fiber_g" data-macro="fiber_g" value="" />
+  <input type="hidden" name="macro_confidence" data-macro="macro_confidence" value="95" />
+  <input type="hidden" name="meal_type" data-meal-type-field value="breakfast" />
+
   <button type="submit" class="primary">Log meal</button>
 </form>
+
+<p class="toast" id="toast" role="status" hidden></p>
+
+<script src="{{ url_for('static', path='app.js') }}"></script>
 {% endblock %}

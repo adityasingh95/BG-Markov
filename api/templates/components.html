@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}UI components · BG-Markov{% endblock %}
+{% block content %}
+<h1>Accessible components</h1>
+<p>Reference gallery of the shared primitives. Not patient-facing.</p>
+
+{# Risk-cue pattern: meaning is carried by icon + text; colour only reinforces
+   it (05b §2). Lives here, NOT on the logging form — no model output is shown to
+   the patient before Gate 1 (INV-2). Real risk readouts arrive at S-804. #}
+<h2>Risk cue (post-Gate-1 pattern)</h2>
+<p class="risk risk--sample" role="status" data-risk-cue>
+  <span class="risk-icon" aria-hidden="true">⚠️</span>
+  <span class="risk-text"><strong>Example — Low risk:</strong> about a 1 in 7
+  chance of going low. This is an estimate, not advice.</span>
+</p>
+{% endblock %}
