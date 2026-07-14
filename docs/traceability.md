@@ -22,6 +22,9 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-001** (repeat meal ≤4 taps + 2 numbers) | S-301 | `tests/e2e/test_meal_log_flow.py` (★ tap-count, draft survival, optional collapsed) | ✅ Done |
 | **REQ-002** (per-meal capture via `POST /api/meals`) | S-301 | `tests/integration/test_meals_api.py` (422 no offset; persists; test_at; bolus_log) | ✅ Done (form; correction-only events S-306) |
 | **REQ-003** (signed offset; cannot be skipped/defaulted) | S-302 | `tests/integration/test_bolus_timing.py` (required, no default, null/absent→422, chosen-0 ok), `tests/e2e/test_bolus_timing.py` (client block + prompt; 15-before→−15) | ✅ Done (client + server) |
+| **REQ-010** (post-BG entry <15s) | S-303 | `tests/e2e/test_post_bg_flow.py`; `PATCH …/post-bg` (one number + one time) | ✅ Done |
+| **REQ-011** (late/retrospective asks real time) | S-303 | `test_post_bg_time_is_required` (422, never assumed); editable reported field | ✅ Done |
+| **REQ-014** (test-time prompt = mealtime+120) | S-301, **S-303** | `test_test_time_prompt_is_reported_mealtime_plus_120` (10:00 not 11:40) | ✅ Done |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -116,7 +119,12 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
   - **S-302 (bolus timing) — Done.** REQ-003 enforced at both layers: schema
     (required, no default → 422) and form (empty offset blocked with a prompt;
     never auto-fills 0; empty ≠ a chosen 0).
-  - Next: **S-303** post-meal reading + test-time prompt, **S-304 ★ backup +
-    restore drill (must be EXECUTED in month one)**, S-305 hypo-rescue capture,
-    S-306 correction events, S-307 operator dashboard. Shipping EPIC 3 starts the
+  - **S-303 (post-meal reading + test-time prompt) — Done.** `PATCH
+    …/post-bg` (reported `post_bg_time` required; `elapsed_min` from reported
+    times; stored regardless of validity); `<15s` form with an editable reported
+    "taken at"; test-time prompt = mealtime + 120.
+  - Next: **S-304 ★ backup + restore drill — [SAFETY], and the drill must be
+    EXECUTED in month one** (the story is not "done" until the restore has been
+    run for real and BA logs the date), S-305 hypo-rescue capture, S-306
+    correction events, S-307 operator dashboard. Shipping EPIC 3 starts the
     Gate-1 clock.
