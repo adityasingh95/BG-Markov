@@ -167,3 +167,20 @@ run time — programmatically (tests) or via the `BGAPP_DB_URL` env var
 (`alembic/env.py`) — so a real patient DB path never lives in the repo. Consistent
 with `06 §5` (`app.db` lives outside any synced folder) and `.gitignore`
 excluding `*.db` / `app.db`.
+
+## DL-014 — The lint/type gate runs fresh (no cache) so local == CI
+**Story:** cross-cutting (surfaced after S-201) · **Type:** test-infra correctness
+**Symptom:** CI runs #2–#7 failed at the `ruff` step on `I001` (import ordering)
+in a few test files, while local `ruff check .` reported clean. No logic was
+broken — the lint step just halts CI before the (passing) tests. **Root cause:**
+a warm local `.ruff_cache` plus environment-dependent isort first-party
+detection let a locally-clean commit still fail CI's fresh checkout — a
+determinism gap that defeats the purpose of the gate.
+**Fix:**
+1. `[tool.ruff.lint.isort] known-first-party` is declared explicitly, so import
+   grouping is deterministic in every environment (no auto-detection drift).
+2. The S-101 toolchain gate test now runs `ruff check --no-cache` and
+   `mypy --strict --no-incremental`, so a stale cache can never mask a real
+   failure. A gate a cache can defeat is not a gate.
+Confirmed by a green CI run (#9, commit `9cd8710`). Verified locally with a wiped
+cache. No further action; recorded so the reasoning survives.
