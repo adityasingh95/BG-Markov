@@ -11,16 +11,18 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.deps import get_session
-from api.schemas import MealCreate, MealCreated
-from data.recording import record_meal
-from data.tables import BolusLog, BolusType
+from api.schemas import MealCreate, MealCreated, PostBgResult, PostBgUpdate
+from data.recording import record_meal, record_post_bg
+from data.repositories import annotate_validity
+from data.tables import BolusLog, BolusType, MealEvent
 
 _TEST_DELAY_MIN = 120  # 05b §3.1 — "test your BG" prompt is reported mealtime + 120
 
@@ -50,6 +52,23 @@ def index(request: Request) -> HTMLResponse:
     before Gate 1 (INV-2). The accessible-primitives gallery lives at /components.
     """
     return templates.TemplateResponse(request, "index.html", {"favourites": FAVOURITES})
+
+
+@app.get("/meals/{meal_id}/post-bg", response_class=HTMLResponse)
+def post_bg_form(
+    meal_id: int, request: Request, session: Session = Depends(get_session)
+) -> HTMLResponse:
+    """The <15s post-meal reading form (S-303). The reading time is reported and
+    editable — asked, never assumed (REQ-011)."""
+    meal = session.get(MealEvent, meal_id)
+    if meal is None:
+        raise HTTPException(status_code=404, detail="meal not found")
+    expected = meal.datetime + dt.timedelta(minutes=_TEST_DELAY_MIN)
+    return templates.TemplateResponse(
+        request,
+        "post_bg.html",
+        {"meal_id": meal_id, "expected_reading_iso": expected.strftime("%Y-%m-%dT%H:%M")},
+    )
 
 
 @app.get("/components", response_class=HTMLResponse)
@@ -114,4 +133,41 @@ def create_meal(payload: MealCreate, session: Session = Depends(get_session)) ->
         meal_id=meal.meal_id,
         test_at=test_at,
         message=f"Logged. Set a phone alarm for {alarm} to test.",
+    )
+
+
+@app.patch("/api/meals/{meal_id}/post-bg", response_model=PostBgResult)
+def add_post_bg(
+    meal_id: int, payload: PostBgUpdate, session: Session = Depends(get_session)
+) -> PostBgResult:
+    """Attach the post-meal reading (05 §1).
+
+    ``post_bg_time`` is reported (required); ``elapsed_min`` is computed from the
+    reported times (S-202), validity from `04 §5` (S-203). The record is stored
+    **regardless** of validity — adherence cannot be diagnosed from discarded
+    data (`03 §2`).
+    """
+    meal = session.get(MealEvent, meal_id)
+    if meal is None:
+        raise HTTPException(status_code=404, detail="meal not found")
+
+    meal.hypo_treatment = payload.hypo_treatment
+    meal.hypo_treatment_g = payload.hypo_treatment_g
+    meal.snack_during_window = payload.snack_during_window
+    record_post_bg(meal, post_bg=payload.post_bg, post_bg_time=payload.post_bg_time)
+
+    prev_meal_datetime = session.scalars(
+        select(MealEvent.datetime)
+        .where(MealEvent.datetime < meal.datetime)
+        .order_by(MealEvent.datetime.desc())
+    ).first()
+    annotate_validity(meal, prev_meal_datetime)
+    session.commit()
+
+    reasons = meal.exclusion_reasons.split(",") if meal.exclusion_reasons else []
+    return PostBgResult(
+        meal_id=meal.meal_id,
+        elapsed_min=meal.elapsed_min,
+        is_valid=meal.is_valid,
+        exclusion_reasons=reasons,
     )

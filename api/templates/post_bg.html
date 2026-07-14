@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Post-meal reading · BG-Markov{% endblock %}
+{% block content %}
+<h1>Test your blood sugar</h1>
+
+<form id="post-bg-form"
+      action="/api/meals/{{ meal_id }}/post-bg"
+      method="post"
+      data-expected-reading="{{ expected_reading_iso }}"
+      novalidate>
+  {{ ui.numeric_field("post_bg", "BG now", "bg") }}
+
+  <label class="field" for="post-bg-time">
+    <span class="field-label">Taken at</span>
+    <span class="field-input">
+      {# REPORTED reading time — pre-filled with the expected time but editable,
+         never silently assumed (REQ-011 / ADR-8). #}
+      <input class="num-input" id="post-bg-time" name="post_bg_time"
+             type="datetime-local" data-post-bg-time autocomplete="off" />
+    </span>
+  </label>
+
+  <details class="optional">
+    <summary>Did you treat a low? (optional)</summary>
+    <label class="field checkbox">
+      <input type="checkbox" name="hypo_treatment" data-hypo />
+      <span>Yes — I took fast carbs to treat a low</span>
+    </label>
+    {{ ui.numeric_field("hypo_treatment_g", "Grams of fast carbs", "carb") }}
+  </details>
+
+  <button type="submit" class="primary">Save</button>
+</form>
+
+<p class="toast" id="toast" role="status" hidden></p>
+
+<script src="{{ url_for('static', path='post_bg.js') }}"></script>
+{% endblock %}

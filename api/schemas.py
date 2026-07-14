@@ -36,3 +36,18 @@ class MealCreated(BaseModel):
     meal_id: int
     test_at: dt.datetime
     message: str
+
+
+class PostBgUpdate(BaseModel):
+    post_bg: int
+    post_bg_time: dt.datetime  # REPORTED — required, never assumed
+    hypo_treatment: bool = False
+    hypo_treatment_g: float | None = None
+    snack_during_window: bool = False
+
+
+class PostBgResult(BaseModel):
+    meal_id: int
+    elapsed_min: int | None
+    is_valid: bool
+    exclusion_reasons: list[str]
