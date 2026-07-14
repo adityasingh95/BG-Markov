@@ -74,6 +74,10 @@
           </button>
         </div>
       </div>
+      {# Timing cannot be skipped or silently defaulted (REQ-003, S-302). #}
+      <p class="field-error" data-timing-error role="alert" hidden>
+        Please choose when you took your bolus — timing can’t be skipped.
+      </p>
     </fieldset>
   </section>
 

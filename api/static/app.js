@@ -83,11 +83,23 @@
   // The offset field holds the final SIGNED value. Presets write it directly;
   // the before/after buttons apply a sign to whatever magnitude is typed.
   var offsetField = form.querySelector("[data-offset-field]");
+  var timingError = form.querySelector("[data-timing-error]");
+
+  function clearTimingError() {
+    if (timingError) timingError.hidden = true;
+  }
+
+  // Timing cannot be silently defaulted: "unset" is the EMPTY field, distinct
+  // from a chosen 0 ("with food"). A preset/direction/typed value is a choice.
+  function timingIsChosen() {
+    return !!(offsetField && offsetField.value.trim() !== "");
+  }
 
   form.querySelectorAll(".timing-preset").forEach(function (chip) {
     chip.addEventListener("click", function () {
       selectInGroup(chip, ".timing-preset");
       if (offsetField) offsetField.value = chip.dataset.offset;  // already signed
+      clearTimingError();
       saveDraft();
     });
   });
@@ -99,9 +111,11 @@
         var mag = Math.abs(parseInt(offsetField.value, 10) || 0);
         offsetField.value = chip.dataset.dir === "before" ? -mag : mag;
       }
+      clearTimingError();
       saveDraft();
     });
   });
+  if (offsetField) offsetField.addEventListener("input", clearTimingError);
 
   // --- Submit -------------------------------------------------------------
   function payload() {
@@ -129,6 +143,15 @@
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();
+    // Timing cannot be skipped (REQ-003): block, prompt, and do NOT post.
+    if (!timingIsChosen()) {
+      if (timingError) {
+        timingError.hidden = false;
+        timingError.scrollIntoView({ block: "nearest" });
+      }
+      if (offsetField) offsetField.focus();
+      return;
+    }
     fetch(form.action, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

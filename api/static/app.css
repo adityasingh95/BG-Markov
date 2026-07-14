@@ -96,6 +96,13 @@ input[data-field-kind] {
   width: 100%;
 }
 
+/* Validation message — text, not colour alone; AA contrast on the light theme. */
+.field-error {
+  color: #b32d2e;
+  font-weight: 600;
+  margin: 0.35rem 0 0;
+}
+
 /* --- Risk cue: colour is never the sole signal (05b §2) ------------------ */
 /* Meaning lives in the icon + text; the tint/border only reinforce it, so the
    cue is fully legible without colour vision. */
