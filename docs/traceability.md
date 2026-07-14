@@ -16,6 +16,8 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-004** (clinical timestamps reported, never `now()`) | S-202 | `test_reported_timestamps.py` (differ; now() bound only to logged_at), plus S-105 `detect_datetime_now_on_clinical_ts` scanning `data/` | ✅ Done |
 | **REQ-005** (`logged_at` ≠ `datetime`) | S-201, **S-202** | S-201 schema tests; **S-202** `test_reported_datetime_and_logged_at_differ`, `test_logged_at_uses_the_injected_clock` | ✅ Done (schema + write path) |
 | _(derived features from reported times)_ | S-202 | `tests/unit/test_timestamps.py` (`bolus_offset_min`, `elapsed_min`); `test_elapsed_min_uses_reported_reading_time_not_entry_time` | ✅ Done |
+| **REQ-022** (validity per 04 §5; elapsed stored when invalid) | S-203 | `tests/unit/test_validity.py`; `test_get_training_set_excludes_invalid_rows` | ✅ Done |
+| **REQ-023 / INV-7** (rescued excluded from training, retained as hypo) | S-203 | `test_repositories.py` (★ regression guard 100/20; wiring-bites) | ✅ Done (INV-7 wired) |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -41,7 +43,7 @@ each invariant must still be *wired in* by the story that owns its feature.
 | INV-4 | `inv4_bolus_allowed_at_bg` | `test_safety_invariants.py::test_inv4_*` | ✅ S-104 | ⏳ S-901 |
 | INV-5 | `inv5_monitoring_not_reduced` | `test_safety_invariants.py::test_inv5_*` | ✅ S-104 | ⏳ output/advice stories |
 | INV-6 | `inv6_predicted_bg_in_range` | `test_safety_invariants.py::test_inv6_*` | ✅ S-104 | ⏳ S-801 |
-| INV-7 | `inv7_rescued_excluded_and_retained` | `test_safety_invariants.py::test_inv7_*` | ✅ S-104 | ⏳ S-203 / S-305 |
+| INV-7 | `inv7_rescued_excluded_and_retained` | `test_safety_invariants.py::test_inv7_*`; **wiring:** `test_repositories.py` (regression guard + wiring-bites) | ✅ S-104 | ✅ **S-203** — `get_training_set()` calls it (S-305 adds capture) |
 | INV-8 | `inv8_beta_insulin_non_negative` | `test_safety_invariants.py::test_inv8_*` | ✅ S-104 | ⏳ S-503 / S-603 |
 | INV-9 | `inv9_prediction_persisted` | `test_safety_invariants.py::test_inv9_*` | ✅ S-104 | ⏳ S-802 |
 | _module hygiene_ | no-`assert` (AST), zero internal imports (ADR-6), single-definition, `-O` still raises | `test_safety_module_hygiene.py` | ✅ S-104 | — |
@@ -92,5 +94,9 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     the S-105 guard** (`detect_datetime_now_on_clinical_ts` scans `data/`, so
     `data/recording.py` cannot bind a now()-call to a clinical timestamp), plus a
     targeted write-path AST test (now() → `logged_at` only).
-  - Next: **S-203** validity engine + INV-7 (the first *invariant* wired into a
-    feature — `get_training_set()` / `get_hypo_events()`), **S-204** dish table.
+  - **S-203 (validity engine + INV-7) — Done.** Six exclusion rules (all
+    applicable reasons); `get_training_set()` / `get_hypo_events()`. **First
+    invariant wired into a feature** — `get_training_set()` calls INV-7, so a
+    rescued meal cannot leak into training without raising. Regression guard
+    (100 meals / 20 rescued) in place.
+  - Next: **S-204** dish table (REQ-009) — closes EPIC 2.
