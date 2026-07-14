@@ -19,6 +19,8 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-022** (validity per 04 §5; elapsed stored when invalid) | S-203 | `tests/unit/test_validity.py`; `test_get_training_set_excludes_invalid_rows` | ✅ Done |
 | **REQ-023 / INV-7** (rescued excluded from training, retained as hypo) | S-203 | `test_repositories.py` (★ regression guard 100/20; wiring-bites) | ✅ Done (INV-7 wired) |
 | **REQ-009** (macros from dish table; free text lowers confidence) | S-204 | `tests/unit/test_macros.py`, `tests/integration/test_dishes.py` | ✅ Done (seed data pending, DL-015) |
+| **REQ-001** (repeat meal ≤4 taps + 2 numbers) | S-301 | `tests/e2e/test_meal_log_flow.py` (★ tap-count, draft survival, optional collapsed) | ✅ Done |
+| **REQ-002** (per-meal capture via `POST /api/meals`) | S-301 | `tests/integration/test_meals_api.py` (422 no offset; persists; test_at; bolus_log) | ✅ Done (form; correction-only events S-306) |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -104,7 +106,14 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     (2×roti=double), free-text ⇒ `macro_confidence=60` + queued. Seed macros are
     representative pending real IFCT-2017 data (DL-015).
 - **EPIC 2 (Data Layer) — COMPLETE.** S-201..S-204 done, green, RED-first.
-  Next per BUILD ORDER: **EPIC 3 (Logging & Durability) — ★ THE CRITICAL PATH**
-  (S-301 meal-log form ≤4 taps, S-302 bolus timing, S-303 post-meal reading,
-  S-304 ★ backup + restore drill, S-305 hypo-rescue capture, S-306 correction
-  events, S-307 operator dashboard). Shipping EPIC 3 starts the Gate-1 clock.
+- **EPIC 3 (Logging & Durability) — ★ THE CRITICAL PATH — IN PROGRESS.**
+  - **S-301 (meal-log form) — Done.** Repeat meal in **3 taps + 2 numbers**
+    (favourite → BG → bolus → timing → LOG), `POST /api/meals` (offset required,
+    server stamps `logged_at`, `test_at` = reported time + 120), `localStorage`
+    draft that survives a kill. Risk-cue example relocated to `/components`
+    (INV-2 — no model output on the form).
+  - Next: **S-302** bolus timing (cannot-be-skipped enforced server-side),
+    **S-303** post-meal reading + test-time prompt, **S-304 ★ backup + restore
+    drill (must be executed in month one)**, S-305 hypo-rescue capture, S-306
+    correction events, S-307 operator dashboard. Shipping EPIC 3 starts the
+    Gate-1 clock.

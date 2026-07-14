@@ -194,3 +194,24 @@ values, not verified IFCT-2017 figures. The operator loads the real IFCT-2017
 data collection, and resolves queued free-text dishes (`needs_review=True`).
 Open item mirrored to `01-prd.md` §9. This is a data gap, not a code gap — the
 2×roti-doubles and free-text-⇒-60 guarantees hold regardless of the numbers.
+
+## DL-016 — S-301 meal form: three UI decisions
+**Story:** S-301 · **Type:** design choices / clarifications
+1. **Favourite *meals* are seeded, not a table (yet).** `05b §3`'s favourites are
+   combos ("Dal + 2 roti + sabzi"); the schema (`04 §7`) has favourite *dishes*,
+   not favourite meals. S-301 serves a seeded `FAVOURITES` list from the app and
+   the tap-to-populate flow (the adherence mechanism). Persisting favourite-meal
+   combos as a table is a later refinement; the ≤4-tap guarantee is what S-301
+   delivers and tests.
+2. **Risk-cue example moved to `/components`.** S-102 put a risk-readout example
+   on the index page to test the colour-not-sole-signal pattern. The real
+   meal-log form (`/`) must show **no** model output before Gate 1 (INV-2), so
+   the primitives gallery (incl. the risk cue) now lives at `/components`. The
+   S-102 a11y guarantees run against the real form; the colour-cue test against
+   `/components`.
+3. **The time field is a pre-filled, editable client default — this is not an
+   ADR-8 violation.** `app.js` pre-fills the mealtime with the current local time
+   and the client sends it as the reported `datetime`. ADR-8 forbids the
+   *server* substituting `now()`; a visible, editable field she can correct is
+   exactly the sanctioned behaviour (`05b §3`). `pre_bg_time` currently defaults
+   to the same reported mealtime (a separate reading time is refined in S-303).
