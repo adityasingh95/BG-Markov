@@ -32,7 +32,6 @@ from data.repositories import (
 )
 from data.tables import Base, HypoRescueLog, LoggedBy, MealEvent, MealType
 
-
 # --- helpers ---------------------------------------------------------------
 
 
@@ -140,7 +139,7 @@ def test_record_hypo_rescue_writes_independent_row(session: Session) -> None:
     session.add(meal)
     session.commit()
 
-    clock = FrozenClock(datetime(2026, 1, 2, 9, 40))
+    clock = _FixedClock(datetime(2026, 1, 2, 9, 40))
     row = record_hypo_rescue(meal_id=meal.meal_id, grams=15.0, clock=clock)
     session.add(row)
     session.commit()
@@ -208,7 +207,7 @@ def test_recorded_rescue_ids_union_flag_and_ledger(session: Session) -> None:
     session.add_all([flagged, ledgered])
     session.commit()
     session.add(record_hypo_rescue(meal_id=ledgered.meal_id, grams=10.0,
-                                   clock=FrozenClock(datetime(2026, 1, 2, 9, 0))))
+                                   clock=_FixedClock(datetime(2026, 1, 2, 9, 0))))
     session.commit()
 
     ids = set(get_recorded_rescue_meal_ids(session))
@@ -231,7 +230,7 @@ def test_inv7_fires_when_a_recorded_rescue_meal_row_is_deleted(session: Session)
     session.add_all([keep, rescued])
     session.commit()
     session.add(record_hypo_rescue(meal_id=rescued.meal_id, grams=15.0,
-                                   clock=FrozenClock(datetime(2026, 1, 3, 9, 0))))
+                                   clock=_FixedClock(datetime(2026, 1, 3, 9, 0))))
     session.commit()
 
     # A future refactor / manual edit hard-deletes the rescued meal row.
@@ -249,7 +248,7 @@ def test_inv7_fires_when_hypo_flag_cleared_but_ledger_retains(session: Session) 
     session.add(rescued)
     session.commit()
     session.add(record_hypo_rescue(meal_id=rescued.meal_id, grams=15.0,
-                                   clock=FrozenClock(datetime(2026, 1, 3, 9, 0))))
+                                   clock=_FixedClock(datetime(2026, 1, 3, 9, 0))))
     session.commit()
 
     # Clear the flag: the row now looks like a valid training meal.
@@ -268,7 +267,7 @@ def test_happy_path_rescue_does_not_raise(session: Session) -> None:
     session.add_all([keep, rescued])
     session.commit()
     session.add(record_hypo_rescue(meal_id=rescued.meal_id, grams=15.0,
-                                   clock=FrozenClock(datetime(2026, 1, 3, 9, 0))))
+                                   clock=_FixedClock(datetime(2026, 1, 3, 9, 0))))
     session.commit()
 
     training = get_training_set(session)  # must not raise
