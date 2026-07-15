@@ -215,3 +215,68 @@ Open item mirrored to `01-prd.md` §9. This is a data gap, not a code gap — th
    *server* substituting `now()`; a visible, editable field she can correct is
    exactly the sanctioned behaviour (`05b §3`). `pre_bg_time` currently defaults
    to the same reported mealtime (a separate reading time is refined in S-303).
+
+## DL-017 — RED-first / test-ownership deviations (audit 2026-07-15-01, H1)
+**Story:** cross-cutting (S-103, S-201, S-202) · **Type:** process deviation ·
+**Raised by:** independent-auditor (`audits/AUDIT-2026-07-15-01.md`, branch
+`claude/independent-auditor-agent-nk5b6u`) · **Owner:** BA
+The auditor correctly found three GREEN/implementation commits that created or
+edited files under `tests/`, which the SDET/Dev split and the RED-first rule
+(`CLAUDE.md`) exist to prevent. Recorded here with an explicit decision each; the
+end state of every test is correct and passing, but the git history did not show
+them RED-first and BA had not flagged it. **None weakens a safety invariant.**
+
+- **`9eff0ec` feat(S-201) GREEN (Dev)** — edited `tests/a11y/conftest.py`,
+  `tests/integration/test_schema.py`, `tests/safety/test_config_frozen.py`,
+  `tests/safety/test_safety_invariants.py`. **Decision: accept-with-reason.** The
+  change was purely `ruff --fix` isort re-ordering (no semantic change), triggered
+  when the `data/` package shifted first-party import grouping. **It is still Dev
+  editing `tests/`, incl. a safety test — a real deviation.** Prevention is
+  already in place (DL-014 pins `known-first-party` so this churn does not recur);
+  **added rule: Dev does not run `ruff --fix` over `tests/`; SDET owns test
+  formatting.**
+- **`b4e4cbf` feat(S-103) GREEN (Dev+SDET)** — added `test_icr_non_positive_raises`
+  and `test_non_positive_curve_constants_raise` in the same commit as the
+  validators they exercise. **Decision: accept-with-reason.** These *were* seen
+  RED first in-session (validators temporarily stripped → tests failed → restored;
+  noted in the commit body), so this is a *commit-granularity* miss (no separate
+  RED commit), not green-before-red. Not re-authored: the RED observation is
+  genuine and documented.
+- **`790e385` feat(S-202) GREEN (Dev)** — created `tests/unit/test_clock.py` inside
+  the implementation commit. **Decision: accept-with-reason.** `SystemClock`
+  already existed when the test was written, so it was green-on-arrival
+  (a true RED-first miss). It is a trivial coverage-completeness test for the one
+  sanctioned wall-clock read (asserts `now()` returns a `datetime` within
+  `[before, after]`); it guards a real property but caught no defect. Kept rather
+  than deleted-and-rewritten because re-authoring a trivially-true assertion adds
+  no catch-power; recorded honestly instead of relabelled.
+
+**Prose correction (same H1):** the unqualified "RED-first throughout" claims in
+`docs/traceability.md` are amended to cite this DL-017 caveat. Going forward, each
+story's RED tests get their own `test(S-nnn): RED` commit *before* any impl, and
+Dev never touches `tests/`.
+
+## DL-018 — S-302 provenance correction (audit H2)
+**Story:** S-302 · **Type:** provenance correction · **Owner:** BA
+The server-side rejection of an absent/null `bolus_offset_min` (422) was **already
+delivered by S-301's `MealCreate` schema** (`api/schemas.py`, commit `f59c32c`),
+*before* the S-302 RED commit. Only the **client-side** e2e blocking (GREEN
+`f10cccc`) was net-new under S-302. The end state (two-layer enforcement) is
+correct; the traceability row is amended so the S-302 "RED" label is not read as
+covering the already-green server assertion. The S-302 commit bodies did note
+this ("server side is already enforced by S-301"); the traceability row now says
+so too.
+
+## DL-019 — INV-7 wiring cannot see a DB-level row deletion (audit H4) → S-305
+**Story:** S-203 (raised) → **S-305 (fix)** · **Type:** coverage gap · **Owner:** SDET/Dev
+In `data/repositories.py`, `get_rescued_meals` and `get_hypo_events` both derive
+"rescued" from the **same** `hypo_treatment` flag, so a rescued meal is in the
+hypo set *by construction*; the `rescued − hypo` drop-branch of
+`inv7_rescued_excluded_and_retained` cannot fire via this call site. INV-7 itself
+is sound (unit + 100/20 regression guard pass). But the **catastrophic** case
+INV-7 names — a low disappearing from the data entirely — is a **DB-level row
+deletion**, which this wiring cannot detect (it removes the row from both lists at
+once). **Decision (per auditor):** fix in **S-305 (hypo-rescue capture)**, which
+introduces an independent record of rescued events to reconcile rescued *rows*
+against — so a count mismatch is caught without both lists sharing the
+`hypo_treatment` derivation. Tracked as an S-305 acceptance item.

@@ -21,7 +21,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-009** (macros from dish table; free text lowers confidence) | S-204 | `tests/unit/test_macros.py`, `tests/integration/test_dishes.py` | ✅ Done (seed data pending, DL-015) |
 | **REQ-001** (repeat meal ≤4 taps + 2 numbers) | S-301 | `tests/e2e/test_meal_log_flow.py` (★ tap-count, draft survival, optional collapsed) | ✅ Done |
 | **REQ-002** (per-meal capture via `POST /api/meals`) | S-301 | `tests/integration/test_meals_api.py` (422 no offset; persists; test_at; bolus_log) | ✅ Done (form; correction-only events S-306) |
-| **REQ-003** (signed offset; cannot be skipped/defaulted) | S-302 | `tests/integration/test_bolus_timing.py` (required, no default, null/absent→422, chosen-0 ok), `tests/e2e/test_bolus_timing.py` (client block + prompt; 15-before→−15) | ✅ Done (client + server) |
+| **REQ-003** (signed offset; cannot be skipped/defaulted) | **S-301** (server 422) + **S-302** (client block) | `tests/integration/test_bolus_timing.py` (regression guards — the server 422 predates S-302, delivered by S-301's `MealCreate`; DL-018), `tests/e2e/test_bolus_timing.py` (the net-new S-302 client block + prompt; 15-before→−15) | ✅ Done (client + server) |
 | **REQ-010** (post-BG entry <15s) | S-303 | `tests/e2e/test_post_bg_flow.py`; `PATCH …/post-bg` (one number + one time) | ✅ Done |
 | **REQ-011** (late/retrospective asks real time) | S-303 | `test_post_bg_time_is_required` (422, never assumed); editable reported field | ✅ Done |
 | **REQ-014** (test-time prompt = mealtime+120) | S-301, **S-303** | `test_test_time_prompt_is_reported_mealtime_plus_120` (10:00 not 11:40) | ✅ Done |
@@ -89,8 +89,14 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
   for a function that does not exist and passes vacuously.
 
 ## Epic status
+> **RED-first caveat (DL-017):** an independent audit found three deviations
+> where a GREEN/implementation commit created or edited files under `tests/`
+> (`9eff0ec` S-201, `b4e4cbf` S-103, `790e385` S-202). End state is correct and
+> passing; see DL-017 for the decision on each. "RED-first" below is qualified by
+> that entry, not unconditional.
+
 - **EPIC 1 (Foundation) — COMPLETE.** S-101, S-102, S-103, S-104, S-105 — Done,
-  green, RED-first throughout.
+  green, RED-first (see DL-017 caveat for S-103).
 - **EPIC 2 (Data Layer) — IN PROGRESS.**
   - **S-201 (schema + migrations) — Done.** 9 tables, Alembic initial migration,
     signed offset, DB-computed floored net-carbs, `logged_at`≠`datetime` with no
@@ -109,7 +115,8 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
   - **S-204 (dish table, REQ-009) — Done.** Ingest path, portion scaling
     (2×roti=double), free-text ⇒ `macro_confidence=60` + queued. Seed macros are
     representative pending real IFCT-2017 data (DL-015).
-- **EPIC 2 (Data Layer) — COMPLETE.** S-201..S-204 done, green, RED-first.
+- **EPIC 2 (Data Layer) — COMPLETE.** S-201..S-204 done, green, RED-first (see
+  DL-017 caveat for S-201/S-202).
 - **EPIC 3 (Logging & Durability) — ★ THE CRITICAL PATH — IN PROGRESS.**
   - **S-301 (meal-log form) — Done.** Repeat meal in **3 taps + 2 numbers**
     (favourite → BG → bolus → timing → LOG), `POST /api/meals` (offset required,
