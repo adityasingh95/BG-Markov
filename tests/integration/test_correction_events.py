@@ -204,4 +204,5 @@ def test_reported_datetime_is_not_the_log_time(
         assert ev is not None
         assert ev.datetime == datetime(2026, 7, 13, 10, 15)
         assert ev.logged_at != ev.datetime  # logged_at is the system clock
-        assert ev.logged_by == LoggedBy.patient
+        # logged_by lives on the bolus_log row (the injection), not the event.
+        assert s.query(BolusLog).one().logged_by == LoggedBy.patient
