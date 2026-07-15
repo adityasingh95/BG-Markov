@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Log a correction · BG-Markov{% endblock %}
+{% block content %}
+<h1>Log a correction</h1>
+<p>A correction taken with <strong>no food</strong> is the most useful reading you
+  can give — it's the clean way to learn your correction factor. Thank you for
+  logging it.</p>
+
+<form id="correction-form" action="/api/correction-events" method="post" novalidate>
+  {{ ui.numeric_field("bg_before", "BG now", "bg") }}
+  {{ ui.numeric_field("units", "Correction units", "unit", suffix="U") }}
+
+  <label class="field" for="correction-time">
+    <span class="field-label">Taken at</span>
+    <span class="field-input">
+      {# REPORTED injection time — editable, never silently assumed (ADR-8). #}
+      <input class="num-input" id="correction-time" name="datetime"
+             type="datetime-local" data-correction-time autocomplete="off" />
+    </span>
+  </label>
+
+  <fieldset data-food-in-window>
+    <legend>Will you be eating in the next 4 hours?</legend>
+    <label class="field radio">
+      <input type="radio" name="food_in_window" value="no" />
+      <span>No — just correcting</span>
+    </label>
+    <label class="field radio">
+      <input type="radio" name="food_in_window" value="yes" />
+      <span>Yes — I'll be eating</span>
+    </label>
+  </fieldset>
+
+  <button type="submit" class="primary">Save</button>
+</form>
+
+<p class="toast" id="toast" role="status" hidden></p>
+
+<script src="{{ url_for('static', path='corrections.js') }}"></script>
+{% endblock %}

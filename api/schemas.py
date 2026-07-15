@@ -51,3 +51,30 @@ class PostBgResult(BaseModel):
     elapsed_min: int | None
     is_valid: bool
     exclusion_reasons: list[str]
+
+
+class CorrectionCreate(BaseModel):
+    datetime: dt.datetime  # REPORTED — when she took the correction
+    bg_before: int
+    units: float
+    food_in_window: bool  # "will you be eating in the next 4 hours?"
+    logged_by: LoggedBy = LoggedBy.patient
+
+
+class CorrectionCreated(BaseModel):
+    event_id: int
+    prompt_followup: bool  # only when no food is expected in the window
+    followup_at: dt.datetime | None
+    message: str
+
+
+class CorrectionFollowup(BaseModel):
+    bg_after: int
+    bg_after_time: dt.datetime  # REPORTED — the +4 h reading time
+    food_in_window: bool  # confirmed at follow-up
+
+
+class CorrectionFollowupResult(BaseModel):
+    event_id: int
+    bg_after: int
+    food_in_window: bool

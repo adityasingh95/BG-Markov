@@ -19,12 +19,28 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.deps import get_session
-from api.schemas import MealCreate, MealCreated, PostBgResult, PostBgUpdate
-from data.recording import record_hypo_rescue, record_meal, record_post_bg
+from api.schemas import (
+    CorrectionCreate,
+    CorrectionCreated,
+    CorrectionFollowup,
+    CorrectionFollowupResult,
+    MealCreate,
+    MealCreated,
+    PostBgResult,
+    PostBgUpdate,
+)
+from data.recording import (
+    record_correction_event,
+    record_correction_followup,
+    record_hypo_rescue,
+    record_meal,
+    record_post_bg,
+)
 from data.repositories import annotate_validity
-from data.tables import BolusLog, BolusType, MealEvent
+from data.tables import BolusLog, BolusType, CorrectionEvent, MealEvent
 
 _TEST_DELAY_MIN = 120  # 05b §3.1 — "test your BG" prompt is reported mealtime + 120
+_CORRECTION_FOLLOWUP_MIN = 240  # F-3.2 — correction +4 h follow-up BG
 
 _BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_BASE_DIR / "templates"))
@@ -177,4 +193,84 @@ def add_post_bg(
         elapsed_min=meal.elapsed_min,
         is_valid=meal.is_valid,
         exclusion_reasons=reasons,
+    )
+
+
+@app.get("/corrections", response_class=HTMLResponse)
+def corrections_form(request: Request) -> HTMLResponse:
+    """Log a standalone correction — the clean ISF signal (S-306). No patient
+    model output (INV-2 holds; nothing here predicts anything)."""
+    return templates.TemplateResponse(request, "corrections.html")
+
+
+@app.post("/api/correction-events", response_model=CorrectionCreated)
+def create_correction_event(
+    payload: CorrectionCreate, session: Session = Depends(get_session)
+) -> CorrectionCreated:
+    """Log a correction bolus taken with no meal (05 §3, REQ-013).
+
+    The reported ``datetime`` is the injection time; the server never substitutes
+    ``now()``. The injection is written to ``bolus_log`` (REQ-006) so S-401's IOB
+    can see it. When no food is expected in the window, prompt a +4 h follow-up so
+    the drop can be measured — the alarm time is the **reported** datetime + 4 h.
+    """
+    event = record_correction_event(
+        reported_datetime=payload.datetime,
+        bg_before=payload.bg_before,
+        units=payload.units,
+        food_in_window=payload.food_in_window,
+    )
+    session.add(event)
+    session.add(
+        BolusLog(
+            datetime=payload.datetime,  # REPORTED
+            logged_at=event.logged_at,
+            units=payload.units,
+            bolus_type=BolusType.correction,
+            meal_id=None,
+            logged_by=payload.logged_by,
+        )
+    )
+    session.commit()
+
+    if payload.food_in_window:
+        return CorrectionCreated(
+            event_id=event.event_id,
+            prompt_followup=False,
+            followup_at=None,
+            message="Logged. Eating soon, so this is not a clean ISF reading.",
+        )
+    followup_at = payload.datetime + dt.timedelta(minutes=_CORRECTION_FOLLOWUP_MIN)
+    alarm = followup_at.strftime("%I:%M %p").lstrip("0")
+    return CorrectionCreated(
+        event_id=event.event_id,
+        prompt_followup=True,
+        followup_at=followup_at,
+        message=f"Not eating in the next 4 hours? Log a follow-up BG at {alarm}.",
+    )
+
+
+@app.patch(
+    "/api/correction-events/{event_id}/followup", response_model=CorrectionFollowupResult
+)
+def add_correction_followup(
+    event_id: int, payload: CorrectionFollowup, session: Session = Depends(get_session)
+) -> CorrectionFollowupResult:
+    """Attach the +4 h reading (05 §3). ``bg_after_time`` is reported;
+    ``food_in_window`` is confirmed here (it decides ISF cleanliness, 07 §6)."""
+    event = session.get(CorrectionEvent, event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="correction event not found")
+
+    record_correction_followup(
+        event,
+        bg_after=payload.bg_after,
+        bg_after_time=payload.bg_after_time,
+        food_in_window=payload.food_in_window,
+    )
+    session.commit()
+    return CorrectionFollowupResult(
+        event_id=event.event_id,
+        bg_after=payload.bg_after,  # just written; typed int (column is nullable)
+        food_in_window=event.food_in_window,
     )

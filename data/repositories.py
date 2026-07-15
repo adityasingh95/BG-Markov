@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from core import safety
 from core.validity import exclusion_reasons, is_hypo_outcome, is_valid
-from data.tables import HypoRescueLog, MealEvent
+from data.tables import CorrectionEvent, HypoRescueLog, MealEvent
 
 
 def _meals_ordered(session: Session) -> list[MealEvent]:
@@ -96,3 +96,26 @@ def get_training_set(session: Session) -> list[MealEvent]:
         rescued_meal_ids=get_recorded_rescue_meal_ids(session),
     )
     return training
+
+
+def get_clean_correction_events(session: Session) -> list[CorrectionEvent]:
+    """The unconfounded ISF signal (07 §6): standalone corrections with no food
+    AND a KNOWN, low insulin-on-board.
+
+    Filter: ``food_in_window == False AND iob_at_start is not None AND
+    iob_at_start < 0.5``. A NULL ``iob_at_start`` is **deferred, not clean** — the
+    IOB engine (S-401) has not yet backfilled it, so we do not know the confounder
+    and the event must be excluded. This is the accessor the future ``derive-isf``
+    (S-501) reads; it never mutates or applies ISF.
+    """
+    return list(
+        session.scalars(
+            select(CorrectionEvent)
+            .where(
+                CorrectionEvent.food_in_window.is_(False),
+                CorrectionEvent.iob_at_start.is_not(None),
+                CorrectionEvent.iob_at_start < 0.5,
+            )
+            .order_by(CorrectionEvent.datetime)
+        )
+    )

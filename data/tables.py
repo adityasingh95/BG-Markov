@@ -182,10 +182,14 @@ class CorrectionEvent(Base):
     datetime: Mapped[dt.datetime] = mapped_column()  # REPORTED
     logged_at: Mapped[dt.datetime] = mapped_column()
     bg_before: Mapped[int] = mapped_column()
-    bg_after: Mapped[int] = mapped_column()  # +4 h
-    bg_after_time: Mapped[dt.datetime] = mapped_column()  # REPORTED
+    # +4 h reading + its reported time arrive at the follow-up, not at create
+    # (two-phase capture, S-306) — nullable until then.
+    bg_after: Mapped[int | None] = mapped_column(default=None)
+    bg_after_time: Mapped[dt.datetime | None] = mapped_column(default=None)  # REPORTED
     units: Mapped[float] = mapped_column()
-    iob_at_start: Mapped[float] = mapped_column()  # valid only if < 0.5
+    # DEFERRED to S-401: iob_at() derives this from bolus_log; NULL means "not yet
+    # known" and is excluded from the clean ISF set (07 §6). Never hand-entered.
+    iob_at_start: Mapped[float | None] = mapped_column(default=None)  # valid only if < 0.5
     food_in_window: Mapped[bool] = mapped_column()
 
 
