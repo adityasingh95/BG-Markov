@@ -36,17 +36,20 @@ that failure could still hide.
    > Audit scope: `<scope>`. Follow your charter. Verify from primary sources
    > (spec pack for intent; code + tests + git history + the running toolchain
    > for reality) — treat every story/traceability/decision-log claim as an
-   > unverified hypothesis. Write your report to `audits/` and return the report
-   > path plus the Verdict block.
+   > unverified hypothesis. Produce BOTH output files per your charter — the
+   > evidence report (`audits/AUDIT-…`) and the remediation brief for the build
+   > agents (`audits/HANDOFF-…`) — and return both paths plus the Verdict block.
 
    Run it synchronously (`run_in_background: false`) — the user is waiting for the
    verdict.
 
-3. **Relay the result to the user.** The subagent's report is not shown to the
+3. **Relay the result to the user.** The subagent's files are not shown to the
    user automatically. When it returns, surface: the **overall verdict**, the
    **one-question answer** (could a silently-wrong-about-a-low defect survive?),
    the **blocker/major/minor finding counts**, the **top 1–3 findings**, and the
-   **path to the full report**. Keep it tight; the detail lives in the report file.
+   **paths to both files** — the evidence report AND the remediation brief
+   (`HANDOFF-…`), noting that the brief is the one to hand to the SDET/Dev/BA
+   agents. Keep it tight; the detail lives in the files.
 
 4. **Do not fix anything.** The auditor reports; it never edits `core/`, `tests/`,
    or `docs/`. If the user then wants fixes, that is follow-up work for the build
