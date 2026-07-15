@@ -29,6 +29,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-051** (restore drill executed in month one) | S-304 | `test_restore_drill_is_ok_and_faithful` + **drill executed 2026-07-15** (`docs/durability-drills.md`) | ✅ Done (drill run) |
 | **REQ-052** (nightly CSV export) | S-304 | `test_export_writes_a_csv_per_table_with_headers` | ✅ Done |
 | **REQ-012 / INV-7** (hypo rescue captured; independent ledger reconciles rescued rows) | **S-305** | `tests/integration/test_hypo_rescue.py` (★ row-deletion ⇒ raise; flag-clear ⇒ raise; ledger has no cascading FK; migration; API appends) | ✅ Done (closes DL-019/H4) |
+| **REQ-013** (correction-only events captured; +4 h follow-up) | **S-306** | `tests/integration/test_correction_events.py` (POST + bolus_log; +4h prompt at reported+4h; ★ clean-events exclude food_in_window==True AND NULL iob), `test_correction_schema.py` (nullable + migration), `tests/a11y/test_corrections_form.py` | ✅ Done (`iob_at_start` deferred to S-401 — DL-020; ISF derivation S-501) |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -145,5 +146,11 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     hard-deleted rescued meal row (`rescued − hypo`) and a cleared `hypo_treatment`
     flag (`rescued & training`) now both raise. **Closes DL-019 / audit-H4** — the
     invariant was not re-implemented, only its `rescued_meal_ids` source made truer.
-  - Next: **S-306** correction-only events (the clean ISF signal), S-307 operator
-    dashboard. Shipping EPIC 3 starts the Gate-1 clock.
+  - **S-306 (correction-only event capture) — Done.** Two-phase capture (log +
+    +4 h follow-up) of a correction with no food — the clean ISF signal; the
+    injection is written to `bolus_log` (REQ-006). `get_clean_correction_events`
+    is the `07` §6 accessor; a NULL `iob_at_start` (deferred to S-401, DL-020) is
+    excluded so the deferral cannot poison ISF. Accessible `/corrections` form.
+  - Next: **S-307** operator adherence dashboard, then EPIC 3 ships and the
+    Gate-1 clock starts. (Post-ship: S-401 backfills `iob_at_start`; S-501 derives
+    ISF from these events.)

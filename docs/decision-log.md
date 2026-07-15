@@ -291,3 +291,21 @@ silent-loss vectors are now loud: a hard-deleted rescued meal row trips
 `rescued & training` (leak). Both are covered by load-bearing tests in
 `tests/integration/test_hypo_rescue.py` (row-deletion + flag-clear). The invariant
 was **not** re-implemented — only the source of `rescued_meal_ids` was made truer.
+
+## DL-020 — `iob_at_start` deferred to S-401; correction_event columns made nullable
+**Story:** S-306 · **Type:** build-order deferral + schema deviation · **Approved by:** operator (2026-07-15)
+S-306 captures correction-only events (REQ-013), but `iob_at_start` requires the
+IOB engine — `iob_at()` over `bolus_log`, the Fiasp curve — which is **S-401
+(EPIC 4, post-ship)** and does not exist yet. CLAUDE.md forbids hand-entered IOB
+(must be derived) and forbids working around a missing piece. **Decision
+(operator-approved):** *defer* — capture the event now with `iob_at_start = NULL`,
+to be backfilled by S-401. The `07` §6 clean-signal filter already requires
+`iob_at_start < 0.5`, so a NULL is **not yet clean** and is excluded from ISF
+derivation by construction — loud, never a silent inclusion (guarded by
+`test_clean_events_exclude_food_in_window_and_unknown_iob`). **Schema deviation
+from S-201:** `correction_event.{iob_at_start, bg_after, bg_after_time}` become
+**nullable** — `iob_at_start` for the deferral, `bg_after`/`bg_after_time` for the
+two-phase (+4 h) capture that mirrors the meal → post-bg pattern. Migration
+`b2c3d4e5f6a7`. **Out of scope, tracked:** `iob_at_start` computation → S-401; the
+ISF regression + `implied_isf`/`clean_events_count` response (`05` §3) → S-501
+(`cli derive-isf`).
