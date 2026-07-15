@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from api.deps import get_session
 from api.schemas import MealCreate, MealCreated, PostBgResult, PostBgUpdate
-from data.recording import record_meal, record_post_bg
+from data.recording import record_hypo_rescue, record_meal, record_post_bg
 from data.repositories import annotate_validity
 from data.tables import BolusLog, BolusType, MealEvent
 
@@ -155,6 +155,13 @@ def add_post_bg(
     meal.hypo_treatment_g = payload.hypo_treatment_g
     meal.snack_during_window = payload.snack_during_window
     record_post_bg(meal, post_bg=payload.post_bg, post_bg_time=payload.post_bg_time)
+
+    # A rescue is a low. Append it to the independent ledger so INV-7 can
+    # reconcile against a record that survives even a meal-row deletion (S-305).
+    if payload.hypo_treatment:
+        session.add(
+            record_hypo_rescue(meal_id=meal.meal_id, grams=payload.hypo_treatment_g)
+        )
 
     prev_meal_datetime = session.scalars(
         select(MealEvent.datetime)

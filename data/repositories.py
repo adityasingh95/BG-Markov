@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from core import safety
 from core.validity import exclusion_reasons, is_hypo_outcome, is_valid
-from data.tables import MealEvent
+from data.tables import HypoRescueLog, MealEvent
 
 
 def _meals_ordered(session: Session) -> list[MealEvent]:
@@ -54,6 +54,21 @@ def get_rescued_meals(session: Session) -> list[MealEvent]:
     return [m for m in _meals_ordered(session) if m.hypo_treatment]
 
 
+def get_recorded_rescue_meal_ids(session: Session) -> set[int]:
+    """The rescued set INV-7 reconciles against: the **union** of meals currently
+    flagged `hypo_treatment` and meals recorded in the independent `hypo_rescue_log`
+    ledger (S-305 / DL-019).
+
+    Sourcing from the ledger — not the flag alone — is what lets INV-7 catch the
+    two ways a low can silently disappear: a meal row that is deleted (gone from
+    the flag set, still in the ledger) or a `hypo_treatment` flag that is cleared
+    (same). The ledger entry is a fact that outlives both.
+    """
+    flagged = {m.meal_id for m in get_rescued_meals(session)}
+    ledgered = set(session.scalars(select(HypoRescueLog.meal_id)))
+    return flagged | ledgered
+
+
 def get_hypo_events(session: Session) -> list[MealEvent]:
     """Rescued meals (retained even if post_bg looks normal) plus measured lows
     (INV-7 / REQ-023)."""
@@ -78,6 +93,6 @@ def get_training_set(session: Session) -> list[MealEvent]:
     safety.inv7_rescued_excluded_and_retained(
         training_meal_ids=[m.meal_id for m in training],
         hypo_event_ids=[m.meal_id for m in get_hypo_events(session)],
-        rescued_meal_ids=[m.meal_id for m in get_rescued_meals(session)],
+        rescued_meal_ids=get_recorded_rescue_meal_ids(session),
     )
     return training

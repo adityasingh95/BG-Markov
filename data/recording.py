@@ -13,7 +13,7 @@ import datetime as dt
 
 from core.clock import Clock, SystemClock
 from core.timestamps import bolus_offset_min, elapsed_min
-from data.tables import LoggedBy, MealEvent, MealType
+from data.tables import HypoRescueLog, LoggedBy, MealEvent, MealType
 
 
 def record_meal(
@@ -58,3 +58,16 @@ def record_post_bg(
     meal.post_bg_time = post_bg_time
     meal.elapsed_min = elapsed_min(meal.datetime, post_bg_time)
     return meal
+
+
+def record_hypo_rescue(
+    *, meal_id: int, grams: float | None, clock: Clock | None = None
+) -> HypoRescueLog:
+    """Append an independent rescue record to `hypo_rescue_log` (INV-7 / DL-019).
+
+    `logged_at` is the system clock — this is the record's write time, not a
+    clinical timestamp (ADR-8). The row is deliberately not FK-bound to the meal,
+    so it survives a meal-row deletion and INV-7 can reconcile against it.
+    """
+    clock = clock or SystemClock()
+    return HypoRescueLog(meal_id=meal_id, grams=grams, logged_at=clock.now())

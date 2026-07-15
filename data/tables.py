@@ -189,6 +189,28 @@ class CorrectionEvent(Base):
     food_in_window: Mapped[bool] = mapped_column()
 
 
+class HypoRescueLog(Base):
+    """An independent, append-only ledger of hypo rescues (REQ-012, INV-7).
+
+    Deliberately **decoupled** from ``meal_event``: ``meal_id`` is a plain integer
+    reference, **not** a cascading foreign key, so deleting a meal row cannot erase
+    its rescue record. This independence is what lets INV-7 catch a rescued meal
+    row that vanished from the database — the flag-and-row disappear together, this
+    ledger entry does not (04 §5 INV-7 / DL-019, audit H4). Never updated in place;
+    a rescue is a fact that happened.
+    """
+
+    __tablename__ = "hypo_rescue_log"
+
+    rescue_id: Mapped[int] = mapped_column(primary_key=True)
+    # Plain reference — NOT a ForeignKey. A meal-row deletion must not cascade here.
+    meal_id: Mapped[int] = mapped_column()
+    grams: Mapped[float | None] = mapped_column(default=None)
+    # System clock is correct here: this is the record's write time, not a
+    # clinical (reported) timestamp (ADR-8).
+    logged_at: Mapped[dt.datetime] = mapped_column()
+
+
 class Dish(Base):
     """The adherence mechanism — a repeat meal in a few taps (REQ-009)."""
 
