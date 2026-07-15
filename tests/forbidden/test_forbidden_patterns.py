@@ -272,3 +272,39 @@ def test_logged_at_now_is_not_flagged() -> None:
         "created_at = datetime.utcnow()\n",
     ):
         assert not detect_datetime_now_on_clinical_ts(ast.parse(snippet)), snippet
+
+
+# --- Tripwires: keep latent guards from passing vacuously forever (audit H3) ---
+
+# Packages that will hold the state-binner (EPIC 5) and the IOB engine (EPIC 4).
+_MODEL_PACKAGES = ["features", "models"]
+
+
+def _defines_any(names: set[str]) -> bool:
+    """True if any source function is named in `names`."""
+    for path in _iter_source_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name in names:
+                return True
+    return False
+
+
+def test_pre_bg_binner_guard_is_armed_once_model_code_exists() -> None:
+    """The `pre_bg`→binner guard scans for calls to names in `_BINNER_NAMES`; with
+    no binner yet it passes vacuously. This tripwire fails the moment `features/`
+    or `models/` exists but NO function in `_BINNER_NAMES` is defined — forcing
+    S-404/S-501 to register the real binner name so a renamed binner cannot slip
+    past the input-path guard (audit H3).
+
+    Binning `pre_bg` as an input discards exactly the low-BG resolution the model
+    needs to predict a low — this guard must be armed before that code lands.
+    """
+    model_pkgs = [p for p in _MODEL_PACKAGES if (_REPO_ROOT / p).is_dir()]
+    if not model_pkgs:
+        pytest.skip("no features/ or models/ package yet — binner guard arms at S-404/S-501")
+    assert _defines_any(_BINNER_NAMES), (
+        f"{model_pkgs} exist but no function in _BINNER_NAMES is defined; register the "
+        "real state-binner name in _BINNER_NAMES so the pre_bg input-path guard has a "
+        "live target (do not let a renamed binner slip past)."
+    )

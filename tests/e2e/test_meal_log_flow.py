@@ -13,23 +13,30 @@ pytestmark = pytest.mark.e2e
 
 
 def test_repeat_meal_in_at_most_four_taps(page: Page) -> None:
-    """★ REQ-001, tested: favourite (tap 1) → BG → bolus → timing (tap 2) →
-    LOG MEAL (tap 3) ⇒ a confirmation appears. Two numbers, three taps."""
+    """★ REQ-001, tested: a repeat meal logs in ≤4 taps + 2 numbers.
+
+    The tap count is derived from *actual* page interactions (every real click is
+    counted by a wrapper), not a hand-maintained integer — so the budget can't
+    silently drift (audit H5)."""
     taps = 0
 
-    page.click("[data-favourite]")          # tap 1 — populates all macros
-    taps += 1
-    page.fill("#f-pre_bg", "142")           # number 1
-    page.fill("#f-meal_bolus_units", "6")   # number 2
-    page.click(".timing-preset")            # tap 2 — sets the signed offset
-    taps += 2  # (the preset click, then the submit below)
-    page.click("button.primary")            # tap 3 — LOG MEAL
+    def tap(selector: str) -> None:
+        nonlocal taps
+        taps += 1
+        page.click(selector)
 
-    assert taps <= 4, f"a repeat meal took {taps} taps (budget is 4)"
+    tap("[data-favourite]")                 # tap — populates all macros
+    page.fill("#f-pre_bg", "142")           # number 1 (typing, not a tap)
+    page.fill("#f-meal_bolus_units", "6")   # number 2
+    tap(".timing-preset")                   # tap — sets the signed offset
+    tap("button.primary")                   # tap — LOG MEAL
 
     toast = page.locator("#toast")
     toast.wait_for(state="visible", timeout=5000)
     assert "Logged" in (toast.text_content() or ""), "expected a logged confirmation"
+
+    # Assert on the REAL number of taps performed to reach a logged meal.
+    assert taps <= 4, f"a repeat meal took {taps} taps (budget is 4)"
 
 
 def test_draft_survives_a_killed_entry(page: Page) -> None:
