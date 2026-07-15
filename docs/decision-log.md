@@ -280,3 +280,14 @@ once). **Decision (per auditor):** fix in **S-305 (hypo-rescue capture)**, which
 introduces an independent record of rescued events to reconcile rescued *rows*
 against — so a count mismatch is caught without both lists sharing the
 `hypo_treatment` derivation. Tracked as an S-305 acceptance item.
+
+**✅ RESOLVED in S-305 (2026-07-15).** `hypo_rescue_log` — an append-only ledger
+deliberately decoupled from `meal_event` (`meal_id` is a plain reference, **not** a
+cascading FK) — now records every rescue. `get_recorded_rescue_meal_ids` returns
+the **union** of currently-flagged meals and ledger entries, and `get_training_set`
+feeds that union into the unchanged `inv7_rescued_excluded_and_retained`. The two
+silent-loss vectors are now loud: a hard-deleted rescued meal row trips
+`rescued − hypo` (drop), and a cleared `hypo_treatment` flag trips
+`rescued & training` (leak). Both are covered by load-bearing tests in
+`tests/integration/test_hypo_rescue.py` (row-deletion + flag-clear). The invariant
+was **not** re-implemented — only the source of `rescued_meal_ids` was made truer.

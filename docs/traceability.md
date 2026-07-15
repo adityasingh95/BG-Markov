@@ -28,6 +28,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-050** (hourly snapshot; app.db never in synced folder) | S-304 | `tests/safety/test_backup_restore.py` (synced rejected; backup-during-write valid) | ✅ Done |
 | **REQ-051** (restore drill executed in month one) | S-304 | `test_restore_drill_is_ok_and_faithful` + **drill executed 2026-07-15** (`docs/durability-drills.md`) | ✅ Done (drill run) |
 | **REQ-052** (nightly CSV export) | S-304 | `test_export_writes_a_csv_per_table_with_headers` | ✅ Done |
+| **REQ-012 / INV-7** (hypo rescue captured; independent ledger reconciles rescued rows) | **S-305** | `tests/integration/test_hypo_rescue.py` (★ row-deletion ⇒ raise; flag-clear ⇒ raise; ledger has no cascading FK; migration; API appends) | ✅ Done (closes DL-019/H4) |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -53,7 +54,7 @@ each invariant must still be *wired in* by the story that owns its feature.
 | INV-4 | `inv4_bolus_allowed_at_bg` | `test_safety_invariants.py::test_inv4_*` | ✅ S-104 | ⏳ S-901 |
 | INV-5 | `inv5_monitoring_not_reduced` | `test_safety_invariants.py::test_inv5_*` | ✅ S-104 | ⏳ output/advice stories |
 | INV-6 | `inv6_predicted_bg_in_range` | `test_safety_invariants.py::test_inv6_*` | ✅ S-104 | ⏳ S-801 |
-| INV-7 | `inv7_rescued_excluded_and_retained` | `test_safety_invariants.py::test_inv7_*`; **wiring:** `test_repositories.py` (regression guard + wiring-bites) | ✅ S-104 | ✅ **S-203** — `get_training_set()` calls it (S-305 adds capture) |
+| INV-7 | `inv7_rescued_excluded_and_retained` | `test_safety_invariants.py::test_inv7_*`; **wiring:** `test_repositories.py` (regression guard + wiring-bites); **ledger reconciliation:** `test_hypo_rescue.py` (row-deletion + flag-clear ⇒ raise) | ✅ S-104 | ✅ **S-203** wired + **S-305** independent ledger closes the DB-row-deletion gap (DL-019/H4) |
 | INV-8 | `inv8_beta_insulin_non_negative` | `test_safety_invariants.py::test_inv8_*` | ✅ S-104 | ⏳ S-503 / S-603 |
 | INV-9 | `inv9_prediction_persisted` | `test_safety_invariants.py::test_inv9_*` | ✅ S-104 | ⏳ S-802 |
 | _module hygiene_ | no-`assert` (AST), zero internal imports (ADR-6), single-definition, `-O` still raises | `test_safety_module_hygiene.py` | ✅ S-104 | — |
@@ -138,6 +139,11 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     synced-folder guard. **★ The restore drill was run for real on 2026-07-15**
     (`docs/durability-drills.md`): ok=True, integrity ok, byte + data identical.
     Re-run monthly.
-  - Next: **S-305** hypo-rescue capture (carries the audit-H4 INV-7 row-deletion
-    reconciliation, DL-019), S-306 correction events, S-307 operator dashboard.
-    Shipping EPIC 3 starts the Gate-1 clock.
+  - **S-305 (hypo-rescue capture) — Done.** New append-only `hypo_rescue_log`
+    ledger, deliberately decoupled from `meal_event` (plain `meal_id`, no cascading
+    FK). `get_recorded_rescue_meal_ids` = flagged ∪ ledgered feeds INV-7, so a
+    hard-deleted rescued meal row (`rescued − hypo`) and a cleared `hypo_treatment`
+    flag (`rescued & training`) now both raise. **Closes DL-019 / audit-H4** — the
+    invariant was not re-implemented, only its `rescued_meal_ids` source made truer.
+  - Next: **S-306** correction-only events (the clean ISF signal), S-307 operator
+    dashboard. Shipping EPIC 3 starts the Gate-1 clock.
