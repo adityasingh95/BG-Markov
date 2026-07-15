@@ -25,6 +25,9 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-010** (post-BG entry <15s) | S-303 | `tests/e2e/test_post_bg_flow.py`; `PATCH …/post-bg` (one number + one time) | ✅ Done |
 | **REQ-011** (late/retrospective asks real time) | S-303 | `test_post_bg_time_is_required` (422, never assumed); editable reported field | ✅ Done |
 | **REQ-014** (test-time prompt = mealtime+120) | S-301, **S-303** | `test_test_time_prompt_is_reported_mealtime_plus_120` (10:00 not 11:40) | ✅ Done |
+| **REQ-050** (hourly snapshot; app.db never in synced folder) | S-304 | `tests/safety/test_backup_restore.py` (synced rejected; backup-during-write valid) | ✅ Done |
+| **REQ-051** (restore drill executed in month one) | S-304 | `test_restore_drill_is_ok_and_faithful` + **drill executed 2026-07-15** (`docs/durability-drills.md`) | ✅ Done (drill run) |
+| **REQ-052** (nightly CSV export) | S-304 | `test_export_writes_a_csv_per_table_with_headers` | ✅ Done |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -130,8 +133,11 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     …/post-bg` (reported `post_bg_time` required; `elapsed_min` from reported
     times; stored regardless of validity); `<15s` form with an editable reported
     "taken at"; test-time prompt = mealtime + 120.
-  - Next: **S-304 ★ backup + restore drill — [SAFETY], and the drill must be
-    EXECUTED in month one** (the story is not "done" until the restore has been
-    run for real and BA logs the date), S-305 hypo-rescue capture, S-306
-    correction events, S-307 operator dashboard. Shipping EPIC 3 starts the
-    Gate-1 clock.
+  - **S-304 (backup + restore drill) — Done, drill EXECUTED.** `cli backup`
+    (online snapshot), `cli export` (CSV/table), `cli restore-drill`;
+    synced-folder guard. **★ The restore drill was run for real on 2026-07-15**
+    (`docs/durability-drills.md`): ok=True, integrity ok, byte + data identical.
+    Re-run monthly.
+  - Next: **S-305** hypo-rescue capture (carries the audit-H4 INV-7 row-deletion
+    reconciliation, DL-019), S-306 correction events, S-307 operator dashboard.
+    Shipping EPIC 3 starts the Gate-1 clock.
