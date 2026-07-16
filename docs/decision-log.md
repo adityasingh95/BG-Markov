@@ -345,3 +345,16 @@ from the request). ISF derivation itself remains S-502.
   the flag∪ledger sourcing), `hypo_rescue_log.meal_id` plain column (no FK),
   deferred gates, `iob_at_start = NULL`, the H3 tripwire skip, and no premature
   EPIC 4+ dirs.
+
+## DL-022 — scikit-learn pinned as a dependency (S-404)
+**Story:** S-404 · **Type:** dependency addition · **Approved by:** implied by 07 §5 (spec-mandated)
+The feature pipeline standardises continuous features with `StandardScaler` inside
+a `Pipeline` (07 §5), which is `scikit-learn` — not previously a dependency. Added
+**pinned** `scikit-learn==1.9.0` (per S-101's pinned-deps AC) plus a `mypy`
+`ignore_missing_imports` override for `sklearn.*` (incomplete stubs, like
+`pandas`/`statsmodels`). **Version note:** 1.9.0 is ≥1.7, where
+`LogisticRegression(multi_class=…)` is removed — irrelevant here (the model is
+`statsmodels` `OrderedModel`; the forbidden-pattern guard already bans
+`multi_class`, so a future accidental use fails the build regardless). The scaler
+is used only via `make_scaler()` and must be fit on train folds only — the leakage
+tests enforce this.

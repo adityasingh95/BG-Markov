@@ -34,6 +34,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-020** (IOB derived from `bolus_log`; Fiasp exponential tp=55 td=240; no manual entry) | **S-401** | `tests/unit/test_iob.py` (★ monotone-decreasing on (0,td); ∈[0,1]; f(0)=1/f(240)=0/f(−5)=1; golden 6 pairs 4 dp; iob_at additive) + `detect_manual_iob` clean | ✅ Done — **opens EPIC 4** |
 | **REQ-021** (effective basal = EWMA halflife 25h; multi-day carryover; not raw dose) | **S-402** | `tests/unit/test_basal.py` (★ step 24→30: +1d strictly between, +5d within 0.5 of 30; flat series constant; lockout change-day..+3d flagged, +4d clear) | ✅ Done |
 | **REQ-024** (exercise one-hot + duration interactions; never numeric 0/1/2) | **S-403** | `tests/unit/test_exercise.py` (none=baseline; light/intense indicators + *_min; ★ light/60 vs intense/60 not scalar multiples ⇒ opposite-signed effects representable) | ✅ Done |
+| **Feature pipeline** (`07` §5; pre_bg continuous; sample_weight; scaler train-folds-only; temporal CV) | **S-404** | `tests/unit/test_pipeline.py` (feature_vector, sample_weight, one-hot); `tests/leakage/test_leakage.py` (★ no target leakage; pre_bg not binned; forward-chaining folds ordered + day-disjoint; scaler train-fold ≠ full-set) | ✅ Done — **closes EPIC 4** |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -184,10 +185,18 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     light/intense indicators + duration interactions (none = baseline). light/60
     and intense/60 are not scalar multiples, so the model can represent
     opposite-signed effects (light lowers, intense raises) — the physiology a
-    numeric 0/1/2 column forbids. Next: **S-404 feature pipeline** (pre_bg
-    continuous, macro_confidence/100 as sample_weight, scaler fit on train folds
-    only) closes EPIC 4; then EPIC 5 (S-501 baseline, S-502 ISF, S-503 constrained
-    OLS).
+    numeric 0/1/2 column forbids.
+  - **★ S-404 (feature pipeline) — Done. EPIC 4 COMPLETE.** `features/pipeline.py`
+    assembles the `07` §5 vector (pre_bg continuous, targets absent by
+    construction, macro_confidence/100 as sample_weight, StandardScaler fit on
+    train folds only); `features/cv.py` gives forward-chaining temporal folds (no
+    day in train+test; train precedes test). New `tests/leakage/` suite (09 §7)
+    runs every commit. scikit-learn pinned (DL-022). **All derived features — IOB,
+    effective basal, exercise, and the leakage-safe pipeline — are in.**
+  - Next: **EPIC 5** — S-501 (★ baseline model — the bar the ML must beat, build
+    before any ML), S-502 [SAFETY] (ISF from correction events; consumes the
+    S-306b iob_at_start), S-503 [SAFETY] (constrained OLS — INV-8, the
+    confounding-by-indication test). Then EPIC 6 (the ordinal model).
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.
