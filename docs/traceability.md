@@ -30,6 +30,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-052** (nightly CSV export) | S-304 | `test_export_writes_a_csv_per_table_with_headers` | ✅ Done |
 | **REQ-012 / INV-7** (hypo rescue captured; independent ledger reconciles rescued rows) | **S-305** | `tests/integration/test_hypo_rescue.py` (★ row-deletion ⇒ raise; flag-clear ⇒ raise; ledger has no cascading FK; migration; API appends) | ✅ Done (closes DL-019/H4) |
 | **REQ-013** (correction-only events captured; +4 h follow-up) | **S-306** | `tests/integration/test_correction_events.py` (POST + bolus_log; +4h prompt at reported+4h; ★ clean-events exclude food_in_window==True AND NULL iob), `test_correction_schema.py` (nullable + migration), `tests/a11y/test_corrections_form.py` | ✅ Done (`iob_at_start` deferred to S-401 — DL-020; ISF derivation S-501) |
+| **REQ-053** (operator adherence dashboard: valid rate, exclusions, `median(logged_at − datetime)`, days-since-last-log) | **S-307** | `tests/integration/test_adherence.py` (valid/gate1 countdown; exclusions-by-reason; in-window rate; days-since-log; ★ median lag from the two distinct columns, asserted ≠ 0; empty-DB safe; `/api/adherence` + `/operator` render) | ✅ Done — **closes EPIC 3** |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -151,6 +152,16 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     injection is written to `bolus_log` (REQ-006). `get_clean_correction_events`
     is the `07` §6 accessor; a NULL `iob_at_start` (deferred to S-401, DL-020) is
     excluded so the deferral cannot poison ISF. Accessible `/corrections` form.
-  - Next: **S-307** operator adherence dashboard, then EPIC 3 ships and the
-    Gate-1 clock starts. (Post-ship: S-401 backfills `iob_at_start`; S-501 derives
-    ISF from these events.)
+  - **S-307 (operator adherence dashboard) — Done.** `data/adherence.py` +
+    `GET /api/adherence` + `GET /operator`: valid-meals / 150-to-Gate-1 countdown,
+    in-window rate, exclusions by reason, days-since-last-log, and the ★
+    `median(logged_at − datetime)` transcription-lag metric computed from the two
+    distinct columns (the ADR-8 payoff — the recall-bias early-warning). Read-only,
+    operator-only, no model output.
+  - **★ EPIC 3 is complete — the system is at the SHIP line.** Logging (meals,
+    timing, post-BG, hypo rescue, correction events), durability (backup + drill),
+    and the adherence cockpit are all in. Shipping starts the **Gate-1 clock**
+    (150 valid meals ≈ 3 months of collection).
+  - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
+    backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
+    correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.
