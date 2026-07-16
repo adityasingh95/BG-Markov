@@ -319,8 +319,13 @@ def test_logged_at_now_is_not_flagged() -> None:
 
 # --- Tripwires: keep latent guards from passing vacuously forever (audit H3) ---
 
-# Packages that will hold the state-binner (EPIC 5) and the IOB engine (EPIC 4).
-_MODEL_PACKAGES = ["features", "models"]
+# The state-binner lives in `models/` (06 §arch: models = baseline · ordinal ·
+# ICR/ISF). `features/` holds IOB · basal · exercise — derived features, no binner
+# — so it must NOT arm the binner tripwire (S-401 creates features/ for the IOB
+# engine before any binner exists). The pre_bg->binner AST scan still runs across
+# ALL packages every commit (test_source_tree_is_free_of_pattern); only the
+# force-registration tripwire is scoped to the binner's real home.
+_BINNER_HOME_PACKAGES = ["models"]
 
 
 def _defines_any(names: set[str]) -> bool:
@@ -334,18 +339,24 @@ def _defines_any(names: set[str]) -> bool:
 
 
 def test_pre_bg_binner_guard_is_armed_once_model_code_exists() -> None:
-    """The `pre_bg`→binner guard scans for calls to names in `_BINNER_NAMES`; with
-    no binner yet it passes vacuously. This tripwire fails the moment `features/`
-    or `models/` exists but NO function in `_BINNER_NAMES` is defined — forcing
-    S-404/S-501 to register the real binner name so a renamed binner cannot slip
-    past the input-path guard (audit H3).
+    """The `pre_bg`->binner guard scans for calls to names in `_BINNER_NAMES`; with
+    no binner yet it passes vacuously. This tripwire fails the moment `models/`
+    (the binner's home per 06 §arch) exists but NO function in `_BINNER_NAMES` is
+    defined — forcing S-501/S-601 to register the real binner name so a renamed
+    binner cannot slip past the input-path guard (audit H3).
+
+    Scoped to `models/`, not `features/`: the IOB/basal/exercise features (EPIC 4,
+    S-401+) contain no binner, so their arrival must not trip this. The
+    `detect_pre_bg_to_binner` scan itself still runs across every package on every
+    commit — this tripwire only forces the name to be registered once binner code
+    can exist.
 
     Binning `pre_bg` as an input discards exactly the low-BG resolution the model
     needs to predict a low — this guard must be armed before that code lands.
     """
-    model_pkgs = [p for p in _MODEL_PACKAGES if (_REPO_ROOT / p).is_dir()]
+    model_pkgs = [p for p in _BINNER_HOME_PACKAGES if (_REPO_ROOT / p).is_dir()]
     if not model_pkgs:
-        pytest.skip("no features/ or models/ package yet — binner guard arms at S-404/S-501")
+        pytest.skip("no models/ package yet — binner guard arms at S-501/S-601")
     assert _defines_any(_BINNER_NAMES), (
         f"{model_pkgs} exist but no function in _BINNER_NAMES is defined; register the "
         "real state-binner name in _BINNER_NAMES so the pre_bg input-path guard has a "
