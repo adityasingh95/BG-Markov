@@ -26,6 +26,7 @@ _SOURCE_PACKAGES = ["core", "features", "models", "prescribe", "data", "api", "c
 # is deliberately absent — it IS the system clock (ADR-8).
 _CLINICAL_TS = {
     "datetime", "pre_bg_time", "post_bg_time", "bolus_time", "bolus_datetime", "time_taken",
+    "bg_after_time",  # S-306 correction-event +4 h reading time (audit N1)
 }
 # User-input sources; assigning IOB from any of these is forbidden (IOB is derived).
 _INPUT_SOURCES = {"request", "req", "form", "payload", "body", "user_input", "params", "args"}
@@ -257,11 +258,53 @@ def test_detector_fires_on_violation(pid: str, detector: object, snippet: str) -
 
 def test_datetime_now_clinical_ts_is_the_most_important_guard() -> None:
     """Fires for each clinical timestamp target populated by now()."""
-    for target in ("datetime", "pre_bg_time", "post_bg_time", "bolus_time"):
+    for target in ("datetime", "pre_bg_time", "post_bg_time", "bolus_time", "bg_after_time"):
         tree = ast.parse(f"obj.{target} = datetime.now()\n")
         assert detect_datetime_now_on_clinical_ts(tree), f"missed now() on {target}"
     # keyword-argument form is caught too
     assert detect_datetime_now_on_clinical_ts(ast.parse("MealEvent(pre_bg_time=datetime.now())\n"))
+    # audit N1: the S-306 correction-event +4 h reading time is a reported clinical
+    # timestamp — the guard must catch now() on it, in both forms.
+    assert detect_datetime_now_on_clinical_ts(
+        ast.parse("event.bg_after_time = datetime.now()\n")
+    ), "guard blind to bg_after_time assignment"
+    assert detect_datetime_now_on_clinical_ts(
+        ast.parse("CorrectionEvent(bg_after_time=datetime.now())\n")
+    ), "guard blind to bg_after_time keyword"
+
+
+# --- Meta-guard: every reported timestamp must arm the now() guard (audit N1) ---
+
+_TABLES_PY = _REPO_ROOT / "data" / "tables.py"
+
+
+def _reported_columns() -> set[str]:
+    """ORM column names in data/tables.py whose line is tagged `# REPORTED`."""
+    names: set[str] = set()
+    for line in _TABLES_PY.read_text(encoding="utf-8").splitlines():
+        if "# REPORTED" in line and ":" in line:
+            head = line.split(":", 1)[0].strip()
+            if head.isidentifier():
+                names.add(head)
+    return names
+
+
+def test_every_reported_column_is_registered_in_clinical_ts() -> None:
+    """Every ORM column marked `# REPORTED` must be in `_CLINICAL_TS`, so the
+    now()->clinical-timestamp guard cannot be blind to a newly-added reported
+    timestamp (as it briefly was for `bg_after_time` after S-306, audit N1).
+
+    This is the forcing function: the next reported clinical timestamp cannot be
+    added to the schema without arming the single most important guard — this test
+    fails until the new column's name is registered here.
+    """
+    reported = _reported_columns()
+    assert reported, "expected some # REPORTED columns in data/tables.py"
+    missing = reported - _CLINICAL_TS
+    assert not missing, (
+        f"# REPORTED columns not registered in _CLINICAL_TS — the now() guard is "
+        f"blind to them: {sorted(missing)}. Add each to _CLINICAL_TS."
+    )
 
 
 def test_logged_at_now_is_not_flagged() -> None:
