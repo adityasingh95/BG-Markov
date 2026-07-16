@@ -36,6 +36,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-024** (exercise one-hot + duration interactions; never numeric 0/1/2) | **S-403** | `tests/unit/test_exercise.py` (none=baseline; light/intense indicators + *_min; ★ light/60 vs intense/60 not scalar multiples ⇒ opposite-signed effects representable) | ✅ Done |
 | **Feature pipeline** (`07` §5; pre_bg continuous; sample_weight; scaler train-folds-only; temporal CV) | **S-404** | `tests/unit/test_pipeline.py` (feature_vector, sample_weight, one-hot); `tests/leakage/test_leakage.py` (★ no target leakage; pre_bg not binned; forward-chaining folds ordered + day-disjoint; scaler train-fold ≠ full-set) | ✅ Done — **closes EPIC 4** |
 | **REQ-030** (baseline predictor; bin via shared state fn; the bar to beat) | **S-501** | `tests/unit/test_baseline.py` (zero⇒post=pre; ★ directionality; 5 golden bg+state; INV-6 raises out of range), `tests/unit/test_state.py` (boundaries [54,80,181,251]; monotone) | ✅ Done — **opens EPIC 5** |
+| **REQ-033** (ISF from correction events; ≥5 clean; never silent swap; ISF≤0 raises) | **S-502** | `tests/unit/test_isf.py` (5⇒applied source=derived; 4⇒default+derived reported; ★ ISF≤0 raises; no events⇒default), `tests/integration/test_isf_derivation.py` (confounded/pending excluded; +4h required) | ✅ Done — consumes S-306b iob_at_start |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -199,10 +200,16 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     (07 §4 formula, INV-6 on the prediction). **Creating `models/` armed the H3
     binner tripwire** — it now runs and passes (`bg_to_state` registered); the
     `pre_bg`→binner input guard stays clean (baseline bins the output). models/ is
-    in the mypy + coverage gates. Next: S-502 [SAFETY] (ISF from correction events;
-    consumes the S-306b `iob_at_start`; ≥5 clean events, never silently swaps,
-    ISF ≤ 0 raises), S-503 [SAFETY] (★ constrained OLS — INV-8, the
-    confounding-by-indication test). Then EPIC 6 (the ordinal model).
+    in the mypy + coverage gates.
+  - **S-502 [SAFETY] (ISF from correction events) — Done.** `models/isf.py`
+    `derive_isf` (mean `(bg_before−bg_after)/units` over clean events) behind three
+    guards: ≥5-event gate, never-silent-swap (both values returned), and a hard stop
+    on any derived ISF ≤ 0. `data/repositories.py::derive_isf_from_correction_events`
+    bridges the S-306/S-306b clean-event filter (food-free, low IOB) and requires a
+    +4 h reading. Nothing mutates `patient_profile` — applying is an explicit
+    operator step (REQ-054). Next: **S-503 [SAFETY]** (★ constrained OLS — INV-8,
+    the confounding-by-indication test — the single most important model-epic test).
+    Then EPIC 6 (the ordinal model).
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.
