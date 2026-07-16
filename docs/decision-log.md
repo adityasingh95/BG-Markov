@@ -309,3 +309,29 @@ two-phase (+4 h) capture that mirrors the meal → post-bg pattern. Migration
 `b2c3d4e5f6a7`. **Out of scope, tracked:** `iob_at_start` computation → S-401; the
 ISF regression + `implied_isf`/`clean_events_count` response (`05` §3) → S-501
 (`cli derive-isf`).
+
+## DL-021 — Audit 2026-07-16-01 remediation (N1–N4); H1–H5 confirmed resolved
+**Source:** `audits/HANDOFF-2026-07-16-01.md` (auditor, outside the loop) · **Audited commit:** `41d0b0e` · **Verdict:** PASS-WITH-CONCERNS (0 blocker, 1 major, 3 minor). The prior cycle's H1–H5 are all **confirmed genuinely resolved**; nothing carried forward.
+- **N1 (major, SDET) — armed the now()→clinical-timestamp guard for `bg_after_time`.**
+  S-306 added a new `# REPORTED` timestamp but did not register it, so the most
+  important forbidden-pattern guard was blind to `bg_after_time = datetime.now()`.
+  Fixed RED-first: added it to `_CLINICAL_TS`, positive assertions (assignment +
+  keyword), and a **new meta-guard** — every `# REPORTED` column in
+  `data/tables.py` must be in `_CLINICAL_TS`, so no future reported timestamp can
+  be added without arming the guard.
+- **N2 (BA) — reconciled S-306 story with what was built.** The TDD-strategy line
+  claimed it would *extend* `tests/safety/test_reported_timestamps.py`; it did not.
+  Corrected the story to point at the covering integration tests, and recorded the
+  decision to route the now()-guard coverage through N1's schema-wide meta-guard
+  (stronger, non-forgettable) rather than per-field safety cases.
+- **N3 (minor, SDET) — smoke test for `python -m cli`.** The operator command
+  surface (`cli/__main__.py`) had 0% coverage; added a dispatch test for
+  backup/export/restore-drill + the non-sqlite-URL rejection. Now 95%.
+- **N4 (minor, BA) — captured drill transcript.** Re-ran the durability drill for
+  real (2026-07-16, post-S-305 10-table schema) and appended the **captured
+  transcript** to `docs/durability-drills.md`; set the going-forward policy that
+  future drills attach logs, not prose.
+- **Explicitly NOT changed** (auditor "do not fix"): `core/safety.py` INV-7 (kept
+  the flag∪ledger sourcing), `hypo_rescue_log.meal_id` plain column (no FK),
+  deferred gates, `iob_at_start = NULL`, the H3 tripwire skip, and no premature
+  EPIC 4+ dirs.
