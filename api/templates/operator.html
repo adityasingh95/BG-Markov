@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Operator · Adherence · BG-Markov{% endblock %}
+{% block content %}
+<h1>Adherence</h1>
+<p class="muted">Operator view. No model output here.</p>
+
+<section aria-label="Gate 1 progress">
+  <p class="metric-big">
+    <strong>{{ m.valid_meals }}</strong> / {{ gate1_target }} valid meals
+    <span class="muted">to Gate 1</span>
+  </p>
+  <p>{{ m.meals_to_gate1 }} valid meals to go.</p>
+</section>
+
+<dl class="metrics">
+  <dt>In-window rate</dt>
+  <dd>
+    {% if m.in_window_rate is none %}—{% else %}{{ (m.in_window_rate * 100) | round(0, 'floor') | int }}%
+      {% if m.in_window_rate < 0.70 %}<span class="warn">⚠ below 70%</span>{% endif %}
+    {% endif %}
+  </dd>
+
+  <dt>Days since last log</dt>
+  <dd>{% if m.days_since_last_log is none %}—{% else %}{{ m.days_since_last_log }}{% endif %}</dd>
+
+  <dt>Transcription lag · median(logged_at − datetime)</dt>
+  <dd>{% if m.median_lag_min is none %}—{% else %}{{ m.median_lag_min | round(0) | int }} min{% endif %}</dd>
+</dl>
+
+<h2>Exclusions</h2>
+{% if m.exclusions_by_reason %}
+<ul class="exclusions">
+  {% for reason, count in m.exclusions_by_reason.items() %}
+  <li>{{ reason }} <strong>{{ count }}</strong>{% if reason == "rescued" %}
+      <span class="muted">← retained as hypo events (INV-7)</span>{% endif %}</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">No exclusions yet.</p>
+{% endif %}
+{% endblock %}

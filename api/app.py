@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from api.deps import get_session
 from api.schemas import (
+    AdherenceResponse,
     CorrectionCreate,
     CorrectionCreated,
     CorrectionFollowup,
@@ -29,6 +30,8 @@ from api.schemas import (
     PostBgResult,
     PostBgUpdate,
 )
+from core.clock import SystemClock
+from data.adherence import GATE1_VALID_MEALS, adherence_metrics
 from data.recording import (
     record_correction_event,
     record_correction_followup,
@@ -273,4 +276,34 @@ def add_correction_followup(
         event_id=event.event_id,
         bg_after=payload.bg_after,  # just written; typed int (column is nullable)
         food_in_window=event.food_in_window,
+    )
+
+
+@app.get("/api/adherence", response_model=AdherenceResponse)
+def adherence(session: Session = Depends(get_session)) -> AdherenceResponse:
+    """Operator adherence metrics (05 §, REQ-053). Operator-only — no model
+    output, so INV-2 is not in play. ``now`` is the system clock (days-since-log)."""
+    m = adherence_metrics(session, now=SystemClock().now())
+    return AdherenceResponse(
+        n_meals=m.n_meals,
+        valid_meals=m.valid_meals,
+        meals_to_gate1=m.meals_to_gate1,
+        in_window_rate=m.in_window_rate,
+        exclusions_by_reason=m.exclusions_by_reason,
+        days_since_last_log=m.days_since_last_log,
+        median_lag_min=m.median_lag_min,
+    )
+
+
+@app.get("/operator", response_class=HTMLResponse)
+def operator_dashboard(
+    request: Request, session: Session = Depends(get_session)
+) -> HTMLResponse:
+    """The operator adherence dashboard (05b §7.1, S-307). Operator-only; not in
+    the patient nav. Shows adherence numbers only — no model output here."""
+    m = adherence_metrics(session, now=SystemClock().now())
+    return templates.TemplateResponse(
+        request,
+        "operator.html",
+        {"m": m, "gate1_target": GATE1_VALID_MEALS},
     )

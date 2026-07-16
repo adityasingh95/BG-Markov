@@ -78,3 +78,13 @@ class CorrectionFollowupResult(BaseModel):
     event_id: int
     bg_after: int
     food_in_window: bool
+
+
+class AdherenceResponse(BaseModel):
+    n_meals: int
+    valid_meals: int
+    meals_to_gate1: int
+    in_window_rate: float | None
+    exclusions_by_reason: dict[str, int]
+    days_since_last_log: int | None
+    median_lag_min: float | None
