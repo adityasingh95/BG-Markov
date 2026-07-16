@@ -29,9 +29,10 @@ jobs:
       - name: Lint (ruff)
         run: ruff check .
 
-      # AC: mypy --strict clean on core (+ api S-102, + data S-201, + cli S-304).
+      # AC: mypy --strict clean on core (+ api S-102, + data S-201, + cli S-304,
+      # + features S-401).
       - name: Types (mypy --strict)
-        run: mypy --strict core api data cli
+        run: mypy --strict core api data cli features
 
       # AC: pytest clean + coverage gate at 90% on core.
       # The toolchain tests additionally assert the ruff/mypy gates BITE on a
