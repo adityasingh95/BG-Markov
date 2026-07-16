@@ -90,7 +90,9 @@ def test_post_correction_event_persists_and_logs_the_bolus(
         assert ev is not None
         assert ev.bg_before == 210
         assert ev.units == 2.0
-        assert ev.iob_at_start is None  # deferred to S-401
+        # iob_at_start is now COMPUTED at capture (S-306b discharged DL-020); with
+        # no prior insulin here it is 0.0 (a genuinely clean event), not NULL.
+        assert ev.iob_at_start == 0.0
         # REQ-006: the injection is in bolus_log as a correction, no meal.
         boluses = s.query(BolusLog).all()
         assert len(boluses) == 1

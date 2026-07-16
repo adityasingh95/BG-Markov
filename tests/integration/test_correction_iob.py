@@ -12,7 +12,7 @@ the endpoint leaves iob_at_start NULL.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -93,8 +93,10 @@ def test_capture_computes_iob_from_prior_bolus_only(
         assert ev is not None
         assert ev.iob_at_start is not None
         assert ev.iob_at_start == pytest.approx(6.0 * iob_fraction(30.0), abs=1e-6)
-        # the correction's own 2 U (age 0, fraction 1.0) must NOT be included
-        assert ev.iob_at_start < 2.0
+        # the correction's own 2 U (age 0, fraction 1.0) must NOT be included —
+        # if it were, iob_at_start would be 6·f(30) + 2·1.0.
+        included = 6.0 * iob_fraction(30.0) + 2.0
+        assert ev.iob_at_start != pytest.approx(included, abs=1e-6)
 
 
 def test_capture_with_no_prior_insulin_is_zero(
