@@ -310,6 +310,16 @@ two-phase (+4 h) capture that mirrors the meal → post-bg pattern. Migration
 ISF regression + `implied_isf`/`clean_events_count` response (`05` §3) → S-501
 (`cli derive-isf`).
 
+**✅ DISCHARGED in S-306b (2026-07-16), once S-401's IOB engine landed.**
+`correction_event.iob_at_start` is now **computed** — at capture from prior
+`bolus_log` injections (`iob_at_start_at → features.iob.iob_at`), excluding the
+correction bolus itself (strictly-before boundary); `backfill_correction_iob`
+fills any events captured while it was deferred (none in production — pre-ship).
+The `07` §6 clean-ISF filter now runs on a real value (high prior IOB ⇒ excluded,
+low ⇒ kept). IOB stays derived, never entered — `detect_manual_iob` clean (the
+reported time is bound to a local `at`, so the value derives from the log, not
+from the request). ISF derivation itself remains S-502.
+
 ## DL-021 — Audit 2026-07-16-01 remediation (N1–N4); H1–H5 confirmed resolved
 **Source:** `audits/HANDOFF-2026-07-16-01.md` (auditor, outside the loop) · **Audited commit:** `41d0b0e` · **Verdict:** PASS-WITH-CONCERNS (0 blocker, 1 major, 3 minor). The prior cycle's H1–H5 are all **confirmed genuinely resolved**; nothing carried forward.
 - **N1 (major, SDET) — armed the now()→clinical-timestamp guard for `bg_after_time`.**
