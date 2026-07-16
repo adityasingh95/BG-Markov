@@ -385,3 +385,13 @@ clock skew.
    IOB in a dosing path. **Resolution: accept as-is;** if a future story needs strict
    §2 semantics inside a summation, add the filter there and update the pinning test
    in the same change.
+
+## DL-024 — scipy pinned as a dependency (S-503)
+**Story:** S-503 · **Type:** dependency addition · **Approved by:** implied by 07 §7 (spec-mandated)
+The sign-constrained OLS (`β_carb ≥ 0`, `β_ins ≥ 0`) uses
+`scipy.optimize.lsq_linear`. `scipy` was already present transitively (a hard dep of
+`statsmodels`/`scikit-learn`), but S-503 imports it **directly**, so it is now a
+**pinned** direct dependency (`scipy==1.18.0`, per S-101's pinned-deps AC) with a
+`mypy` `ignore_missing_imports` override for `scipy.*` (like `pandas`/`statsmodels`/
+`sklearn`). No behaviour change — this makes an existing transitive dependency
+explicit and version-locked.
