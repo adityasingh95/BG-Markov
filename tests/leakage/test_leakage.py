@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pytest
 
-from data.tables import LoggedBy, MealEvent, MealType
+from data.tables import ExIntensity, LoggedBy, MealEvent, MealType
 from features.cv import forward_chaining_folds
 from features.pipeline import (
     CONTINUOUS_FEATURES,
@@ -33,8 +33,13 @@ def _meal(day: int, pre_bg: int = 130) -> MealEvent:
     return MealEvent(
         datetime=when, logged_at=when, logged_by=LoggedBy.patient,
         meal_type=MealType.breakfast, pre_bg=pre_bg, pre_bg_time=when,
-        meal_bolus_units=5.0 + day, bolus_offset_min=-10, carbs_g=40.0 + 2 * day,
+        meal_bolus_units=5.0 + day, correction_bolus_units=0.0,
+        bolus_offset_min=-10, carbs_g=40.0 + 2 * day,
         protein_g=10.0, fat_g=6.0, fiber_g=4.0, macro_confidence=95,
+        # column defaults apply at INSERT, not on an in-memory object — a persisted
+        # meal always has these set, so mirror that here.
+        ex_intensity=ExIntensity.none, ex_duration_min=0, ex_offset_min=None,
+        pre_ex_intensity=ExIntensity.none, pre_ex_duration_min=0,
     )
 
 
