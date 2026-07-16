@@ -108,7 +108,7 @@ markers = [
 branch = true
 # Expand this list as features/, models/, prescribe/ are introduced by later
 # epics. The 90% gate applies to whatever is listed here.
-source = ["core"]
+source = ["core", "features"]  # features/ added at S-404 (audit A1)
 
 [tool.coverage.report]
 show_missing = true

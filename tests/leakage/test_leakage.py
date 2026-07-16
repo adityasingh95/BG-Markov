@@ -83,6 +83,15 @@ def test_forward_chaining_folds_are_temporally_ordered_and_day_disjoint() -> Non
         assert max(dates[i] for i in train_idx) < min(dates[i] for i in test_idx)
 
 
+def test_too_few_distinct_days_raises() -> None:
+    """Fewer than n_splits+1 distinct days cannot form temporal folds — refuse
+    loudly rather than silently return degenerate folds (covers cv.py guard)."""
+    base = datetime(2026, 3, 1, 8, 0)
+    two_days = [base, base + timedelta(hours=3), base + timedelta(days=1)]
+    with pytest.raises(ValueError):
+        forward_chaining_folds(two_days, n_splits=3)
+
+
 def test_folds_never_put_the_same_day_in_train_and_test() -> None:
     """Two meals share a day; a correct temporal split keeps that day on one side."""
     base = datetime(2026, 3, 1, 8, 0)

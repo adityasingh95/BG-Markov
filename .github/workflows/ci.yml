@@ -34,8 +34,8 @@ jobs:
       - name: Types (mypy --strict)
         run: mypy --strict core api data cli features
 
-      # AC: pytest clean + coverage gate at 90% on core.
+      # AC: pytest clean + coverage gate at 90% on core + features (audit A1).
       # The toolchain tests additionally assert the ruff/mypy gates BITE on a
       # deliberate lint error and a deliberate type error (S-101 TDD).
       - name: Tests + coverage gate
-        run: pytest --cov=core --cov-report=term-missing --cov-fail-under=90
+        run: pytest --cov=core --cov=features --cov-report=term-missing --cov-fail-under=90
