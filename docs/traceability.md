@@ -33,6 +33,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-053** (operator adherence dashboard: valid rate, exclusions, `median(logged_at − datetime)`, days-since-last-log) | **S-307** | `tests/integration/test_adherence.py` (valid/gate1 countdown; exclusions-by-reason; in-window rate; days-since-log; ★ median lag from the two distinct columns, asserted ≠ 0; empty-DB safe; `/api/adherence` + `/operator` render) | ✅ Done — **closes EPIC 3** |
 | **REQ-020** (IOB derived from `bolus_log`; Fiasp exponential tp=55 td=240; no manual entry) | **S-401** | `tests/unit/test_iob.py` (★ monotone-decreasing on (0,td); ∈[0,1]; f(0)=1/f(240)=0/f(−5)=1; golden 6 pairs 4 dp; iob_at additive) + `detect_manual_iob` clean | ✅ Done — **opens EPIC 4** |
 | **REQ-021** (effective basal = EWMA halflife 25h; multi-day carryover; not raw dose) | **S-402** | `tests/unit/test_basal.py` (★ step 24→30: +1d strictly between, +5d within 0.5 of 30; flat series constant; lockout change-day..+3d flagged, +4d clear) | ✅ Done |
+| **REQ-024** (exercise one-hot + duration interactions; never numeric 0/1/2) | **S-403** | `tests/unit/test_exercise.py` (none=baseline; light/intense indicators + *_min; ★ light/60 vs intense/60 not scalar multiples ⇒ opposite-signed effects representable) | ✅ Done |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -179,8 +180,14 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
   - **S-402 (effective basal) — Done.** `features/basal.py`: degludec EWMA
     (half-life 25 h) so a dose change ramps over days (not the forbidden raw dose),
     plus a 3-day titration lockout that suppresses basal guidance during the ramp.
-    Next: S-403 exercise encoding, S-404 feature pipeline; then EPIC 5 (S-502 ISF
-    derivation consumes the correction events).
+  - **S-403 (exercise encoding) — Done.** `features/exercise.py`: one-hot
+    light/intense indicators + duration interactions (none = baseline). light/60
+    and intense/60 are not scalar multiples, so the model can represent
+    opposite-signed effects (light lowers, intense raises) — the physiology a
+    numeric 0/1/2 column forbids. Next: **S-404 feature pipeline** (pre_bg
+    continuous, macro_confidence/100 as sample_weight, scaler fit on train folds
+    only) closes EPIC 4; then EPIC 5 (S-501 baseline, S-502 ISF, S-503 constrained
+    OLS).
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.
