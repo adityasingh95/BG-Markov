@@ -20,6 +20,7 @@ dependencies = [
     "pydantic-settings==2.7.0",
     "statsmodels==0.14.4",
     "pandas==2.2.3",
+    "scikit-learn==1.9.0",
     "alembic==1.14.0",
     "sqlalchemy==2.0.36",
 ]
@@ -87,7 +88,7 @@ warn_unused_ignores = true
 # Third-party clinical/stats libraries ship incomplete stubs; do not let their
 # gaps mask errors in our own code.
 [[tool.mypy.overrides]]
-module = ["statsmodels.*", "pandas.*"]
+module = ["statsmodels.*", "pandas.*", "sklearn.*"]
 ignore_missing_imports = true
 
 # --- Tests ----------------------------------------------------------------
