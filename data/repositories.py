@@ -18,6 +18,7 @@ from core import safety
 from core.validity import exclusion_reasons, is_hypo_outcome, is_valid
 from data.tables import BolusLog, CorrectionEvent, HypoRescueLog, MealEvent
 from features.iob import iob_at
+from models.isf import ISFResult, derive_isf
 
 
 def _meals_ordered(session: Session) -> list[MealEvent]:
@@ -154,3 +155,20 @@ def backfill_correction_iob(session: Session) -> int:
         event.iob_at_start = iob_at_start_at(session, event.datetime)
     session.commit()
     return len(pending)
+
+
+def derive_isf_from_correction_events(
+    session: Session, *, current_isf: float, current_source: str
+) -> ISFResult:
+    """Derive ISF from the clean correction events (S-502, 07 §6).
+
+    Bridges `get_clean_correction_events` (food-free, known low IOB) to the pure
+    `derive_isf`, keeping only events with a **+4 h reading** (`bg_after` present) —
+    an event without its follow-up cannot contribute to `(bg_before − bg_after)/units`.
+    """
+    triples = [
+        (float(e.bg_before), float(e.bg_after), float(e.units))
+        for e in get_clean_correction_events(session)
+        if e.bg_after is not None
+    ]
+    return derive_isf(triples, current_isf=current_isf, current_source=current_source)
