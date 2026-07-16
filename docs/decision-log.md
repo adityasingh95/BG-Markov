@@ -358,3 +358,30 @@ a `Pipeline` (07 §5), which is `scikit-learn` — not previously a dependency. 
 `multi_class`, so a future accidental use fails the build regardless). The scaler
 is used only via `make_scaler()` and must be fit on train folds only — the leakage
 tests enforce this.
+
+## DL-023 — `iob_at` clock-skew handling deviates from the 07 §2 reference (accepted)
+**Story:** S-401 / S-306b · **Type:** deliberate deviation from spec reference · **Decision:** accept as-is (audit A2)
+The `07` §2 reference for insulin-on-board filters `0 < age < td` — a bolus dated
+**at or after** the query time `at` contributes **0**. The shipped
+`features/iob.py::iob_at` instead relies on `iob_fraction(t ≤ 0) = 1.0` and counts a
+future-dated / same-instant bolus as **full** IOB. This is **deliberate** and pinned
+by `tests/unit/test_iob.py` (the `f(-5)=1` clock-skew case) — the single-bolus curve
+must not return NaN or >1 when a reported bolus time is slightly ahead of `at` due to
+clock skew.
+
+**Why it is safe and why we keep it:**
+1. **Safe direction.** Over-estimating IOB can only *reduce* a downstream correction
+   dose and can only *exclude* a correction event from the clean-ISF set (a higher
+   `iob_at_start` fails the `< 0.5` filter). It never inflates a dose or admits a
+   confounded event — the error, if any, is toward caution for a patient who cannot
+   feel a low.
+2. **Unreachable in the live path.** `iob_at_start` is computed via
+   `data.repositories.boluses_before(session, at)`, which selects injections
+   **strictly before** `at`. No at-or-after bolus ever reaches `iob_at` in production;
+   the clamp only governs a directly-constructed call (e.g. clock-skew robustness).
+3. **Precedence.** `07` wins on clinical/model matters (CLAUDE.md). Recording this
+   keeps a later reader from "correcting" `iob_at` back to the §2 `0 < age < td`
+   filter without realising a test pins the clock-skew behaviour — which would change
+   IOB in a dosing path. **Resolution: accept as-is;** if a future story needs strict
+   §2 semantics inside a summation, add the filter there and update the pinning test
+   in the same change.
