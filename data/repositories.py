@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from core import safety
 from core.validity import exclusion_reasons, is_hypo_outcome, is_valid
-from data.tables import CorrectionEvent, HypoRescueLog, MealEvent
+from data.tables import BolusLog, CorrectionEvent, HypoRescueLog, MealEvent
+from features.iob import iob_at
 
 
 def _meals_ordered(session: Session) -> list[MealEvent]:
@@ -119,3 +120,37 @@ def get_clean_correction_events(session: Session) -> list[CorrectionEvent]:
             .order_by(CorrectionEvent.datetime)
         )
     )
+
+
+def boluses_before(session: Session, at: dt.datetime) -> list[tuple[dt.datetime, float]]:
+    """Injections logged **strictly before** ``at`` — the pre-existing insulin at
+    that moment. Strictly-before excludes a bolus logged at the same instant (e.g.
+    the correction being captured), which is the intervention, not prior IOB."""
+    rows = session.execute(
+        select(BolusLog.datetime, BolusLog.units).where(BolusLog.datetime < at)
+    ).all()
+    return [(when, units) for when, units in rows]
+
+
+def iob_at_start_at(session: Session, at: dt.datetime) -> float:
+    """Insulin-on-board from PRIOR injections at ``at`` (S-306b / DL-020).
+
+    The single bridge from the pure S-401 IOB engine to ``bolus_log``. Used to fill
+    ``correction_event.iob_at_start`` — the confounder that decides whether a
+    correction is a clean ISF signal (07 §6). Derived, never entered.
+    """
+    return iob_at(at, boluses_before(session, at))
+
+
+def backfill_correction_iob(session: Session) -> int:
+    """Fill ``iob_at_start`` for correction events left NULL before the IOB engine
+    existed (DL-020). Returns the number filled; idempotent."""
+    pending = list(
+        session.scalars(
+            select(CorrectionEvent).where(CorrectionEvent.iob_at_start.is_(None))
+        )
+    )
+    for event in pending:
+        event.iob_at_start = iob_at_start_at(session, event.datetime)
+    session.commit()
+    return len(pending)

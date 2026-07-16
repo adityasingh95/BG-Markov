@@ -39,7 +39,7 @@ from data.recording import (
     record_meal,
     record_post_bg,
 )
-from data.repositories import annotate_validity
+from data.repositories import annotate_validity, iob_at_start_at
 from data.tables import BolusLog, BolusType, CorrectionEvent, MealEvent
 
 _TEST_DELAY_MIN = 120  # 05b §3.1 — "test your BG" prompt is reported mealtime + 120
@@ -223,6 +223,13 @@ def create_correction_event(
         units=payload.units,
         food_in_window=payload.food_in_window,
     )
+    # iob_at_start = IOB from PRIOR insulin at the correction moment (S-306b /
+    # DL-020). Computed from bolus_log BEFORE the correction bolus is inserted, so
+    # the intervention itself is never counted. `at` is the reported time bound to
+    # a local — the value derives from the log, not from `payload` (keeps the
+    # derived-IOB discipline; `detect_manual_iob` stays clean).
+    at = payload.datetime
+    event.iob_at_start = iob_at_start_at(session, at)
     session.add(event)
     session.add(
         BolusLog(
