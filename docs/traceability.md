@@ -49,6 +49,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-047 [SAFETY]** (kill switch on drift; **re-arming is manual only** — a later good run must not silently re-enable it) | **S-803** | `tests/integration/test_kill_switch.py` (drift `rolling<baseline` trips + persists; ★ after a trip a **good** run leaves it tripped — `evaluate_kill_switch` only ever *sets*; ★ `rearm(operator_confirmed=False)` raises `ManualReArmRequired` & stays tripped, `=True` clears it; healthy model untripped; unknown version raises) | ✅ Done — `prescribe/kill_switch.py`; state persisted on `model_artifact.kill_switch_tripped`; the only un-trip door is manual, a machine cannot open it; fails safe to the baseline |
 | **REQ-040 [SAFETY]** (patient risk readout — hypo risk the headline; plain language; refusal a rendered state; **never advice**; INV-2 first patient-reachable surface) | **S-804** | `tests/safety/test_readout.py` (★ 149 valid meals ⇒ `build_patient_readout` raises `GateNotPassed`; ★ **no bypass** — no override param, no env var; hypo risk is the headline (State-2 ⇒ elevated/high, State-3 ⇒ in_range, State-5 ⇒ reduced); refusal rendered as a state (`state=None`, plain body, not a blank); ★ **never advice** — no `dose`/`bolus`/`units` attribute or directive; kill switch ⇒ baseline fallback; conflict shows both, no winner; severity/hypo_risk are **text** not colour) | ✅ Done — **closes EPIC 8**; `prescribe/readout.py`; `require_gate1` first, no bypass; a dose cannot ride a risk screen; signal is textual (a11y) |
 | **REQ-048** (shadow mode ≥90 days; operator reviews shadow output before any patient-visible output) | **S-805** | `tests/unit/test_shadow.py` (report aggregates hypo recall @ FAR / calibration bins / Clarke grid / MAE / off-by-one / severe; predictions-vs-actuals confusion sums to n; ★ `unconstrained β_ins<0` ⇒ `beta_insulin_confounding=True`, healthy ⇒ False; Clarke **D** danger preserved; multiclass Brier when a distribution is supplied) | ✅ Done — `models/shadow.py::build_shadow_report`; composes the S-702 metrics (no plain-accuracy headline) + surfaces the INV-8/S-503 confounding alarm on the operator's Gate-1 evidence screen |
+| **REQ-041/042/043 [SAFETY]** (prescriptive bolus calculator — clinical formula only, **no ML in the dose path**; INV-1/3/4; full arithmetic shown; suggestion for review) | **S-901** | `tests/safety/test_bolus.py` (★ INV-4 BG 79 refuses / 80 computes; ★ INV-3 carbs=900 typo ⇒ capped 15 U **AND** `implausible_input` flagged; negative ⇒ 0.0; ★ INV-1 icr=null ⇒ `GateNotPassed`, no bypass param/env; ★ **5 golden hand-computed doses** to 2 dp; property — non-decreasing in carbs, non-increasing in IOB; **no `models` import** in the dose path; arithmetic shown + framed as review) | ✅ Done — **closes EPIC 9 (final story)**; `prescribe/bolus.py::recommend_bolus`; ICR 9 / ISF 30 / target 135 clinician-confirmed (DL-032), read from the versioned profile — no hardcoded constant; human gate + code gate both cleared |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -68,10 +69,10 @@ each invariant must still be *wired in* by the story that owns its feature.
 
 | INV | Function (`core/safety.py`) | Test(s) | Module | Wired into feature |
 |-----|-----------------------------|---------|--------|--------------------|
-| INV-1 | `inv1_prescriptive_requires_gate2` | `test_safety_invariants.py::test_inv1_*`; **wiring:** `test_gates.py` (icr=null ⇒ `recommend_bolus` raises `GateNotPassed`; ★ no bypass param/env/flag; gate open ⇒ EPIC-9 placeholder) | ✅ S-104 | ✅ **S-703** — `prescribe/bolus.py::recommend_bolus` hard-gated on Gate 2 (live, no bypass); dosing math still EPIC 9 |
+| INV-1 | `inv1_prescriptive_requires_gate2` | `test_safety_invariants.py::test_inv1_*`; **wiring:** `test_gates.py` + `test_bolus.py` (icr=null ⇒ `recommend_bolus` raises `GateNotPassed`; ★ no bypass param/env/flag; gate open ⇒ **computes a real dose**) | ✅ S-104 | ✅ **S-703** (gate) + **S-901** — `prescribe/bolus.py::recommend_bolus` hard-gated on Gate 2 first line, live, no bypass; the calculator now fills the path |
 | INV-2 | `inv2_patient_output_requires_gate1` | `test_safety_invariants.py::test_inv2_*`; **wiring:** `test_gates.py` (149 ⇒ `require_gate1` raises; 150+recall>baseline ⇒ opens; ★ 200 w/ recall≤baseline still closed); `test_readout.py` (patient surface raises at 149, no bypass) | ✅ S-104 | ✅ **S-703** (`require_gate1`) + **S-804** — the patient risk readout (`prescribe/readout.py`) is the first patient-reachable surface and calls `require_gate1` on its first line, no bypass; ungated model output cannot reach her |
-| INV-3 | `inv3_bolus_within_bounds` | `test_safety_invariants.py::test_inv3_*` | ✅ S-104 | ⏳ S-901 |
-| INV-4 | `inv4_bolus_allowed_at_bg` | `test_safety_invariants.py::test_inv4_*` | ✅ S-104 | ⏳ S-901 |
+| INV-3 | `inv3_bolus_within_bounds` | `test_safety_invariants.py::test_inv3_*`; **wiring:** `test_bolus.py` (★ carbs=900 typo ⇒ capped 15 U **AND** `implausible_input` flagged; negative computed dose ⇒ 0.0) | ✅ S-104 | ✅ **S-901** — `recommend_bolus` caps + flags an implausible input (never a silent clip) and floors at 0; `inv3` re-asserts the bound |
+| INV-4 | `inv4_bolus_allowed_at_bg` | `test_safety_invariants.py::test_inv4_*`; **wiring:** `test_bolus.py` (BG 79 ⇒ refuses; BG 80 ⇒ computes) | ✅ S-104 | ✅ **S-901** — `recommend_bolus` refuses to dose below BG 80 (treat the low first) |
 | INV-5 | `inv5_monitoring_not_reduced` | `test_safety_invariants.py::test_inv5_*` | ✅ S-104 | ⏳ output/advice stories |
 | INV-6 | `inv6_predicted_bg_in_range` | `test_safety_invariants.py::test_inv6_*`; **wiring:** `test_baseline.py` (out-of-range prediction raises); `test_guardrails.py` (absurd predicted BG raises, checked before any refusal can mask it) | ✅ S-104 | ✅ **S-501** (baseline prediction path) + **S-801** — the output guardrail evaluates INV-6 **first**, so a physiologically absurd BG is a hard error, never downgraded to a refusal message |
 | INV-7 | `inv7_rescued_excluded_and_retained` | `test_safety_invariants.py::test_inv7_*`; **wiring:** `test_repositories.py` (regression guard + wiring-bites); **ledger reconciliation:** `test_hypo_rescue.py` (row-deletion + flag-clear ⇒ raise) | ✅ S-104 | ✅ **S-203** wired + **S-305** independent ledger closes the DB-row-deletion gap (DL-019/H4) |
@@ -332,13 +333,21 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     output; the operator is the pre-Gate-1 audience).
   - **EPIC 8 COMPLETE** — output guardrails (S-801), prediction log/INV-9 (S-802), kill
     switch (S-803), patient readout/INV-2 (S-804), shadow-mode dashboard (S-805) all in.
-  - Next: **EPIC 9 — Prescriptive (Gate 2).** The bolus calculator (S-901): unblocked by
-    S-703 (Gate 2 enforcement green) but **also human-gated** — **BLOCKED until the
-    endocrinologist confirms ICR (OQ-1) and ISF (OQ-2)**; a human gate, not an agent
-    decision. Do **not** self-clear it or stub `icr`/`isf`. When it lands: no ML anywhere
-    in the dose path (carbs/ICR + correction only), cap 15 U + flag implausible inputs
-    (INV-3), refuse at BG<80 (INV-4), never negative (INV-3), behind `recommend_bolus`'s
-    live Gate-2 check with no bypass.
+  - **★ S-901 [SAFETY] (bolus calculator) — Done. EPIC 9 COMPLETE — the build is finished.**
+    Both gates cleared: the **code gate** (S-703, green) and the **human gate** — the
+    endocrinologist confirmed **ICR 9 g/U, ISF 30 mg/dL/U, target 135** (OQ-1/OQ-2/OQ-6,
+    DL-032), stored in the versioned `patient_profile` and read as parameters (no hardcoded
+    constant; updatable by a new profile version). `prescribe/bolus.py::recommend_bolus` is
+    the clinical formula only — **no ML in the dose path** — behind the live Gate-2 check
+    (INV-1, no bypass): it refuses below BG 80 (INV-4), caps at 15 U **and flags** an
+    implausible input rather than silently dosing a typo (INV-3), floors at 0 (INV-3), shows
+    the full arithmetic, and frames the number as a suggestion for review. Five golden
+    hand-computed doses and the carbs/IOB monotonicity properties are pinned.
+  - **BUILD COMPLETE.** EPICs 1–9 done; INV-1..9 all defined in `core/safety.py` and wired
+    into real features with positive + negative tests; every forbidden pattern guarded; the
+    prescriptive path is the clinical arithmetic only, behind two gates. The remaining work
+    is operational, not code: collect ≥150 valid meals + ≥90 days shadow mode, then the
+    operator's manual Gate-1 promotion on hypo recall.
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.
