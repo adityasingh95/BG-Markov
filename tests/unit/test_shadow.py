@@ -67,6 +67,18 @@ def test_beta_insulin_negative_raises_the_confounding_warning() -> None:
     assert healthy.beta_insulin_confounding is False
 
 
+def test_multiclass_brier_when_a_distribution_is_supplied() -> None:
+    """When a full predictive distribution is logged, Brier is the multiclass score."""
+    proba = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]])
+    r = _report(
+        proba=proba,
+        pred_states=np.array([1, 2, 3, 1]),
+        actual_states=np.array([1, 2, 3, 1]),  # perfect one-hot ⇒ Brier 0
+        states=(1, 2, 3),
+    )
+    assert r.brier == pytest.approx(0.0)
+
+
 def test_clarke_danger_zone_is_preserved() -> None:
     """A truly-low, predicted-normal pair must land in Clarke zone D on the dashboard."""
     r = _report(
