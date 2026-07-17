@@ -42,6 +42,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-031** (07 §8 escalation: proportional-odds test after every fit; escalate on rejection) | **S-602** | `tests/unit/test_brant.py` (PO-satisfying data passes, no raise; ★ threshold-varying data fails AND `check_proportional_odds` raises `ProportionalOddsViolation`; violation names the non-proportional predictor; `<3` states raises; omnibus/per-predictor df) | ✅ Done — Brant test + typed escalation; partial-PO *fitter* deferred to a real rejection on live data (DL-026); `statsmodels.api` unusable under scipy 1.18 → local Newton logits (DL-026) |
 | **REQ-031 / INV-8** (07 §8 step 3: Bayesian ordinal at n≥200; priors encode INV-8 as a sign constraint; credible intervals not point estimates) | **S-603** | `tests/unit/test_bayesian_ordinal.py` (★ posterior `β_insulin` support only ≥0 on confounded data; HDI has positive width — an interval, not a point; ★ intervals widen as n shrinks; INV-8 wired on draws; `bayesian_gate_open` False@199/True@200; bad-col & `<3`-states raise) | ✅ Done — **closes EPIC 6**; PyMC `OrderedLogistic`, `HalfNormal` insulin prior (support ≥0 by construction, enters η negatively); PyMC added + numpy repinned 2.4.6 (DL-027) |
 | **REQ-034 [SAFETY]** (forward-chaining temporal CV, never random; no `date` in both train and test in any fold; scaler train-only) | **S-701** | `tests/leakage/test_temporal_cv.py` (runner yields OOS preds, folds ordered+day-disjoint; ★ injected leaky fold — shared day / out-of-order — raises `TemporalLeakageError`; ★ shuffled random split rejected; scaler train-only under a test-fold outlier; ★ runs against the real `fit_ordinal`→`predict_proba`, OOS proba sum to 1; empty/scale-false edges) + forbidden grep (`shuffle=True` absent) | ✅ Done — **opens EPIC 7**; `models/validation.py::temporal_cv` re-asserts the temporal invariants on every fold at fit time (adversarial defense-in-depth) |
+| **REQ-035** (metric suite: hypo recall @ fixed FAR **primary**, Brier, calibration, MAE, Clarke grid, off-by-one; **plain accuracy NOT reported**) | **S-702** | `tests/unit/test_metrics.py` (★ hypo recall @ FAR — threshold holds FAR≤target, recall correct, perfect/useless bounds; Brier golden + perfect⇒0; reliability well-calibrated + empty-bin skip; MAE golden; ★ Clarke goldens incl. the two **D** fails-to-detect cases `(50,120)`/`(300,150)` + **E** reversals; off-by-one & severe-state rates; module exposes **no** `accuracy`/`accuracy_score`) + forbidden grep (`accuracy_score` absent tree-wide) | ✅ Done — `models/metrics.py`; consumes S-701 OOS predictions; danger-weighted Clarke (D/E) is the point, not magnitude |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -272,10 +273,16 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     absent (forbidden guard). This is the guard against the project's most likely
     failure — a model that looks brilliant on retrospective data and is quietly wrong
     about a low.
-  - Next: **S-702** (metric suite — hypo recall @ FAR **primary**, Brier, calibration,
-    Clarke/Parkes grid, off-by-one; **plain accuracy NOT reported**), **S-703 [SAFETY]**
-    (gate enforcement — EPIC 9 blocked until merged; `icr=None` ⇒ `GateNotPassed`, no
-    bypass; n=200 with hypo recall below baseline ⇒ still blocked).
+  - **S-702 (metric suite) — Done.** `models/metrics.py`: hypo recall @ fixed FAR
+    (**primary**), multiclass Brier, reliability/calibration curve, MAE, the Clarke
+    error grid (danger-weighted — D = failure to detect a low, E = reversed reading),
+    off-by-one and severe-state-error rates. **Plain accuracy is not a function in the
+    module** and `accuracy_score` is absent tree-wide (forbidden guard). Consumes the
+    out-of-sample predictions from S-701.
+  - Next: **S-703 [SAFETY]** (gate enforcement — **EPIC 9 blocked until merged+green**;
+    `icr=None` ⇒ `GateNotPassed`, no fixture/mock/flag/env bypass; n=200 with hypo
+    recall below baseline ⇒ still blocked; gates evaluated from live data every call,
+    never cached — ADR-7).
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.
