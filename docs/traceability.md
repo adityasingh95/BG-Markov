@@ -43,6 +43,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-031 / INV-8** (07 §8 step 3: Bayesian ordinal at n≥200; priors encode INV-8 as a sign constraint; credible intervals not point estimates) | **S-603** | `tests/unit/test_bayesian_ordinal.py` (★ posterior `β_insulin` support only ≥0 on confounded data; HDI has positive width — an interval, not a point; ★ intervals widen as n shrinks; INV-8 wired on draws; `bayesian_gate_open` False@199/True@200; bad-col & `<3`-states raise) | ✅ Done — **closes EPIC 6**; PyMC `OrderedLogistic`, `HalfNormal` insulin prior (support ≥0 by construction, enters η negatively); PyMC added + numpy repinned 2.4.6 (DL-027) |
 | **REQ-034 [SAFETY]** (forward-chaining temporal CV, never random; no `date` in both train and test in any fold; scaler train-only) | **S-701** | `tests/leakage/test_temporal_cv.py` (runner yields OOS preds, folds ordered+day-disjoint; ★ injected leaky fold — shared day / out-of-order — raises `TemporalLeakageError`; ★ shuffled random split rejected; scaler train-only under a test-fold outlier; ★ runs against the real `fit_ordinal`→`predict_proba`, OOS proba sum to 1; empty/scale-false edges) + forbidden grep (`shuffle=True` absent) | ✅ Done — **opens EPIC 7**; `models/validation.py::temporal_cv` re-asserts the temporal invariants on every fold at fit time (adversarial defense-in-depth) |
 | **REQ-035** (metric suite: hypo recall @ fixed FAR **primary**, Brier, calibration, MAE, Clarke grid, off-by-one; **plain accuracy NOT reported**) | **S-702** | `tests/unit/test_metrics.py` (★ hypo recall @ FAR — threshold holds FAR≤target, recall correct, perfect/useless bounds; Brier golden + perfect⇒0; reliability well-calibrated + empty-bin skip; MAE golden; ★ Clarke goldens incl. the two **D** fails-to-detect cases `(50,120)`/`(300,150)` + **E** reversals; off-by-one & severe-state rates; module exposes **no** `accuracy`/`accuracy_score`) + forbidden grep (`accuracy_score` absent tree-wide) | ✅ Done — `models/metrics.py`; consumes S-701 OOS predictions; danger-weighted Clarke (D/E) is the point, not magnitude |
+| **REQ-040/041 [SAFETY]** (no patient output before Gate 1 (INV-2); prescriptive hard-disabled before Gate 2 (INV-1); live every call, never cached — ADR-7) | **S-703** | `tests/safety/test_gates.py` (★ icr=null ⇒ `recommend_bolus` `GateNotPassed`; ★ **no bypass** — no override param, no env var; gate open ⇒ `NotImplementedError` not a fabricated dose; 149 closed / 150+recall>baseline open; ★ 200 w/ recall≤baseline **still closed** + tie closed; live-not-cached; `GateNotPassed` is a `SafetyViolation`; constant == adherence) | ✅ Done — **closes EPIC 7, UNBLOCKS EPIC 9**; `prescribe/gates.py` + `prescribe/bolus.py`; gates fail-closed, route through `core/safety` INV-1/INV-2; `prescribe` added to mypy + coverage gates |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -62,8 +63,8 @@ each invariant must still be *wired in* by the story that owns its feature.
 
 | INV | Function (`core/safety.py`) | Test(s) | Module | Wired into feature |
 |-----|-----------------------------|---------|--------|--------------------|
-| INV-1 | `inv1_prescriptive_requires_gate2` | `test_safety_invariants.py::test_inv1_*`; precondition also guarded in `test_config_frozen.py` | ✅ S-104 | ⏳ S-703 / S-901 |
-| INV-2 | `inv2_patient_output_requires_gate1` | `test_safety_invariants.py::test_inv2_*` | ✅ S-104 | ⏳ S-703 / S-804 |
+| INV-1 | `inv1_prescriptive_requires_gate2` | `test_safety_invariants.py::test_inv1_*`; **wiring:** `test_gates.py` (icr=null ⇒ `recommend_bolus` raises `GateNotPassed`; ★ no bypass param/env/flag; gate open ⇒ EPIC-9 placeholder) | ✅ S-104 | ✅ **S-703** — `prescribe/bolus.py::recommend_bolus` hard-gated on Gate 2 (live, no bypass); dosing math still EPIC 9 |
+| INV-2 | `inv2_patient_output_requires_gate1` | `test_safety_invariants.py::test_inv2_*`; **wiring:** `test_gates.py` (149 ⇒ `require_gate1` raises; 150+recall>baseline ⇒ opens; ★ 200 w/ recall≤baseline still closed) | ✅ S-104 | ✅ **S-703** — `prescribe/gates.py::require_gate1`; patient readout consumes it at S-804 |
 | INV-3 | `inv3_bolus_within_bounds` | `test_safety_invariants.py::test_inv3_*` | ✅ S-104 | ⏳ S-901 |
 | INV-4 | `inv4_bolus_allowed_at_bg` | `test_safety_invariants.py::test_inv4_*` | ✅ S-104 | ⏳ S-901 |
 | INV-5 | `inv5_monitoring_not_reduced` | `test_safety_invariants.py::test_inv5_*` | ✅ S-104 | ⏳ output/advice stories |
@@ -279,10 +280,20 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     off-by-one and severe-state-error rates. **Plain accuracy is not a function in the
     module** and `accuracy_score` is absent tree-wide (forbidden guard). Consumes the
     out-of-sample predictions from S-701.
-  - Next: **S-703 [SAFETY]** (gate enforcement — **EPIC 9 blocked until merged+green**;
-    `icr=None` ⇒ `GateNotPassed`, no fixture/mock/flag/env bypass; n=200 with hypo
-    recall below baseline ⇒ still blocked; gates evaluated from live data every call,
-    never cached — ADR-7).
+  - **★ S-703 [SAFETY] (gate enforcement) — Done. EPIC 7 COMPLETE; EPIC 9 UNBLOCKED.**
+    `prescribe/gates.py` evaluates both gates as pure, fail-closed functions of **live**
+    inputs (never cached — ADR-7): Gate 1 (INV-2) opens only on ≥150 valid meals **AND**
+    the model **strictly** beating the baseline on hypo recall (volume alone / a tie is
+    inert); Gate 2 (INV-1) opens only on a confirmed ICR. `prescribe/bolus.py::recommend_bolus`
+    checks Gate 2 on its first line every call and has **no bypass** — no override param,
+    no env var, no config flag; `icr=null` ⇒ `GateNotPassed`, gate-open ⇒
+    `NotImplementedError` (the dosing math is EPIC 9, never a fabricated dose). Both gates
+    route through the `core/safety` invariants; `prescribe` is now in the mypy + coverage
+    gates. **The prescriptive module cannot touch a dose, and she cannot see model output,
+    until each gate is earned from live data.**
+  - Next: **EPIC 8 — Guardrails & Output** (S-801 output guardrails, S-802 prediction log
+    INV-9, S-803 kill switch, S-804 patient risk readout INV-2), then **EPIC 9** (the
+    now-unblocked prescriptive bolus calculator, gated behind S-703 + a confirmed ICR).
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.
