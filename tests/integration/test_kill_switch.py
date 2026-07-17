@@ -83,6 +83,11 @@ def test_re_arm_is_manual_only(session: Session) -> None:
     assert is_tripped(session, _VERSION) is False  # manual action re-arms it
 
 
+def test_unknown_model_version_raises(session: Session) -> None:
+    with pytest.raises(ValueError):
+        is_tripped(session, "no-such-version")
+
+
 def test_evaluate_leaves_a_healthy_model_untripped(session: Session) -> None:
     _seed_model(session)
     tripped = evaluate_kill_switch(
