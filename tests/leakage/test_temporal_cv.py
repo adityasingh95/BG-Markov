@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 
 from models.validation import (
+    FoldPrediction,
     TemporalCVResult,
     TemporalLeakageError,
     assert_temporal_split,
@@ -97,6 +98,38 @@ def test_shuffled_random_split_is_rejected() -> None:
         temporal_cv(x, y, dates, _identity_predict, folds=shuffled)
 
 
+def test_empty_fold_side_raises() -> None:
+    """A fold with no train or no test rows is not a valid split."""
+    dates = _dates(3)
+    with pytest.raises(TemporalLeakageError):
+        assert_temporal_split(dates, [0, 1, 2], [])
+    with pytest.raises(TemporalLeakageError):
+        assert_temporal_split(dates, [], [0, 1, 2])
+
+
+def test_empty_result_accessors_are_empty() -> None:
+    empty = TemporalCVResult(folds=())
+    assert empty.oos_predictions().shape == (0,)
+    assert empty.oos_truth().shape == (0,)
+
+
+def test_scale_false_passes_raw_features() -> None:
+    """With scale=False the model sees the raw (un-standardised) feature rows."""
+    dates = _dates(8)
+    x = (np.arange(8, dtype=float) * 10.0).reshape(-1, 1)
+    y = np.array([1, 2, 3, 4, 5, 1, 2, 3])
+    seen: dict[str, np.ndarray] = {}
+
+    def _capture(x_train: np.ndarray, y_train: np.ndarray, x_test: np.ndarray) -> np.ndarray:
+        seen["train"] = x_train
+        return np.zeros(x_test.shape[0])
+
+    result = temporal_cv(x, y, dates, _capture, n_splits=3, scale=False)
+    # last fold's train rows are the raw values (fold 3 trains on days 0..5 → 0,10,..,50)
+    assert seen["train"].max() > 1.0  # not standardised
+    assert isinstance(result.folds[0], FoldPrediction)
+
+
 def test_scaler_is_fit_on_train_fold_only() -> None:
     """A giant outlier in the test fold does not shift the train-fold centering the
     model is fit against."""
@@ -137,6 +170,11 @@ def test_runs_against_the_real_ordinal_fit() -> None:
         return fit.predict_proba(x_test)
 
     result = temporal_cv(x, y, dates, _fit_predict, n_splits=3, scale=True)
-    preds = result.oos_predictions()
-    assert preds.shape[0] == result.oos_truth().shape[0]
-    assert np.allclose(preds.sum(axis=1), 1.0)  # genuine out-of-sample probabilities
+    # Each fold trains on its own observed states, so proba widths can differ across
+    # folds (absent-class) — assert per fold rather than concatenating ragged matrices.
+    covered = 0
+    for fold in result.folds:
+        assert fold.test_pred.shape[0] == len(fold.test_idx)
+        assert np.allclose(fold.test_pred.sum(axis=1), 1.0)  # genuine OOS probabilities
+        covered += len(fold.test_idx)
+    assert covered == result.oos_truth().shape[0] > 0
