@@ -61,7 +61,8 @@ class _WeightedL2OrderedModel(OrderedModel):  # type: ignore[misc]  # statsmodel
         self._n_feature_coefs = int(self.k_vars)  # exog coefs precede the thresholds
 
     def loglikeobs(self, params: _FloatArray) -> _FloatArray:
-        return self._weights * np.asarray(super().loglikeobs(params), dtype=float)
+        base = np.asarray(super().loglikeobs(params), dtype=float)
+        return np.asarray(self._weights * base, dtype=float)
 
     def loglike(self, params: _FloatArray) -> float:
         ll = float(self.loglikeobs(params).sum())

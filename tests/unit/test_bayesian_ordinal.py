@@ -86,6 +86,21 @@ def test_inv8_is_wired_on_the_draws(_big_fit: BayesianOrdinalFit) -> None:
         inv8_beta_insulin_non_negative(-1.0)                             # guard still bites
 
 
+def test_insulin_col_out_of_range_raises() -> None:
+    """Guard fires before any sampling — a bad column index is a programming error."""
+    x, y = _confounded_data(30, seed=9)
+    with pytest.raises(ValueError):
+        fit_bayesian_ordinal(x, y, insulin_col=5)
+
+
+def test_too_few_states_raises() -> None:
+    """An ordinal model needs >= 3 states; fewer raises before sampling."""
+    x = np.tile(np.array([[0.1, 0.2], [0.3, 0.4]]), (10, 1))
+    y = np.array([1, 2] * 10)  # only two states
+    with pytest.raises(ValueError):
+        fit_bayesian_ordinal(x, y, insulin_col=1)
+
+
 def test_bayesian_gate_opens_only_at_200() -> None:
     assert MIN_BAYESIAN_N == 200
     assert bayesian_gate_open(199) is False

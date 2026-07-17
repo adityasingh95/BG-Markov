@@ -22,6 +22,12 @@ dependencies = [
     "pandas==2.2.3",
     "scikit-learn==1.9.0",
     "scipy==1.18.0",
+    # numpy is pinned because PyMC/numba constrain it to the 2.4.x line (DL-027).
+    "numpy==2.4.6",
+    # Bayesian ordinal (S-603, 07 §8). PyMC pulls a heavy transitive stack
+    # (pytensor, numba, arviz); user-approved 2026-07-17 (DL-027).
+    "pymc==6.1.0",
+    "arviz==1.2.0",
     "alembic==1.14.0",
     "sqlalchemy==2.0.36",
 ]
@@ -89,7 +95,7 @@ warn_unused_ignores = true
 # Third-party clinical/stats libraries ship incomplete stubs; do not let their
 # gaps mask errors in our own code.
 [[tool.mypy.overrides]]
-module = ["statsmodels.*", "pandas.*", "sklearn.*", "scipy.*"]
+module = ["statsmodels.*", "pandas.*", "sklearn.*", "scipy.*", "pymc.*", "arviz.*"]
 ignore_missing_imports = true
 
 # --- Tests ----------------------------------------------------------------
