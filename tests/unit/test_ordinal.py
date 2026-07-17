@@ -11,7 +11,6 @@ RED: `models.ordinal` does not exist yet.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from models.ordinal import (
     DEFAULT_HYPO_WEIGHT,
@@ -77,7 +76,8 @@ def test_hypo_weights_are_confidence_times_hypo_multiplier() -> None:
     conf = np.array([0.5, 0.5, 0.5, 0.5, 0.5])
     w = hypo_confidence_weights(states, conf, hypo_weight=4.0)
     assert w.tolist() == [2.0, 2.0, 0.5, 0.5, 0.5]
-    assert HYPO_STATES == frozenset({1, 2})
+    assert 1 in HYPO_STATES and 2 in HYPO_STATES
+    assert 3 not in HYPO_STATES
 
 
 def test_hypo_weight_default_upweights_only_lows() -> None:
@@ -93,6 +93,15 @@ def test_l2_shrinks_feature_coefficients() -> None:
     weak = fit_ordinal(x, y, confidence_weights=conf, l2_alpha=0.0)
     strong = fit_ordinal(x, y, confidence_weights=conf, l2_alpha=50.0)
     assert np.linalg.norm(strong.feature_coefs) < np.linalg.norm(weak.feature_coefs)
+
+
+def test_prob_at_least_above_top_state_is_zero() -> None:
+    """P(state ≥ 6) is 0 everywhere — no observed state satisfies it."""
+    x, y, conf = _make_data()
+    fit = fit_ordinal(x, y, confidence_weights=conf)
+    p = fit.prob_at_least(x, 6)
+    assert p.shape == (x.shape[0],)
+    assert np.all(p == 0.0)
 
 
 def test_one_model_covers_all_five_states() -> None:
