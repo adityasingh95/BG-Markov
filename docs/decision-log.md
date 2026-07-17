@@ -552,3 +552,31 @@ decision log, the traceability matrix) land in a `docs(...)` BA commit, distinct
 already governs `tests/` and `core|features|models|...`. This DL entry is itself an
 instance of the rule (a lone `docs(...)` commit). Attribution is a safety signal: a fix
 that blurs ownership is not a fix.
+
+## DL-030 — Story-doc commit attribution (audit 2026-07-17-03, H3)
+**Story:** cross-cutting (process) · **Type:** process decision · **Raised by:**
+independent-auditor (`audits/AUDIT-2026-07-17-03.md`) · **Owner:** BA
+
+DL-029 says BA-owned `docs/**` changes land in a `docs(...)` BA commit, yet every EPIC 8
+**story doc** (`docs/stories/S-80x.md`) was created inside the SDET `test(...)` RED commit.
+The decision-log and traceability halves of DL-029 are followed correctly; this settles
+only `docs/stories/`.
+
+**Decision — option (b): the story doc lands in its own `docs(...)` BA commit BEFORE the
+RED test.** This matches the CLAUDE.md TDD loop step 1 ("BA restates the story… writes
+`docs/stories/S-nnn.md` **before** work begins") and step 2 (SDET writes the RED test).
+Bundling the story restatement into the `test(...)` commit blurred the BA/SDET boundary;
+going forward the sequence is: `docs(S-nnn): story` (BA) → `test(S-nnn): RED` (SDET) →
+`feat(S-nnn): GREEN` (Dev) → `docs(S-nnn): traceability` (BA). Applied from **S-901**
+onward. The EPIC 8 story docs are not re-committed (no history rewrite; DL-029 principle);
+their statuses were corrected to Done in a `docs(...)` BA commit (H1).
+
+## DL-031 — mypy gate scope (audit 2026-07-17-03, H4)
+**Story:** cross-cutting (infra note) · **Type:** documentary · **Owner:** BA
+`mypy --strict` is enforced over the **source packages only** —
+`core api data cli features models prescribe` (the CI "Types" step and
+`pyproject.toml [tool.mypy]`). It does **not** cover `tests/` or `alembic/versions/`;
+`mypy --strict .` reports errors there (e.g. a couple in `tests/safety/test_readout.py`)
+which are **outside the gate by design** (tests use fixtures/`type: ignore` pragmatically;
+migrations are generated). "mypy clean" in this project means the source packages type-check
+under `--strict`, unambiguously — not the whole tree.
