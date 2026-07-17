@@ -455,3 +455,35 @@ speculation. The escalation is the honest handoff: when a Brant rejection occurs
 data, the violation object already carries which predictors to free. This is consistent
 with the project's gate discipline (INV-1/INV-2) — surface the decision, do not
 pre-empt it.
+
+## DL-027 — PyMC/Bambi added; numpy repinned 2.4.6 (S-603)
+**Story:** S-603 · **Type:** dependency addition (spec-mandated tool) ·
+**Approved by:** user (explicit choice, 2026-07-17) over a self-contained sampler
+
+07 §8 names **PyMC/Bambi** for the Bayesian ordinal at n ≥ 200. Neither was installed,
+and the toolchain is already fragile under `scipy 1.18` (`statsmodels.api` is dead,
+DL-026), so the choice between (a) a self-contained numpy/scipy sampler, (b) adding
+PyMC as spec-literal, and (c) deferring S-603 (it is gated behind n ≥ 200) was put to
+the user. **Decision: (b) — add PyMC.**
+
+**What changed:**
+- `pymc==6.1.0` and `arviz==1.2.0` pinned as direct dependencies. PyMC pulls a heavy
+  transitive stack (`pytensor`, `numba`, `llvmlite`, `xarray`); sampling compiles a
+  `pytensor` C graph, so a C++ compiler (`g++`, present on the CI runner) is now a
+  build requirement. First compile dominates wall-time and is disk-cached.
+- **`numpy` repinned `==2.4.6`.** `numba 0.65.1` (a PyMC transitive dep) constrains
+  `numpy` to the 2.4.x line, so the previously-transitive `numpy 2.5.1` is downgraded.
+  `numpy` is therefore now an **explicit pin** (it had been transitive). All prior code
+  and the full suite pass under 2.4.6; one latent `mypy` `no-any-return` in
+  `models/ordinal.py::loglikeobs` surfaced under the 2.4.6 stubs and was fixed
+  (explicit `np.asarray` on the return) — no behaviour change.
+- `mypy` `ignore_missing_imports` extended to `pymc.*`, `arviz.*` (untyped).
+
+**INV-8 in this model.** The insulin coefficient has a `HalfNormal` prior (support
+≥ 0) and enters the linear predictor with a **negative** sign, so every posterior draw
+is ≥ 0 by construction — the sign constraint is the prior's support, not a post-hoc
+clamp, and holds for arbitrarily confounded data. `inv8_beta_insulin_non_negative` is
+still asserted on the sampled minimum so the guard bites if the prior is ever swapped
+for an unconstrained one. The estimator fits at any identifiable n (to demonstrate that
+credible intervals widen as n shrinks); the **n ≥ 200** rule (`MIN_BAYESIAN_N`,
+`bayesian_gate_open`) governs production use, per 07 §8.

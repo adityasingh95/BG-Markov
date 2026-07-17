@@ -40,6 +40,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-032 / INV-8** (β_insulin sign-constrained ≥0; unconstrained-negative reported) | **S-503** | `tests/unit/test_params.py` (clean recovers ICR/ISF; ★ confounded ⇒ unconstrained β_ins<0, warning fired, applied β_ins≥0; INV-8 guard; cross-check prefers correction events) | ✅ Done — **closes EPIC 5** |
 | **REQ-031** (one ordinal proportional-odds logit; `pre_bg` continuous; L2; hypo states up-weighted × macro-confidence) | **S-601** | `tests/unit/test_ordinal.py` (probabilities sum to 1; ★ ordinal sanity — `P(state≥4)` non-decreasing in `pre_bg`; multiplicative hypo×confidence weights; L2 shrinks feature coefs; one model covers all 5 states; `prob_at_least` above-range ⇒ 0) + forbidden greps (`multi_class`, per-state `fit()` loop, `accuracy_score` all absent) | ✅ Done — **opens EPIC 6**; `method="lbfgs"`→`"bfgs"` + absent-class refusal deferred (DL-025) |
 | **REQ-031** (07 §8 escalation: proportional-odds test after every fit; escalate on rejection) | **S-602** | `tests/unit/test_brant.py` (PO-satisfying data passes, no raise; ★ threshold-varying data fails AND `check_proportional_odds` raises `ProportionalOddsViolation`; violation names the non-proportional predictor; `<3` states raises; omnibus/per-predictor df) | ✅ Done — Brant test + typed escalation; partial-PO *fitter* deferred to a real rejection on live data (DL-026); `statsmodels.api` unusable under scipy 1.18 → local Newton logits (DL-026) |
+| **REQ-031 / INV-8** (07 §8 step 3: Bayesian ordinal at n≥200; priors encode INV-8 as a sign constraint; credible intervals not point estimates) | **S-603** | `tests/unit/test_bayesian_ordinal.py` (★ posterior `β_insulin` support only ≥0 on confounded data; HDI has positive width — an interval, not a point; ★ intervals widen as n shrinks; INV-8 wired on draws; `bayesian_gate_open` False@199/True@200; bad-col & `<3`-states raise) | ✅ Done — **closes EPIC 6**; PyMC `OrderedLogistic`, `HalfNormal` insulin prior (support ≥0 by construction, enters η negatively); PyMC added + numpy repinned 2.4.6 (DL-027) |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -66,7 +67,7 @@ each invariant must still be *wired in* by the story that owns its feature.
 | INV-5 | `inv5_monitoring_not_reduced` | `test_safety_invariants.py::test_inv5_*` | ✅ S-104 | ⏳ output/advice stories |
 | INV-6 | `inv6_predicted_bg_in_range` | `test_safety_invariants.py::test_inv6_*`; **wiring:** `test_baseline.py` (out-of-range prediction raises) | ✅ S-104 | ✅ **S-501** — enforced on the baseline's predicted BG (first prediction path); re-checked at the patient readout (S-8xx) |
 | INV-7 | `inv7_rescued_excluded_and_retained` | `test_safety_invariants.py::test_inv7_*`; **wiring:** `test_repositories.py` (regression guard + wiring-bites); **ledger reconciliation:** `test_hypo_rescue.py` (row-deletion + flag-clear ⇒ raise) | ✅ S-104 | ✅ **S-203** wired + **S-305** independent ledger closes the DB-row-deletion gap (DL-019/H4) |
-| INV-8 | `inv8_beta_insulin_non_negative` | `test_safety_invariants.py::test_inv8_*`; **wiring:** `test_params.py` (applied β_ins≥0; unconstrained-negative reported) | ✅ S-104 | ✅ **S-503** — enforced on the constrained OLS fit. The frequentist ordinal (S-601) does **not** gate a dose (ADR-10: the ML never touches a dose), so INV-8 does not constrain it; the sign constraint re-appears at **S-603** as an INV-8-encoding prior on the Bayesian ordinal. |
+| INV-8 | `inv8_beta_insulin_non_negative` | `test_safety_invariants.py::test_inv8_*`; **wiring:** `test_params.py` (applied β_ins≥0; unconstrained-negative reported); `test_bayesian_ordinal.py` (posterior support ≥0; wired on the sampled minimum) | ✅ S-104 | ✅ **S-503** (constrained OLS) + **S-603** (Bayesian ordinal: `HalfNormal` prior gives the posterior zero density below 0 — the sign constraint is the prior's support, not a clamp; the invariant is still asserted on the draws). The frequentist ordinal (S-601) does **not** gate a dose (ADR-10), so INV-8 does not constrain it there. |
 | INV-9 | `inv9_prediction_persisted` | `test_safety_invariants.py::test_inv9_*` | ✅ S-104 | ⏳ S-802 |
 | _module hygiene_ | no-`assert` (AST), zero internal imports (ADR-6), single-definition, `-O` still raises | `test_safety_module_hygiene.py` | ✅ S-104 | — |
 
@@ -241,8 +242,22 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     rejection, carrying the `violators` that a partial-PO fit would free. The partial-PO
     *fitter* is deferred to a real rejection on live data (DL-026): surface the
     modelling decision, do not default it.
-  - Next: **S-603** (Bayesian ordinal at n ≥ 200, priors encoding INV-8 as a sign
-    constraint).
+  - **★ S-603 [SAFETY] (Bayesian ordinal) — Done. EPIC 6 COMPLETE.**
+    `models/bayesian_ordinal.py` `fit_bayesian_ordinal`: PyMC `OrderedLogistic`,
+    weakly-informative priors, and a `HalfNormal` prior on the insulin coefficient
+    (support ≥0) that enters η with a **negative** sign — so INV-8 lives in the
+    prior's support and every posterior draw is ≥0 by construction, for any data
+    however confounded; the invariant is still asserted on the sampled minimum. Output
+    is a **credible interval** (arviz HDI), not a point estimate, and the interval
+    widens as n shrinks. `MIN_BAYESIAN_N=200` / `bayesian_gate_open` is the 07 §8
+    production gate. PyMC added + numpy repinned 2.4.6 (DL-027, user-approved).
+    **The ordinal model, its proportional-odds check, and the Bayesian form are all
+    in — INV-8 now holds in both the OLS and the Bayesian fit.**
+  - Next: **EPIC 7 — Validation.** S-701 (temporal CV — no `date` in both train and
+    test in any fold; `shuffle=True` absent), S-702 (metric suite — hypo recall @ FAR
+    primary, Brier, Clarke grid; **plain accuracy NOT reported**), S-703 [SAFETY]
+    (gate enforcement — EPIC 9 blocked until merged; `icr=None` ⇒ `GateNotPassed`, no
+    bypass; n=200 with hypo recall below baseline ⇒ still blocked).
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.
