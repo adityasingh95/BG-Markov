@@ -46,6 +46,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-040/041 [SAFETY]** (no patient output before Gate 1 (INV-2); prescriptive hard-disabled before Gate 2 (INV-1); live every call, never cached — ADR-7) | **S-703** | `tests/safety/test_gates.py` (★ icr=null ⇒ `recommend_bolus` `GateNotPassed`; ★ **no bypass** — no override param, no env var; gate open ⇒ `NotImplementedError` not a fabricated dose; 149 closed / 150+recall>baseline open; ★ 200 w/ recall≤baseline **still closed** + tie closed; live-not-cached; `GateNotPassed` is a `SafetyViolation`; constant == adherence) | ✅ Done — **closes EPIC 7, UNBLOCKS EPIC 9**; `prescribe/gates.py` + `prescribe/bolus.py`; gates fail-closed, route through `core/safety` INV-1/INV-2; `prescribe` added to mypy + coverage gates |
 | **REQ-044/046 [SAFETY]** (output guardrails — OOD, sparse, diffuse posterior, baseline conflict; predicted BG outside [20,600] hard error (INV-6); refusal is a valid output) | **S-801** | `tests/safety/test_guardrails.py` (OOD & sparse refuse `state=None`; ★ diffuse — max p=0.39 ⇒ "not confident", 0.41 ⇒ a state; ★ baseline 3 vs model 5 ⇒ both shown, `conflict=true`, **no winner** (`state=None`), 1-apart not a conflict; ★ absurd 601/19 raise INV-6, 600/20 do not, absurd checked before a refusal can mask it; clean confident path) | ✅ Done — **opens EPIC 8**; `models/guardrails.py`; never fills the silence with a number |
 | **REQ-045 [SAFETY]** (every prediction written to `prediction_log` **before** it is returned — INV-9; write-then-display enforced, not incidental) | **S-802** | `tests/integration/test_prediction_log.py` (happy path — row persisted & queryable with correct fields by the time it returns; ★ mock persistence: `flush` leaves no id ⇒ INV-9 raises, `flush` raises ⇒ propagates — **no prediction returned** either way; `serve_prediction` maps a `GuardedPrediction`, persists first, sets `guardrail_fired` on a refusal; ★ serve refuses to return on a failed write) | ✅ Done — `data/predictions.py`; `record_prediction` flushes + `inv9_prediction_persisted` **before** the return; `serve_prediction` inherits the guarantee |
+| **REQ-047 [SAFETY]** (kill switch on drift; **re-arming is manual only** — a later good run must not silently re-enable it) | **S-803** | `tests/integration/test_kill_switch.py` (drift `rolling<baseline` trips + persists; ★ after a trip a **good** run leaves it tripped — `evaluate_kill_switch` only ever *sets*; ★ `rearm(operator_confirmed=False)` raises `ManualReArmRequired` & stays tripped, `=True` clears it; healthy model untripped; unknown version raises) | ✅ Done — `prescribe/kill_switch.py`; state persisted on `model_artifact.kill_switch_tripped`; the only un-trip door is manual, a machine cannot open it; fails safe to the baseline |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -306,13 +307,19 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     prediction. `serve_prediction` maps a `GuardedPrediction` (S-801) and persists first,
     inheriting the guarantee. Every returned prediction is therefore in the audit trail — a
     wrong-about-a-low is findable.
-  - Next: **S-803 [SAFETY]** (kill switch — trips on a bad run, shows baseline; a later
-    good run must **not** silently re-enable it), **S-804 [SAFETY]** (patient risk readout,
-    INV-2 — hypo risk the headline, refusal a rendered state, no colour-only signalling;
-    first patient-reachable point — re-run no-bypass against the real surface). Then
-    **EPIC 9** (the prescriptive bolus calculator — unblocked by S-703 but **also
-    human-gated** on endocrinologist ICR/ISF sign-off, OQ-1/OQ-2; do not self-clear or
-    stub `icr`/`isf`).
+  - **★ S-803 [SAFETY] (kill switch) — Done.** `prescribe/kill_switch.py`:
+    `evaluate_kill_switch` trips on drift (rolling hypo recall below the baseline) and
+    **only ever sets** the flag — no sequence of good runs can un-trip it; the sole clear
+    is `rearm(operator_confirmed=True)`, which raises `ManualReArmRequired` otherwise. State
+    is persisted on `model_artifact.kill_switch_tripped`, so a restart cannot come up armed
+    after a trip, and a tripped switch fails safe to the ML-free baseline.
+  - Next: **S-804 [SAFETY]** (patient risk readout, INV-2 — hypo risk the headline, plain
+    language, refusal a rendered state never advice, no colour-only signalling; n=149 ⇒
+    raises, no bypass; first patient-reachable point — re-run no-bypass against the real
+    surface; wires `require_gate1` (S-703), `serve_prediction` (S-802), the guardrails
+    (S-801), and the kill switch (S-803)). Then **EPIC 9** (the prescriptive bolus
+    calculator — unblocked by S-703 but **also human-gated** on endocrinologist ICR/ISF
+    sign-off, OQ-1/OQ-2; do not self-clear or stub `icr`/`isf`).
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.
