@@ -81,6 +81,14 @@ def test_escalation_carries_the_violating_predictors() -> None:
         raise AssertionError("expected ProportionalOddsViolation")
 
 
+def test_too_few_states_raises() -> None:
+    """A Brant test needs >= 3 states (>= 2 thresholds) to compare slopes across."""
+    x = np.array([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6], [0.7, 0.8]])
+    y = np.array([1, 1, 2, 2])  # only two states
+    with pytest.raises(ValueError):
+        brant_test(x, y)
+
+
 def test_result_shapes_and_degrees_of_freedom() -> None:
     x, y = _po_data()
     res = brant_test(x, y)
