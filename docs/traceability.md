@@ -38,6 +38,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-030** (baseline predictor; bin via shared state fn; the bar to beat) | **S-501** | `tests/unit/test_baseline.py` (zero⇒post=pre; ★ directionality; 5 golden bg+state; INV-6 raises out of range), `tests/unit/test_state.py` (boundaries [54,80,181,251]; monotone) | ✅ Done — **opens EPIC 5** |
 | **REQ-033** (ISF from correction events; ≥5 clean; never silent swap; ISF≤0 raises) | **S-502** | `tests/unit/test_isf.py` (5⇒applied source=derived; 4⇒default+derived reported; ★ ISF≤0 raises; no events⇒default), `tests/integration/test_isf_derivation.py` (confounded/pending excluded; +4h required) | ✅ Done — consumes S-306b iob_at_start |
 | **REQ-032 / INV-8** (β_insulin sign-constrained ≥0; unconstrained-negative reported) | **S-503** | `tests/unit/test_params.py` (clean recovers ICR/ISF; ★ confounded ⇒ unconstrained β_ins<0, warning fired, applied β_ins≥0; INV-8 guard; cross-check prefers correction events) | ✅ Done — **closes EPIC 5** |
+| **REQ-031** (one ordinal proportional-odds logit; `pre_bg` continuous; L2; hypo states up-weighted × macro-confidence) | **S-601** | `tests/unit/test_ordinal.py` (probabilities sum to 1; ★ ordinal sanity — `P(state≥4)` non-decreasing in `pre_bg`; multiplicative hypo×confidence weights; L2 shrinks feature coefs; one model covers all 5 states; `prob_at_least` above-range ⇒ 0) + forbidden greps (`multi_class`, per-state `fit()` loop, `accuracy_score` all absent) | ✅ Done — **opens EPIC 6**; `method="lbfgs"`→`"bfgs"` + absent-class refusal deferred (DL-025) |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -64,7 +65,7 @@ each invariant must still be *wired in* by the story that owns its feature.
 | INV-5 | `inv5_monitoring_not_reduced` | `test_safety_invariants.py::test_inv5_*` | ✅ S-104 | ⏳ output/advice stories |
 | INV-6 | `inv6_predicted_bg_in_range` | `test_safety_invariants.py::test_inv6_*`; **wiring:** `test_baseline.py` (out-of-range prediction raises) | ✅ S-104 | ✅ **S-501** — enforced on the baseline's predicted BG (first prediction path); re-checked at the patient readout (S-8xx) |
 | INV-7 | `inv7_rescued_excluded_and_retained` | `test_safety_invariants.py::test_inv7_*`; **wiring:** `test_repositories.py` (regression guard + wiring-bites); **ledger reconciliation:** `test_hypo_rescue.py` (row-deletion + flag-clear ⇒ raise) | ✅ S-104 | ✅ **S-203** wired + **S-305** independent ledger closes the DB-row-deletion gap (DL-019/H4) |
-| INV-8 | `inv8_beta_insulin_non_negative` | `test_safety_invariants.py::test_inv8_*`; **wiring:** `test_params.py` (applied β_ins≥0; unconstrained-negative reported) | ✅ S-104 | ✅ **S-503** — enforced on the constrained OLS fit; re-checked in the ordinal fit (S-6xx) |
+| INV-8 | `inv8_beta_insulin_non_negative` | `test_safety_invariants.py::test_inv8_*`; **wiring:** `test_params.py` (applied β_ins≥0; unconstrained-negative reported) | ✅ S-104 | ✅ **S-503** — enforced on the constrained OLS fit. The frequentist ordinal (S-601) does **not** gate a dose (ADR-10: the ML never touches a dose), so INV-8 does not constrain it; the sign constraint re-appears at **S-603** as an INV-8-encoding prior on the Bayesian ordinal. |
 | INV-9 | `inv9_prediction_persisted` | `test_safety_invariants.py::test_inv9_*` | ✅ S-104 | ⏳ S-802 |
 | _module hygiene_ | no-`assert` (AST), zero internal imports (ADR-6), single-definition, `-O` still raises | `test_safety_module_hygiene.py` | ✅ S-104 | — |
 
@@ -218,10 +219,21 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     the unconfounded correction-event ISF on material disagreement. scipy pinned
     (DL-024). **The baseline, the ISF/ICR estimators, and the state binner are all
     in — with INV-6 and INV-8 wired into real fits.**
-  - Next: **EPIC 6** — the ordinal model (`statsmodels OrderedModel`): one model,
-    `pre_bg` continuous, L2, hypo states up-weighted; forbidden-pattern greps
-    (`multi_class`, per-state fit loop, `accuracy_score`) already wired and must
-    stay green; `pre_bg` reaches the binner only on the OUTPUT path.
+  - **EPIC 6 open — S-601 (ordinal model) Done.** `models/ordinal.py`
+    `fit_ordinal`: **one** `statsmodels OrderedModel` (proportional-odds logit,
+    `distr="logit"`), `pre_bg` continuous, feature coefficients L2-penalised via a
+    thin weighted subclass, and hypo states (1, 2) up-weighted **multiplicatively**
+    with the macro-confidence weights. `predict_proba` rows sum to 1 and
+    `prob_at_least(·, 4)` = `P(state≥4)` is monotone in `pre_bg` (structural under
+    proportional odds). Deviations recorded (DL-025): the spec's `method="lbfgs"` is
+    `"bfgs"` under the pinned statsmodels/scipy; an **unobserved** state is modelled
+    honestly (observed states only, reported via `OrdinalFit.states`) rather than
+    forced to a non-summing fit or a silent `P=0` for a missing hypo class — the
+    latter refusal is deferred to the gate/risk stories (S-703/S-804). Forbidden
+    greps (`multi_class`, per-state fit loop, `accuracy_score`) stay green; `pre_bg`
+    reaches the binner only on the OUTPUT path.
+  - Next: **S-602** (Brant test + partial proportional odds), **S-603** (Bayesian
+    ordinal at n ≥ 200, priors encoding INV-8 as a sign constraint).
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.

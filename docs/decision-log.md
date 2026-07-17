@@ -395,3 +395,34 @@ The sign-constrained OLS (`β_carb ≥ 0`, `β_ins ≥ 0`) uses
 `mypy` `ignore_missing_imports` override for `scipy.*` (like `pandas`/`statsmodels`/
 `sklearn`). No behaviour change — this makes an existing transitive dependency
 explicit and version-locked.
+
+## DL-025 — `method="lbfgs"` → `method="bfgs"`; absent-class handling (S-601)
+**Story:** S-601 · **Type:** deliberate deviation from spec reference + flagged
+data-limitation · **Approved by:** forced by the pinned toolchain (mechanical);
+absent-class refusal escalated to the gate stories
+
+**1. Optimiser.** 07 §8 writes
+`OrderedModel(y_state, X, distr="logit").fit(method="lbfgs", maxiter=2000)`. Under the
+pinned `statsmodels==0.14.4` + `scipy==1.18.0` that raises
+`TypeError: fmin_l_bfgs_b() got an unexpected keyword argument 'disp'` — a
+statsmodels/scipy interface incompatibility, **not** a modelling decision.
+`models/ordinal.py::fit_ordinal` uses `method="bfgs"` instead: the **same**
+maximum-likelihood objective (identical log-likelihood, identical proportional-odds
+parameterisation) reached by a different quasi-Newton step. Verified empirically —
+probabilities sum to 1, and `P(state ≥ 4)` is monotone in `pre_bg`. Recorded so a
+later reader does not "restore" the spec's `lbfgs` and silently re-break the build.
+The L2 ridge is applied inside a thin `OrderedModel` subclass (weighted `loglikeobs`;
+`loglike = Σ wᵢ·llᵢ − l2_alpha·‖β_features‖²`, penalising the **feature** coefficients
+only, never the thresholds) — `statsmodels` has no `fit_regularized` on `OrderedModel`.
+
+**2. Absent-class hazard (flagged, deferred — NOT silently handled).** On a tiny
+single-patient training fold a state can be **entirely unobserved**. Declaring all five
+categories then leaves the missing threshold unidentifiable — the fit diverges and the
+per-row probabilities stop summing to 1. `fit_ordinal` therefore models the
+**observed** ordered states and reports them via `OrdinalFit.states`; it does **not**
+fabricate a zero-probability column for an unseen state. Assigning `P = 0` to an unseen
+**hypo** state would silently assert "this low cannot happen" — the exact silent
+failure this system exists to make loud. The full 5-vector mapping, and the **refusal**
+that must fire when a hypo class is missing at prediction time, are deferred to the gate
+and risk-readout stories (**S-703 / S-804**), where they belong with INV-1/INV-2. This
+is escalated, not resolved here.
