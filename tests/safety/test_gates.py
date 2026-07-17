@@ -27,17 +27,20 @@ from prescribe.gates import (
 
 # --- Gate 2 / prescriptive (INV-1) ------------------------------------------
 
+# Full clinical inputs for the S-901 calculator; ``icr`` is supplied per-test.
+_DOSE = dict(isf=30.0, carbs_g=60.0, current_bg=150.0, target_bg=135.0, iob=0.0)
+
 
 def test_null_icr_blocks_bolus_recommendation() -> None:
     """★ icr is null ⇒ recommend_bolus() raises GateNotPassed (INV-1)."""
     with pytest.raises(GateNotPassed):
-        recommend_bolus(icr=None)
+        recommend_bolus(icr=None, **_DOSE)
 
 
 def test_gate_not_passed_is_a_safety_violation() -> None:
     assert issubclass(GateNotPassed, SafetyViolation)
     with pytest.raises(SafetyViolation):
-        recommend_bolus(icr=None)
+        recommend_bolus(icr=None, **_DOSE)
 
 
 def test_no_bypass_parameter_exists() -> None:
@@ -52,15 +55,15 @@ def test_no_env_var_can_bypass_the_gate(monkeypatch: pytest.MonkeyPatch) -> None
     for var in ("BGMARKOV_FORCE_BOLUS", "FORCE_BOLUS", "SKIP_GATE", "GATE2_PASSED", "DEBUG"):
         monkeypatch.setenv(var, "1")
     with pytest.raises(GateNotPassed):
-        recommend_bolus(icr=None)
+        recommend_bolus(icr=None, **_DOSE)
 
 
-def test_confirmed_icr_passes_gate2_but_dosing_is_epic9() -> None:
-    """With a confirmed ICR the gate OPENS — recommend_bolus gets past it and hits the
-    EPIC-9 placeholder (NotImplementedError), NOT GateNotPassed."""
-    assert gate2_status(icr=8.3).is_open is True
-    with pytest.raises(NotImplementedError):
-        recommend_bolus(icr=8.3)
+def test_confirmed_icr_passes_gate2_and_computes_a_dose() -> None:
+    """With a confirmed ICR the gate OPENS and recommend_bolus computes a real dose
+    (S-901), NOT GateNotPassed and no longer the EPIC-9 placeholder."""
+    assert gate2_status(icr=9.0).is_open is True
+    rec = recommend_bolus(icr=9.0, **_DOSE)
+    assert rec.total_units >= 0.0
 
 
 def test_gate2_closed_on_null_or_nonpositive_icr() -> None:
@@ -104,12 +107,11 @@ def test_volume_alone_never_opens_gate1() -> None:
 def test_gates_are_live_not_cached() -> None:
     """The gate result flips when the live input flips, within one process — no memo."""
     assert gate2_status(icr=None).is_open is False
-    assert gate2_status(icr=8.3).is_open is True
+    assert gate2_status(icr=9.0).is_open is True
     # recommend_bolus reflects the live icr on each call
     with pytest.raises(GateNotPassed):
-        recommend_bolus(icr=None)
-    with pytest.raises(NotImplementedError):
-        recommend_bolus(icr=8.3)
+        recommend_bolus(icr=None, **_DOSE)
+    assert recommend_bolus(icr=9.0, **_DOSE).total_units >= 0.0  # gate open ⇒ computes
 
 
 def test_gate1_constant_matches_adherence() -> None:
