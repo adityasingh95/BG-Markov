@@ -41,6 +41,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-031** (one ordinal proportional-odds logit; `pre_bg` continuous; L2; hypo states up-weighted × macro-confidence) | **S-601** | `tests/unit/test_ordinal.py` (probabilities sum to 1; ★ ordinal sanity — `P(state≥4)` non-decreasing in `pre_bg`; multiplicative hypo×confidence weights; L2 shrinks feature coefs; one model covers all 5 states; `prob_at_least` above-range ⇒ 0) + forbidden greps (`multi_class`, per-state `fit()` loop, `accuracy_score` all absent) | ✅ Done — **opens EPIC 6**; `method="lbfgs"`→`"bfgs"` + absent-class refusal deferred (DL-025) |
 | **REQ-031** (07 §8 escalation: proportional-odds test after every fit; escalate on rejection) | **S-602** | `tests/unit/test_brant.py` (PO-satisfying data passes, no raise; ★ threshold-varying data fails AND `check_proportional_odds` raises `ProportionalOddsViolation`; violation names the non-proportional predictor; `<3` states raises; omnibus/per-predictor df) | ✅ Done — Brant test + typed escalation; partial-PO *fitter* deferred to a real rejection on live data (DL-026); `statsmodels.api` unusable under scipy 1.18 → local Newton logits (DL-026) |
 | **REQ-031 / INV-8** (07 §8 step 3: Bayesian ordinal at n≥200; priors encode INV-8 as a sign constraint; credible intervals not point estimates) | **S-603** | `tests/unit/test_bayesian_ordinal.py` (★ posterior `β_insulin` support only ≥0 on confounded data; HDI has positive width — an interval, not a point; ★ intervals widen as n shrinks; INV-8 wired on draws; `bayesian_gate_open` False@199/True@200; bad-col & `<3`-states raise) | ✅ Done — **closes EPIC 6**; PyMC `OrderedLogistic`, `HalfNormal` insulin prior (support ≥0 by construction, enters η negatively); PyMC added + numpy repinned 2.4.6 (DL-027) |
+| **REQ-034 [SAFETY]** (forward-chaining temporal CV, never random; no `date` in both train and test in any fold; scaler train-only) | **S-701** | `tests/leakage/test_temporal_cv.py` (runner yields OOS preds, folds ordered+day-disjoint; ★ injected leaky fold — shared day / out-of-order — raises `TemporalLeakageError`; ★ shuffled random split rejected; scaler train-only under a test-fold outlier; ★ runs against the real `fit_ordinal`→`predict_proba`, OOS proba sum to 1; empty/scale-false edges) + forbidden grep (`shuffle=True` absent) | ✅ Done — **opens EPIC 7**; `models/validation.py::temporal_cv` re-asserts the temporal invariants on every fold at fit time (adversarial defense-in-depth) |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -260,9 +261,19 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     **recurrence of DL-017**; no safety invariant weakened. SDET has restored the exact
     `frozenset({1, 2}) == HYPO_STATES` pin and adopted the edge tests. "RED-first" for
     these three is **commit-granularity qualified** — see DL-028.
-  - Next: **EPIC 7 — Validation.** S-701 (temporal CV — no `date` in both train and
-    test in any fold; `shuffle=True` absent), S-702 (metric suite — hypo recall @ FAR
-    primary, Brier, Clarke grid; **plain accuracy NOT reported**), S-703 [SAFETY]
+  - **★ S-701 [SAFETY] (temporal CV runner) — Done. EPIC 7 OPEN.**
+    `models/validation.py::temporal_cv` drives the **actual** model across
+    forward-chaining folds and — adversarially — **re-asserts on every fold** that
+    `max(train.datetime) < min(test.datetime)` and that no calendar day straddles the
+    split (`assert_temporal_split` raises `TemporalLeakageError`), so a leaky or shuffled
+    split **raises instead of scoring**. The scaler is fit on the train fold only; the
+    runner is model-agnostic and produces genuine **out-of-sample** predictions
+    (verified end-to-end against `fit_ordinal`→`predict_proba`). `shuffle=True` stays
+    absent (forbidden guard). This is the guard against the project's most likely
+    failure — a model that looks brilliant on retrospective data and is quietly wrong
+    about a low.
+  - Next: **S-702** (metric suite — hypo recall @ FAR **primary**, Brier, calibration,
+    Clarke/Parkes grid, off-by-one; **plain accuracy NOT reported**), **S-703 [SAFETY]**
     (gate enforcement — EPIC 9 blocked until merged; `icr=None` ⇒ `GateNotPassed`, no
     bypass; n=200 with hypo recall below baseline ⇒ still blocked).
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
