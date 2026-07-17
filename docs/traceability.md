@@ -39,6 +39,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-033** (ISF from correction events; ≥5 clean; never silent swap; ISF≤0 raises) | **S-502** | `tests/unit/test_isf.py` (5⇒applied source=derived; 4⇒default+derived reported; ★ ISF≤0 raises; no events⇒default), `tests/integration/test_isf_derivation.py` (confounded/pending excluded; +4h required) | ✅ Done — consumes S-306b iob_at_start |
 | **REQ-032 / INV-8** (β_insulin sign-constrained ≥0; unconstrained-negative reported) | **S-503** | `tests/unit/test_params.py` (clean recovers ICR/ISF; ★ confounded ⇒ unconstrained β_ins<0, warning fired, applied β_ins≥0; INV-8 guard; cross-check prefers correction events) | ✅ Done — **closes EPIC 5** |
 | **REQ-031** (one ordinal proportional-odds logit; `pre_bg` continuous; L2; hypo states up-weighted × macro-confidence) | **S-601** | `tests/unit/test_ordinal.py` (probabilities sum to 1; ★ ordinal sanity — `P(state≥4)` non-decreasing in `pre_bg`; multiplicative hypo×confidence weights; L2 shrinks feature coefs; one model covers all 5 states; `prob_at_least` above-range ⇒ 0) + forbidden greps (`multi_class`, per-state `fit()` loop, `accuracy_score` all absent) | ✅ Done — **opens EPIC 6**; `method="lbfgs"`→`"bfgs"` + absent-class refusal deferred (DL-025) |
+| **REQ-031** (07 §8 escalation: proportional-odds test after every fit; escalate on rejection) | **S-602** | `tests/unit/test_brant.py` (PO-satisfying data passes, no raise; ★ threshold-varying data fails AND `check_proportional_odds` raises `ProportionalOddsViolation`; violation names the non-proportional predictor; `<3` states raises; omnibus/per-predictor df) | ✅ Done — Brant test + typed escalation; partial-PO *fitter* deferred to a real rejection on live data (DL-026); `statsmodels.api` unusable under scipy 1.18 → local Newton logits (DL-026) |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -232,8 +233,16 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     latter refusal is deferred to the gate/risk stories (S-703/S-804). Forbidden
     greps (`multi_class`, per-state fit loop, `accuracy_score`) stay green; `pre_bg`
     reaches the binner only on the OUTPUT path.
-  - Next: **S-602** (Brant test + partial proportional odds), **S-603** (Bayesian
-    ordinal at n ≥ 200, priors encoding INV-8 as a sign constraint).
+  - **S-602 (Brant test + partial PO) Done.** `models/brant.py` `brant_test` runs the
+    proportional-odds check after every fit: per-threshold binary logits (local Newton
+    — `statsmodels.api`/`Logit` is unusable under scipy 1.18, DL-026), the Brant (1990)
+    covariance sandwich, and an omnibus + per-predictor Wald χ². `check_proportional_odds`
+    is the gate — it **raises `ProportionalOddsViolation`** (the escalation) on
+    rejection, carrying the `violators` that a partial-PO fit would free. The partial-PO
+    *fitter* is deferred to a real rejection on live data (DL-026): surface the
+    modelling decision, do not default it.
+  - Next: **S-603** (Bayesian ordinal at n ≥ 200, priors encoding INV-8 as a sign
+    constraint).
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.

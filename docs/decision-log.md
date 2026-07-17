@@ -426,3 +426,32 @@ failure this system exists to make loud. The full 5-vector mapping, and the **re
 that must fire when a hypo class is missing at prediction time, are deferred to the gate
 and risk-readout stories (**S-703 / S-804**), where they belong with INV-1/INV-2. This
 is escalated, not resolved here.
+
+## DL-026 — `statsmodels.api` unusable under scipy 1.18; partial-PO fitter deferred (S-602)
+**Story:** S-602 · **Type:** toolchain constraint + deliberate scope deferral ·
+**Approved by:** toolchain (mechanical); partial-PO deferral escalated per CLAUDE.md
+
+**1. `statsmodels.api` is unusable under the pinned toolchain.** `import
+statsmodels.api` (and thus the discrete `Logit`) fails at import time under
+`statsmodels==0.14.4` + `scipy==1.18.0`: `ImportError: cannot import name
+'_lazywhere' from 'scipy._lib._util'` (scipy removed `_lazywhere`). Only the direct
+`statsmodels.miscmodels.ordinal_model.OrderedModel` path (used in S-601) is reachable.
+The Brant test's per-threshold binary logits are therefore fit with a small,
+deterministic Newton–Raphson (`models/brant.py::_fit_binary_logit`) rather than
+`sm.Logit`. No behaviour compromise — the Newton fit is the exact binary-logit MLE, and
+the Brant covariance is the Brant (1990) sandwich built from the fitted probabilities.
+Recorded so a later reader does not "simplify" the binary fits back onto the broken
+`statsmodels.api` import.
+
+**2. Partial-proportional-odds *fitter* deferred.** 07 §8 step 2 names partial
+proportional odds as the response to a Brant rejection. S-602 ships the **detection and
+the typed escalation** (`ProportionalOddsViolation`, carrying the `BrantResult` whose
+`violators` name exactly which slopes a partial-PO fit would free) but **not** the
+partial-PO fitter itself, because: (a) the model epics are gated behind live data —
+there is nothing real to reject on yet; (b) choosing to free specific slopes is a
+modelling decision that CLAUDE.md says must be surfaced and made deliberately, not
+defaulted by Dev; and (c) building an untested partial-PO fitter now would be
+speculation. The escalation is the honest handoff: when a Brant rejection occurs on real
+data, the violation object already carries which predictors to free. This is consistent
+with the project's gate discipline (INV-1/INV-2) — surface the decision, do not
+pre-empt it.
