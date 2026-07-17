@@ -253,6 +253,13 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     production gate. PyMC added + numpy repinned 2.4.6 (DL-027, user-approved).
     **The ordinal model, its proportional-odds check, and the Bayesian form are all
     in — INV-8 now holds in both the OLS and the Bayesian fit.**
+  - **RED-first caveat for S-601/S-602/S-603 (DL-028, audit 2026-07-17-01 F1):** each
+    story's RED tests were real and seen to fail in their own `test(S-nnn): RED` commit,
+    but three GREEN commits (`e746290`, `bc4f462`, `305f967`) edited `tests/` — adding
+    edge tests and, in S-601, **loosening** the `HYPO_STATES` exactness assertion. A
+    **recurrence of DL-017**; no safety invariant weakened. SDET has restored the exact
+    `frozenset({1, 2}) == HYPO_STATES` pin and adopted the edge tests. "RED-first" for
+    these three is **commit-granularity qualified** — see DL-028.
   - Next: **EPIC 7 — Validation.** S-701 (temporal CV — no `date` in both train and
     test in any fold; `shuffle=True` absent), S-702 (metric suite — hypo recall @ FAR
     primary, Brier, Clarke grid; **plain accuracy NOT reported**), S-703 [SAFETY]

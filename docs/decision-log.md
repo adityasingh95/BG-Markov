@@ -487,3 +487,46 @@ still asserted on the sampled minimum so the guard bites if the prior is ever sw
 for an unconstrained one. The estimator fits at any identifiable n (to demonstrate that
 credible intervals widen as n shrinks); the **n ≥ 200** rule (`MIN_BAYESIAN_N`,
 `bayesian_gate_open`) governs production use, per 07 §8.
+
+## DL-028 — RED-first / test-ownership deviations, EPIC 6 (audit 2026-07-17-01, F1) — RECURRENCE of DL-017
+**Story:** cross-cutting (S-601, S-602, S-603) · **Type:** process deviation ·
+**Raised by:** independent-auditor (`audits/AUDIT-2026-07-17-01.md`, branch
+`claude/independent-auditor-agent-nk5b6u`) · **Owner:** BA
+
+This is an explicit **recurrence of DL-017**: three GREEN/implementation commits again
+created or edited files under `tests/`, which the SDET/Dev split and the RED-first rule
+(`CLAUDE.md`) exist to prevent. The audit verdict was **PASS** and **no safety invariant
+was weakened**, but one assertion was *loosened* by the implementer and the git history
+looks more disciplined than the process was — the "looks done" gap the audits exist to
+close. Recorded here with a per-commit decision.
+
+- **`e746290` feat(S-601) GREEN (Dev)** — in the GREEN commit, edited
+  `tests/unit/test_ordinal.py`: removed an unused `pytest` import, **weakened**
+  `assert HYPO_STATES == frozenset({1, 2})` to membership checks (`1 in …`, `2 in …`,
+  `3 not in …`), and added `test_prob_at_least_above_top_state_is_zero`. **Decision:
+  re-authored (not merely accepted).** The weakening is the material one: a
+  membership-only check would not catch a future refactor that silently adds state 4 or
+  5 to the up-weighted hypo set — and those up-weighted states *are* the lows she cannot
+  feel. **SDET has restored the exact assertion** `frozenset({1, 2}) == HYPO_STATES`
+  (ruff-clean operand order) and adopted the added edge test as SDET-owned.
+- **`bc4f462` feat(S-602) GREEN (Dev)** — added `test_too_few_states_raises` to
+  `tests/unit/test_brant.py` in the GREEN commit. **Decision: accept-with-reason,
+  SDET-adopted.** A legitimate edge test (the `< 3 states` guard) that adds catch-power;
+  it is now marked SDET-owned. Still Dev editing `tests/` — a real commit-granularity
+  deviation, not green-before-red (the guard existed and the test exercises it).
+- **`305f967` feat(S-603) GREEN (Dev)** — added `test_insulin_col_out_of_range_raises`
+  and `test_too_few_states_raises` to `tests/unit/test_bayesian_ordinal.py` in the GREEN
+  commit. **Decision: accept-with-reason, SDET-adopted.** Both pin real pre-sampling
+  guards; marked SDET-owned.
+
+**Re-affirmed rule (unchanged from DL-017):** *Dev never touches `tests/`.* Each story's
+RED tests land in their own `test(S-nnn): RED` commit, seen to fail, **before** any
+implementation; coverage-completeness edge tests that emerge during GREEN are the SDET's
+to author or adopt in a separate commit, never folded into the Dev GREEN commit. The
+recurrence indicates the rule needs active guarding, not just restating — future GREEN
+commits touching `tests/` should be treated as a process failure at commit time.
+
+**Prose correction:** the EPIC 6 traceability lines for S-601/S-602/S-603 are qualified
+to cite this DL-028 caveat; "RED-first" for those three stories is **commit-granularity
+qualified** (the RED tests were real and seen to fail, but edge tests / one loosened
+assertion landed in the GREEN commits), not unqualified.

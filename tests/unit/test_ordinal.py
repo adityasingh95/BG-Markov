@@ -76,8 +76,11 @@ def test_hypo_weights_are_confidence_times_hypo_multiplier() -> None:
     conf = np.array([0.5, 0.5, 0.5, 0.5, 0.5])
     w = hypo_confidence_weights(states, conf, hypo_weight=4.0)
     assert w.tolist() == [2.0, 2.0, 0.5, 0.5, 0.5]
-    assert 1 in HYPO_STATES and 2 in HYPO_STATES
-    assert 3 not in HYPO_STATES
+    # EXACT — pins the hypo set so a refactor cannot silently add state 4/5 to the
+    # up-weighted (low-BG) set. Membership-only checks would miss that. Re-tightened by
+    # SDET after audit 2026-07-17-01 F1 (see DL-028); the up-weighted states ARE the
+    # lows she cannot feel, so this assertion is owned by the test author, not loosened.
+    assert frozenset({1, 2}) == HYPO_STATES
 
 
 def test_hypo_weight_default_upweights_only_lows() -> None:
@@ -96,7 +99,9 @@ def test_l2_shrinks_feature_coefficients() -> None:
 
 
 def test_prob_at_least_above_top_state_is_zero() -> None:
-    """P(state ≥ 6) is 0 everywhere — no observed state satisfies it."""
+    """P(state ≥ 6) is 0 everywhere — no observed state satisfies it.
+
+    SDET-owned (adopted after audit 2026-07-17-01 F1; see DL-028)."""
     x, y, conf = _make_data()
     fit = fit_ordinal(x, y, confidence_weights=conf)
     p = fit.prob_at_least(x, 6)
