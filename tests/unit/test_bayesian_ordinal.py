@@ -87,14 +87,18 @@ def test_inv8_is_wired_on_the_draws(_big_fit: BayesianOrdinalFit) -> None:
 
 
 def test_insulin_col_out_of_range_raises() -> None:
-    """Guard fires before any sampling — a bad column index is a programming error."""
+    """Guard fires before any sampling — a bad column index is a programming error.
+
+    SDET-owned (adopted after audit 2026-07-17-01 F1; see DL-028)."""
     x, y = _confounded_data(30, seed=9)
     with pytest.raises(ValueError):
         fit_bayesian_ordinal(x, y, insulin_col=5)
 
 
 def test_too_few_states_raises() -> None:
-    """An ordinal model needs >= 3 states; fewer raises before sampling."""
+    """An ordinal model needs >= 3 states; fewer raises before sampling.
+
+    SDET-owned (adopted after audit 2026-07-17-01 F1; see DL-028)."""
     x = np.tile(np.array([[0.1, 0.2], [0.3, 0.4]]), (10, 1))
     y = np.array([1, 2] * 10)  # only two states
     with pytest.raises(ValueError):

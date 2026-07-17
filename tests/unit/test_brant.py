@@ -82,7 +82,9 @@ def test_escalation_carries_the_violating_predictors() -> None:
 
 
 def test_too_few_states_raises() -> None:
-    """A Brant test needs >= 3 states (>= 2 thresholds) to compare slopes across."""
+    """A Brant test needs >= 3 states (>= 2 thresholds) to compare slopes across.
+
+    SDET-owned (adopted after audit 2026-07-17-01 F1; see DL-028)."""
     x = np.array([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6], [0.7, 0.8]])
     y = np.array([1, 1, 2, 2])  # only two states
     with pytest.raises(ValueError):
