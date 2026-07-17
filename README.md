@@ -58,6 +58,14 @@ python scripts/demo_epic2.py
 
 # 3. Run the accessible logging shell (S-102) and open it in a browser.
 ./scripts/run_app.sh          # -> http://127.0.0.1:8000
+
+# 4. Watch the whole pipeline end-to-end on SYNTHETIC data (no DB, fixed seed):
+#    data in -> feature pipeline -> ordinal model -> operator shadow report ->
+#    the two gates -> the patient readout -> the bolus calculator (INV-1/3/4,
+#    the 900 g typo flagged not dosed, the already-low refusal, the null-ICR block).
+#    On the seeded draw the model does NOT beat baseline, so Gate 1 stays CLOSED —
+#    that refusal is the system working, not failing.
+python scripts/demo_end_to_end.py
 ```
 
 What "green" means here: lint clean, `mypy --strict` clean on `core`/`api`/`data`,
