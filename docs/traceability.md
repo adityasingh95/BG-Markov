@@ -48,6 +48,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-045 [SAFETY]** (every prediction written to `prediction_log` **before** it is returned — INV-9; write-then-display enforced, not incidental) | **S-802** | `tests/integration/test_prediction_log.py` (happy path — row persisted & queryable with correct fields by the time it returns; ★ mock persistence: `flush` leaves no id ⇒ INV-9 raises, `flush` raises ⇒ propagates — **no prediction returned** either way; `serve_prediction` maps a `GuardedPrediction`, persists first, sets `guardrail_fired` on a refusal; ★ serve refuses to return on a failed write) | ✅ Done — `data/predictions.py`; `record_prediction` flushes + `inv9_prediction_persisted` **before** the return; `serve_prediction` inherits the guarantee |
 | **REQ-047 [SAFETY]** (kill switch on drift; **re-arming is manual only** — a later good run must not silently re-enable it) | **S-803** | `tests/integration/test_kill_switch.py` (drift `rolling<baseline` trips + persists; ★ after a trip a **good** run leaves it tripped — `evaluate_kill_switch` only ever *sets*; ★ `rearm(operator_confirmed=False)` raises `ManualReArmRequired` & stays tripped, `=True` clears it; healthy model untripped; unknown version raises) | ✅ Done — `prescribe/kill_switch.py`; state persisted on `model_artifact.kill_switch_tripped`; the only un-trip door is manual, a machine cannot open it; fails safe to the baseline |
 | **REQ-040 [SAFETY]** (patient risk readout — hypo risk the headline; plain language; refusal a rendered state; **never advice**; INV-2 first patient-reachable surface) | **S-804** | `tests/safety/test_readout.py` (★ 149 valid meals ⇒ `build_patient_readout` raises `GateNotPassed`; ★ **no bypass** — no override param, no env var; hypo risk is the headline (State-2 ⇒ elevated/high, State-3 ⇒ in_range, State-5 ⇒ reduced); refusal rendered as a state (`state=None`, plain body, not a blank); ★ **never advice** — no `dose`/`bolus`/`units` attribute or directive; kill switch ⇒ baseline fallback; conflict shows both, no winner; severity/hypo_risk are **text** not colour) | ✅ Done — **closes EPIC 8**; `prescribe/readout.py`; `require_gate1` first, no bypass; a dose cannot ride a risk screen; signal is textual (a11y) |
+| **REQ-048** (shadow mode ≥90 days; operator reviews shadow output before any patient-visible output) | **S-805** | `tests/unit/test_shadow.py` (report aggregates hypo recall @ FAR / calibration bins / Clarke grid / MAE / off-by-one / severe; predictions-vs-actuals confusion sums to n; ★ `unconstrained β_ins<0` ⇒ `beta_insulin_confounding=True`, healthy ⇒ False; Clarke **D** danger preserved; multiclass Brier when a distribution is supplied) | ✅ Done — `models/shadow.py::build_shadow_report`; composes the S-702 metrics (no plain-accuracy headline) + surfaces the INV-8/S-503 confounding alarm on the operator's Gate-1 evidence screen |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -323,8 +324,14 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     colour-only), and has **no** `advice`/`dose`/`bolus`/`units` field — a dose can never
     ride a risk screen. The HTML rendering of the readout is deferred to live-model wiring
     (no patient-visible prediction exists to render before then).
+  - **S-805 (shadow-mode dashboard) — Done.** `models/shadow.py::build_shadow_report`
+    composes the S-702 metric suite (hypo recall @ FAR, calibration, Clarke grid, MAE,
+    off-by-one/severe) into the operator's pre-Gate-1 evidence report, with a
+    predictions-vs-actuals confusion matrix and the **`β_insulin < 0` confounding alarm**
+    on the same screen — no plain-accuracy headline. Operator-only (INV-2 governs patient
+    output; the operator is the pre-Gate-1 audience).
   - **EPIC 8 COMPLETE** — output guardrails (S-801), prediction log/INV-9 (S-802), kill
-    switch (S-803), patient readout/INV-2 (S-804) all in.
+    switch (S-803), patient readout/INV-2 (S-804), shadow-mode dashboard (S-805) all in.
   - Next: **EPIC 9 — Prescriptive (Gate 2).** The bolus calculator (S-901): unblocked by
     S-703 (Gate 2 enforcement green) but **also human-gated** — **BLOCKED until the
     endocrinologist confirms ICR (OQ-1) and ISF (OQ-2)**; a human gate, not an agent
