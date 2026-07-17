@@ -79,6 +79,16 @@ def test_hypo_risk_is_the_headline() -> None:
     assert "hypo" in in_range.headline.lower() or "low" in in_range.headline.lower()
 
 
+def test_high_state_frames_hypo_risk_as_reduced() -> None:
+    """A confident hyper prediction (State 5) still leads with hypo risk — reduced."""
+    high = _readout(guarded=_guarded(5, baseline_state=5))  # agree, no conflict
+    assert high.kind is ReadoutKind.PREDICTION
+    assert high.state == 5
+    assert high.hypo_risk == "reduced"
+    assert high.severity == "moderate"
+    assert "hypo" in high.headline.lower()
+
+
 def test_refusal_is_a_rendered_state_not_a_blank() -> None:
     refused = _readout(guarded=_guarded(3, in_distribution=False))
     assert refused.kind is ReadoutKind.REFUSAL
