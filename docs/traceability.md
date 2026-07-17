@@ -47,6 +47,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-044/046 [SAFETY]** (output guardrails — OOD, sparse, diffuse posterior, baseline conflict; predicted BG outside [20,600] hard error (INV-6); refusal is a valid output) | **S-801** | `tests/safety/test_guardrails.py` (OOD & sparse refuse `state=None`; ★ diffuse — max p=0.39 ⇒ "not confident", 0.41 ⇒ a state; ★ baseline 3 vs model 5 ⇒ both shown, `conflict=true`, **no winner** (`state=None`), 1-apart not a conflict; ★ absurd 601/19 raise INV-6, 600/20 do not, absurd checked before a refusal can mask it; clean confident path) | ✅ Done — **opens EPIC 8**; `models/guardrails.py`; never fills the silence with a number |
 | **REQ-045 [SAFETY]** (every prediction written to `prediction_log` **before** it is returned — INV-9; write-then-display enforced, not incidental) | **S-802** | `tests/integration/test_prediction_log.py` (happy path — row persisted & queryable with correct fields by the time it returns; ★ mock persistence: `flush` leaves no id ⇒ INV-9 raises, `flush` raises ⇒ propagates — **no prediction returned** either way; `serve_prediction` maps a `GuardedPrediction`, persists first, sets `guardrail_fired` on a refusal; ★ serve refuses to return on a failed write) | ✅ Done — `data/predictions.py`; `record_prediction` flushes + `inv9_prediction_persisted` **before** the return; `serve_prediction` inherits the guarantee |
 | **REQ-047 [SAFETY]** (kill switch on drift; **re-arming is manual only** — a later good run must not silently re-enable it) | **S-803** | `tests/integration/test_kill_switch.py` (drift `rolling<baseline` trips + persists; ★ after a trip a **good** run leaves it tripped — `evaluate_kill_switch` only ever *sets*; ★ `rearm(operator_confirmed=False)` raises `ManualReArmRequired` & stays tripped, `=True` clears it; healthy model untripped; unknown version raises) | ✅ Done — `prescribe/kill_switch.py`; state persisted on `model_artifact.kill_switch_tripped`; the only un-trip door is manual, a machine cannot open it; fails safe to the baseline |
+| **REQ-040 [SAFETY]** (patient risk readout — hypo risk the headline; plain language; refusal a rendered state; **never advice**; INV-2 first patient-reachable surface) | **S-804** | `tests/safety/test_readout.py` (★ 149 valid meals ⇒ `build_patient_readout` raises `GateNotPassed`; ★ **no bypass** — no override param, no env var; hypo risk is the headline (State-2 ⇒ elevated/high, State-3 ⇒ in_range, State-5 ⇒ reduced); refusal rendered as a state (`state=None`, plain body, not a blank); ★ **never advice** — no `dose`/`bolus`/`units` attribute or directive; kill switch ⇒ baseline fallback; conflict shows both, no winner; severity/hypo_risk are **text** not colour) | ✅ Done — **closes EPIC 8**; `prescribe/readout.py`; `require_gate1` first, no bypass; a dose cannot ride a risk screen; signal is textual (a11y) |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
 | **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
@@ -67,7 +68,7 @@ each invariant must still be *wired in* by the story that owns its feature.
 | INV | Function (`core/safety.py`) | Test(s) | Module | Wired into feature |
 |-----|-----------------------------|---------|--------|--------------------|
 | INV-1 | `inv1_prescriptive_requires_gate2` | `test_safety_invariants.py::test_inv1_*`; **wiring:** `test_gates.py` (icr=null ⇒ `recommend_bolus` raises `GateNotPassed`; ★ no bypass param/env/flag; gate open ⇒ EPIC-9 placeholder) | ✅ S-104 | ✅ **S-703** — `prescribe/bolus.py::recommend_bolus` hard-gated on Gate 2 (live, no bypass); dosing math still EPIC 9 |
-| INV-2 | `inv2_patient_output_requires_gate1` | `test_safety_invariants.py::test_inv2_*`; **wiring:** `test_gates.py` (149 ⇒ `require_gate1` raises; 150+recall>baseline ⇒ opens; ★ 200 w/ recall≤baseline still closed) | ✅ S-104 | ✅ **S-703** — `prescribe/gates.py::require_gate1`; patient readout consumes it at S-804 |
+| INV-2 | `inv2_patient_output_requires_gate1` | `test_safety_invariants.py::test_inv2_*`; **wiring:** `test_gates.py` (149 ⇒ `require_gate1` raises; 150+recall>baseline ⇒ opens; ★ 200 w/ recall≤baseline still closed); `test_readout.py` (patient surface raises at 149, no bypass) | ✅ S-104 | ✅ **S-703** (`require_gate1`) + **S-804** — the patient risk readout (`prescribe/readout.py`) is the first patient-reachable surface and calls `require_gate1` on its first line, no bypass; ungated model output cannot reach her |
 | INV-3 | `inv3_bolus_within_bounds` | `test_safety_invariants.py::test_inv3_*` | ✅ S-104 | ⏳ S-901 |
 | INV-4 | `inv4_bolus_allowed_at_bg` | `test_safety_invariants.py::test_inv4_*` | ✅ S-104 | ⏳ S-901 |
 | INV-5 | `inv5_monitoring_not_reduced` | `test_safety_invariants.py::test_inv5_*` | ✅ S-104 | ⏳ output/advice stories |
@@ -313,13 +314,24 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
     is `rearm(operator_confirmed=True)`, which raises `ManualReArmRequired` otherwise. State
     is persisted on `model_artifact.kill_switch_tripped`, so a restart cannot come up armed
     after a trip, and a tripped switch fails safe to the ML-free baseline.
-  - Next: **S-804 [SAFETY]** (patient risk readout, INV-2 — hypo risk the headline, plain
-    language, refusal a rendered state never advice, no colour-only signalling; n=149 ⇒
-    raises, no bypass; first patient-reachable point — re-run no-bypass against the real
-    surface; wires `require_gate1` (S-703), `serve_prediction` (S-802), the guardrails
-    (S-801), and the kill switch (S-803)). Then **EPIC 9** (the prescriptive bolus
-    calculator — unblocked by S-703 but **also human-gated** on endocrinologist ICR/ISF
-    sign-off, OQ-1/OQ-2; do not self-clear or stub `icr`/`isf`).
+  - **★ S-804 [SAFETY] (patient risk readout) — Done. EPIC 8 COMPLETE.**
+    `prescribe/readout.py::build_patient_readout` is the first patient-reachable INV-2
+    surface: it calls `require_gate1` on its first line (n=149 raises `GateNotPassed`; no
+    override param, no env var), leads every readout with the **hypo-risk headline**,
+    renders a refusal / conflict / kill-switch suppression as a definite **rendered state**
+    (never a blank), carries the signal as **text** (`hypo_risk`/`severity`, not
+    colour-only), and has **no** `advice`/`dose`/`bolus`/`units` field — a dose can never
+    ride a risk screen. The HTML rendering of the readout is deferred to live-model wiring
+    (no patient-visible prediction exists to render before then).
+  - **EPIC 8 COMPLETE** — output guardrails (S-801), prediction log/INV-9 (S-802), kill
+    switch (S-803), patient readout/INV-2 (S-804) all in.
+  - Next: **EPIC 9 — Prescriptive (Gate 2).** The bolus calculator (S-901): unblocked by
+    S-703 (Gate 2 enforcement green) but **also human-gated** — **BLOCKED until the
+    endocrinologist confirms ICR (OQ-1) and ISF (OQ-2)**; a human gate, not an agent
+    decision. Do **not** self-clear it or stub `icr`/`isf`. When it lands: no ML anywhere
+    in the dose path (carbs/ICR + correction only), cap 15 U + flag implausible inputs
+    (INV-3), refuse at BG<80 (INV-4), never negative (INV-3), behind `recommend_bolus`'s
+    live Gate-2 check with no bypass.
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.
