@@ -122,6 +122,27 @@ def test_off_by_one_and_severe_rates() -> None:
     assert severe_state_error_rate(pred, true) == pytest.approx(2 / 5)  # two off by >= 2
 
 
+def test_hypo_recall_requires_both_classes() -> None:
+    with pytest.raises(ValueError):
+        hypo_recall_at_far(np.array([0.1, 0.2, 0.3]), np.array([1, 1, 1], dtype=bool))
+    with pytest.raises(ValueError):
+        hypo_recall_at_far(np.array([0.1, 0.2, 0.3]), np.array([0, 0, 0], dtype=bool))
+
+
+def test_clarke_zone_rejects_nonpositive_reference() -> None:
+    with pytest.raises(ValueError):
+        clarke_zone(0.0, 100.0)
+
+
+def test_reliability_skips_empty_bins() -> None:
+    """Probabilities in a narrow band leave most bins empty — those are skipped."""
+    prob = np.full(50, 0.05)               # all fall in the first bin
+    is_event = np.zeros(50, dtype=bool)
+    bins = reliability_curve(prob, is_event, n_bins=10)
+    assert len(bins) == 1                   # only the occupied bin is returned
+    assert bins[0].count == 50
+
+
 def test_module_reports_no_plain_accuracy() -> None:
     """Plain accuracy / exact-match is the forbidden metric — it must not be exposed."""
     import models.metrics as m
