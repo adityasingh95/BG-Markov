@@ -530,3 +530,25 @@ commits touching `tests/` should be treated as a process failure at commit time.
 to cite this DL-028 caveat; "RED-first" for those three stories is **commit-granularity
 qualified** (the RED tests were real and seen to fail, but edge tests / one loosened
 assertion landed in the GREEN commits), not unqualified.
+
+## DL-029 — Commit-attribution hygiene for doc changes (audit 2026-07-17-02, M1)
+**Story:** cross-cutting (F1 remediation) · **Type:** process note · **Raised by:**
+independent-auditor (`audits/AUDIT-2026-07-17-02.md`) · **Owner:** BA
+
+The audit verdict was **PASS**; the single minor is attribution hygiene. The F1
+remediation commit **`eec1e7f`** is labeled `test(F1): SDET re-pin exact HYPO_STATES
+frozenset + adopt EPIC 6 edge tests`, but it also edited **BA-owned docs** —
+`docs/decision-log.md` (+43, the DL-028 body) and `docs/traceability.md` (+7). Folding
+BA doc changes into a `test(...)`-labeled commit is itself the one-commit cross-owner
+blur that DL-028 says to treat as a commit-time process failure — and doing it *inside*
+the DL-028 fix quietly weakens the who-did-what signal the audits reconstruct from commit
+attribution.
+
+**Decision — accept `eec1e7f` as-is + going-forward rule (no history rewrite).** The
+substance of DL-028 and the traceability edits is correct and stays; rewriting pushed
+history is neither needed nor wanted. Going forward: **BA-owned changes (`docs/**`, the
+decision log, the traceability matrix) land in a `docs(...)` BA commit, distinct from
+`test(...)` (SDET) and `feat(...)` (Dev) commits** — the same commit-per-owner rule that
+already governs `tests/` and `core|features|models|...`. This DL entry is itself an
+instance of the rule (a lone `docs(...)` commit). Attribution is a safety signal: a fix
+that blurs ownership is not a fix.
