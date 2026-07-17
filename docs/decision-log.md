@@ -580,3 +580,29 @@ their statuses were corrected to Done in a `docs(...)` BA commit (H1).
 which are **outside the gate by design** (tests use fixtures/`type: ignore` pragmatically;
 migrations are generated). "mypy clean" in this project means the source packages type-check
 under `--strict`, unambiguously — not the whole tree.
+
+## DL-032 — OQ-1/OQ-2 resolved: ICR/ISF clinically confirmed — Gate 2 human gate cleared (S-901)
+**Story:** S-901 (EPIC 9) · **Type:** clinical constant confirmation (human gate) ·
+**Confirmed by:** operator relaying the endocrinologist's sign-off, 2026-07-17 · **Owner:** BA
+
+The prescriptive module (EPIC 9) was blocked on **two gates**: the code gate (S-703, green
+since 2026-07-17) **and** the human gate — an endocrinologist confirming ICR (OQ-1) and ISF
+(OQ-2). The code gate being open (`gate2_status(icr=…)`) is **not** sufficient; a fabricated
+or unilaterally-chosen ICR would be a top-severity safety defect. This entry records the
+human gate being cleared.
+
+**Confirmed values (2026-07-17):**
+- **ICR = 9 g/U** (OQ-1). Within the expected 7–10 g/U band; not the 500/60 ≈ 8.3 heuristic —
+  the clinician's figure.
+- **ISF = 30 mg/dL/U** (OQ-2). Confirms the population heuristic for this patient.
+- **Correction target = 135 mg/dL** (OQ-6) — unchanged, still valid.
+
+**How the values live (updatable later, by design):** ICR/ISF/target are stored in the
+**versioned, append-only `patient_profile`** (REQ-054), not hardcoded anywhere. The
+bolus calculator reads them from the profile as parameters; there is no `icr = 9` literal in
+`prescribe/`. To update them later, the operator appends a **new `patient_profile` version**
+(the old one is retained for audit) — no code change. `01-prd §9` OQ-1/OQ-2 marked RESOLVED,
+OQ-6 CONFIRMED.
+
+**This unblocks S-901.** The calculator uses the clinical formula only (07 §11 — no ML in the
+dose path) behind `recommend_bolus`'s live Gate-2 check, with INV-1/INV-3/INV-4 enforced.

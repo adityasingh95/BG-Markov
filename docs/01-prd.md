@@ -154,10 +154,10 @@ Explicitly not built. Do not build these.
 
 | # | Question | Blocks |
 |---|---|---|
-| OQ-1 | **Confirm ICR.** Expected 7–10 g/U (500/60 ≈ 8.3). | **Gate 2** |
-| OQ-2 | **Confirm ISF = 30.** Consistent with 1800/60, but a population heuristic. **An ISF too low causes over-dosing.** | **Gate 2** |
+| OQ-1 | **Confirm ICR.** Expected 7–10 g/U (500/60 ≈ 8.3). | ~~**Gate 2**~~ **RESOLVED 2026-07-17: ICR = 9 g/U** (endocrinologist-confirmed; DL-032). Opens Gate 2. |
+| OQ-2 | **Confirm ISF = 30.** Consistent with 1800/60, but a population heuristic. **An ISF too low causes over-dosing.** | ~~**Gate 2**~~ **RESOLVED 2026-07-17: ISF = 30 mg/dL/U** (endocrinologist-confirmed; DL-032). Opens Gate 2. |
 | OQ-3 | **Basal:bolus split.** Tresiba should be ~40–50% of TDD (24–30 U). If materially higher, she may be **over-basalized** — which causes unexplained lows in someone who cannot feel them. **Check before collecting data.** | Data quality |
 | OQ-4 | Does she have **confirmed** impaired hypoglycaemia awareness? The spec assumes yes. | Alert tuning |
 | OQ-5 | Confirm State 2 upper boundary at **80** mg/dL (raised from the standard 70). | State model |
-| OQ-6 | Confirm the 120–150 correction target is intentional for her age and duration. | Baseline, prescriptive |
+| OQ-6 | Confirm the 120–150 correction target is intentional for her age and duration. | **CONFIRMED 2026-07-17: target = 135 mg/dL still valid** (DL-032). |
 | OQ-7 | Is she aware of and does she approve of this system? | Everything |
