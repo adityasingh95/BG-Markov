@@ -351,3 +351,26 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
   - Post-ship, in parallel with data collection: **EPIC 4** (S-401 IOB engine —
     backfills `iob_at_start`; features), **EPIC 5** (S-501 ISF derivation from the
     correction events; the ordinal model), gated on live data — INV-1/INV-2 hold.
+
+- **EPIC 10 — Integration, UI & End-to-End Validation — BACKLOG (not started, DL-033).**
+  Approved scope addition (operator, 2026-07-17). Builds the render layer that EPICs 5–9
+  deferred, plus a synthetic-data generator and one end-to-end test. **Building the UI does
+  not open any gate** — the patient/bolus screens call `require_gate1`/`require_gate2` first
+  and render the refusal/baseline state before the gate. Status per story:
+  - **REQ-055 → S-1001 (operator shadow dashboard UI) — Backlog.** Renders
+    `build_shadow_report` (hypo-recall headline, Brier, calibration, Clarke grid,
+    predictions-vs-actuals, `β_insulin < 0` alarm) + live gate status; operator-only; no
+    plain accuracy; no dose. Test: `accuracy` absent from template; alarm renders; `axe`.
+  - **REQ-040 / INV-2 → S-1002 [SAFETY] (patient readout UI) — Backlog.** Discharges the
+    S-804 deferred presentation note. Route calls `require_gate1` first, no bypass; refusal/
+    baseline is a rendered state, never a blank; **no dose field on the screen.**
+  - **REQ-041/042/043 / INV-1/INV-3/INV-4 → S-1003 [SAFETY] (bolus calculator UI) —
+    Backlog.** Route calls `require_gate2` first, no bypass; BG < 80 refuses; over-cap
+    renders the flagged-implausible state; full arithmetic shown, framed as a suggestion,
+    no autofill; imports nothing from `models/`.
+  - **REQ-056 → S-1004 (synthetic-data generator) — Backlog.** Seeded; reported-timestamp
+    discipline (ADR-8); forbidden-import guard keeps it out of `core`/`models`/`prescribe`/
+    `api` and it is never presented as real data.
+  - **REQ-057 → S-1005 [SAFETY] (end-to-end cycle test) — Backlog.** Drives synthetic data
+    through logging → INV-7 → features → fit → temporal CV → metrics → gates → readout →
+    shadow dashboard → bolus, asserting INV-1/2/7/9 and gate refusals **across** the chain.

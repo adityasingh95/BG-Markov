@@ -606,3 +606,39 @@ OQ-6 CONFIRMED.
 
 **This unblocks S-901.** The calculator uses the clinical formula only (07 §11 — no ML in the
 dose path) behind `recommend_bolus`'s live Gate-2 check, with INV-1/INV-3/INV-4 enforced.
+
+## DL-033 — EPIC 10 added: Integration, UI & End-to-End Validation (approved scope addition)
+**Story:** EPIC 10 (S-1001..S-1005) · **Type:** approved scope addition · **Requested by:**
+operator, 2026-07-17 · **Owner:** BA
+
+After the build reached BUILD COMPLETE (EPICs 1–9), the operator asked for (a) a UI over the
+model/prescriptive surfaces so the system can be seen and validated, and (b) an end-to-end
+test over synthetically generated data proving the full cycle works. This is a **sanctioned**
+scope addition (requested by the operator), recorded here rather than back-filled — BA's job
+is to make the addition visible, not silent.
+
+**Why these surfaces had no UI (not an oversight).** EPICs 5–9 delivered the shadow report,
+patient readout, and bolus calculator as tested Python returning data structures; the HTML
+render layer was **deferred by design** (S-804/S-805 presentation notes) on the same gate
+discipline as S-703 — *there is nothing patient-visible to render before Gate 1.* EPIC 10
+builds those render layers now, explicitly.
+
+**The load-bearing guarantee: building a UI does not open a gate.** S-1002 (patient readout)
+calls `require_gate1` first (INV-2); S-1003 (bolus) calls `require_gate2` first (INV-1).
+Before those gates the screens render the refusal / baseline state — never a blank, never a
+dose. The invariants stay in `core/safety.py`; the UI composes them, it does not re-implement
+or weaken them. The bolus screen shows the full arithmetic, frames the number as *a
+suggestion for review*, and **does not autofill the dose into any action**.
+
+**Synthetic-data guardrail (S-1004).** The generator is for tests/demos only. It honours
+reported-timestamp discipline (ADR-8) and is **never importable into `core`/`models`/
+`prescribe`/`api` and never presented as real patient data** — a forbidden-import guard
+enforces this, so synthetic rows can never be mistaken for hers or fed to a production fit.
+
+**New requirements:** REQ-055 (rendered shadow dashboard), REQ-056 (seeded synthetic-data
+generator), REQ-057 (end-to-end cycle test). Patient-readout and bolus rendering trace to the
+existing REQ-040 and REQ-041–043; EPIC 10 adds their render layer without changing the gates.
+
+**Not started.** EPIC 10 is backlog only at this entry — no code yet. Each story still runs
+the full TDD loop (SDET RED first); the three `[SAFETY]` stories (S-1002/S-1003/S-1005)
+require a written invariant argument in their PR.

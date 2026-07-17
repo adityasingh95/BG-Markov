@@ -121,6 +121,17 @@ Explicitly not built. Do not build these.
 | REQ-053 | Operator adherence dashboard: valid-meal rate, exclusion reasons, `median(logged_at − datetime)`, days-since-last-log. | P0 |
 | REQ-054 | Clinical constants are **versioned**, never overwritten. | P0 |
 
+### Integration, UI & validation (EPIC 10)
+| ID | Requirement | Priority |
+|---|---|---|
+| REQ-055 | The operator shadow report is **rendered** (hypo recall @ FAR headline, Brier, calibration, Clarke grid, predictions-vs-actuals, `β_insulin < 0` alarm, live gate status). Operator-only; **never plain accuracy**; no dose on the screen. | P1 |
+| REQ-056 | A **seeded** synthetic-data generator produces a full logging cycle for tests/demos, honouring reported-timestamp discipline (ADR-8). **Never used on, imported by, or presented as, real patient data.** | P1 |
+| REQ-057 | An **end-to-end test** exercises the full pipeline on synthetic data and asserts the safety invariants (INV-1/2/7/9) and gate behaviour hold **across** the chain, not just in unit isolation. | P1 |
+
+*Rendering of the patient readout (INV-2, REQ-040) and the bolus calculator (INV-1/3/4,
+REQ-041–043) is covered by those existing requirements; EPIC 10 adds their render layer
+without changing the runtime gates.*
+
 ## 6. Success Criteria
 
 | # | Criterion |

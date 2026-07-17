@@ -27,6 +27,9 @@ EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
                                                         │
                                                         ▼
                                               EPIC 9 (Prescriptive — Gate 2)
+                                                        │
+                                                        ▼
+                          EPIC 10 (Integration, UI & End-to-End Validation)
 ```
 
 ### Three hard rules
@@ -237,6 +240,91 @@ Calibration, hypo recall, Clarke grid, predictions vs actuals, `β_insulin < 0` 
 - **INV-1:** `icr = None` ⇒ raises. **Assert no fixture, mock, or config bypasses.**
 - Golden: 5 hand-computed doses to 2 dp.
 - Property: non-decreasing in carbs; non-increasing in IOB.
+
+---
+
+## EPIC 10 — Integration, UI & End-to-End Validation
+
+> Post-ship hardening, added after EPICs 1–9 completed (approved by the operator,
+> 2026-07-17, DL-033). EPICs 5–9 delivered the model/prescriptive surfaces as **tested
+> Python returning data structures** (`ShadowReport`, `PatientReadout`, `BolusRecommendation`);
+> the HTML render layer was **deferred by design** (S-804/S-805 presentation notes) because
+> there is nothing patient-visible to render before Gate 1. This epic builds those render
+> layers, a seeded synthetic-data generator, and one end-to-end test that drives the whole
+> cycle.
+>
+> **Building a UI does not open a gate.** The patient readout and bolus screens render the
+> *already-gated* logic: the readout route calls `require_gate1` first (INV-2) and the bolus
+> route `require_gate2` first (INV-1). Before those gates, the screens render the refusal /
+> baseline state — never a blank, never a dose. Runtime gating is unchanged.
+>
+> The operator dashboard (S-1001), the synthetic-data generator (S-1004), and the E2E test
+> (S-1005) are **not gated** and are buildable now. S-1002/S-1003 render gated states now;
+> their patient-visible model/dose output still waits on Gate 1 / clinical go-live.
+
+### S-1001 — Operator shadow dashboard UI — REQ-055
+**AC:** A rendered operator page for `build_shadow_report`: hypo recall @ FAR (**headline
+metric**), Brier, a reliability/calibration diagram, Clarke grid, predictions-vs-actuals
+matrix, off-by-one/severe rates, and the **`β_insulin < 0` confounding alarm** on the same
+screen. Live Gate 1 / Gate 2 status shown. Operator-only, in the operator nav, **not** the
+patient nav. **No plain-accuracy figure anywhere.** No dose on this screen.
+**TDD:** Grep — `accuracy` absent from the template. The `β_insulin < 0` case renders a
+visible alarm, not a silent pass. `axe` passes; usable at 200% zoom. Renders with an empty
+report (pre-data) without error.
+
+### S-1002 [SAFETY] — Patient readout UI — REQ-040, INV-2
+**Discharges the S-804 deferred presentation note.**
+**AC:** A Jinja template + route rendering `PatientReadout`. **The route calls
+`require_gate1` first, no bypass** — before Gate 1 it renders the refusal / baseline state
+as a **rendered answer, never a blank, never an error page**. Hypo risk is the headline, in
+**text** (never colour-only). **There is no dose/bolus/units field on this screen, ever.**
+**TDD:** Gate-1-closed ⇒ the route renders the refusal/baseline state (asserted), never a
+prediction; no query param, header, or env var flips it. `axe` passes. A grep/DOM test
+asserts no dose-like field is present on the readout template.
+
+### S-1003 [SAFETY] — Bolus calculator UI — REQ-041, REQ-042, REQ-043, INV-1, INV-3, INV-4
+**The most dangerous screen in the system. Clinical-deployment gated.**
+**AC:** A form + route over `recommend_bolus`. **The route calls `require_gate2` first, no
+bypass** (INV-1) — `icr = None` renders a "disabled until Gate 2" state, not a form that
+computes. Refuses below BG 80 (INV-4). An over-cap dose renders the **flagged implausible**
+state (INV-3), never a silent 15 U. Shows the **full arithmetic**; frames the number as *a
+suggestion for review*, not an instruction; **does not autofill the dose into any action or
+log**. No ML in the path (the UI calls only `recommend_bolus`).
+**TDD:** icr=None ⇒ disabled state rendered, no dose (asserted); no bypass param/env. BG 79
+⇒ "treat the low first" state; BG 80 ⇒ computes. carbs=900 ⇒ the flagged-implausible state
+renders (cap **and** flag both visible). Golden: the 5 hand-computed doses render to 2 dp.
+Grep — the UI module imports nothing from `models/`.
+
+### S-1004 — Synthetic-data generator — REQ-056
+**AC:** A **seeded** generator producing a full synthetic logging cycle — meals, boluses,
+corrections, exercise, post-meal readings, hypo rescues — honouring **reported-timestamp
+discipline** (`datetime` reported, `logged_at` separate; ADR-8) and producing a realistic
+hypo minority. Lives under `tests/` / `scripts/` fixtures. **Never importable into a
+production model-fit or dosing path, and never presented as real patient data** (an AST/grep
+guard asserts `core/`,`models/`,`prescribe/`,`api/` do not import it).
+**TDD:** A fixed seed reproduces byte-identical output. No generated clinical `datetime`
+comes from the system clock. The forbidden-import guard fires if a production module imports
+it.
+
+### S-1005 [SAFETY] — End-to-end cycle test — REQ-057
+**The "prove it all works through the full cycle" story.**
+**AC:** One test (or suite) drives synthetic data (S-1004) through the **whole chain**:
+logging/validity + INV-7 → features → model fit → temporal CV → metric suite → gates →
+patient readout → shadow dashboard → bolus calculator. Asserts the safety invariants hold
+**across** the chain, not just in unit isolation, and that the gates refuse correctly
+end-to-end.
+**TDD (the chain-level assertions):**
+- **INV-7 across the chain:** a rescued low is absent from the training set the model is fit
+  on, yet present in `get_hypo_events()` and in the hypo-recall denominator.
+- **INV-2:** with < 150 valid meals, the patient readout path refuses; the operator dashboard
+  still renders.
+- **INV-1:** the bolus path refuses with an unconfirmed ICR; confirmed ⇒ computes.
+- **INV-9:** every served prediction in the run is persisted **before** it is returned.
+- **No temporal leakage:** every CV fold satisfies `max(train.datetime) < min(test.datetime)`
+  and shares no `date` across train/test.
+**Adversarial:** this is the test that catches an invariant that holds in isolation but is
+bypassed by the wiring between stages. It is the integration counterpart to the unit safety
+suite — **do not let it degrade into a smoke test.**
 
 ---
 
