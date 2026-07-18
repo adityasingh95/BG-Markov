@@ -295,13 +295,17 @@ log**. No ML in the path (the UI calls only `recommend_bolus`).
 renders (cap **and** flag both visible). Golden: the 5 hand-computed doses render to 2 dp.
 Grep — the UI module imports nothing from `models/`.
 
-### S-1004 — Synthetic-data generator — REQ-056
+### S-1004 [SAFETY] — Synthetic-data generator — REQ-056
+**Reclassified `[SAFETY]` on review (2026-07-18, DL-034): "fake data can never reach a
+production fit or be mistaken for hers" is a safety property, so the guard belongs in
+`tests/forbidden/` (S-105 lineage) with a written argument, not as a plain AC.**
 **AC:** A **seeded** generator producing a full synthetic logging cycle — meals, boluses,
 corrections, exercise, post-meal readings, hypo rescues — honouring **reported-timestamp
 discipline** (`datetime` reported, `logged_at` separate; ADR-8) and producing a realistic
 hypo minority. Lives under `tests/` / `scripts/` fixtures. **Never importable into a
-production model-fit or dosing path, and never presented as real patient data** (an AST/grep
-guard asserts `core/`,`models/`,`prescribe/`,`api/` do not import it).
+production model-fit or dosing path, and never presented as real patient data** — the
+forbidden-import guard runs in `tests/forbidden/` and asserts `core/`,`models/`,`prescribe/`,
+`api/` do not import it.
 **TDD:** A fixed seed reproduces byte-identical output. No generated clinical `datetime`
 comes from the system clock. The forbidden-import guard fires if a production module imports
 it.
@@ -325,6 +329,81 @@ end-to-end.
 **Adversarial:** this is the test that catches an invariant that holds in isolation but is
 bypassed by the wiring between stages. It is the integration counterpart to the unit safety
 suite — **do not let it degrade into a smoke test.**
+
+---
+
+> **★ Review addendum — 2026-07-18 (DL-034).** Holding the first-cut EPIC 10 (S-1001–S-1005)
+> against the full end-to-end usage sequence exposed that the UI/test layer was scoped but the
+> sequence's **operational spine was assumed, not storied.** Two of the gaps are
+> **spec-conformance**, not new decisions: `07 §Retraining` already mandates *"Monthly refit …
+> Promotion is manual, on hypo recall"* and REQ-048 already requires *"Shadow mode ≥ 90 days
+> before patient-visible output."* Yet `gate1_status()` opens automatically on
+> `volume ∧ beats_baseline`, and `ModelArtifact.is_promoted` (schema, *"manual only"*) is read
+> nowhere. The stories below close the code-vs-spec gap. **They tighten Gate 1; they do not
+> relax it. No threshold here is chosen by the team — 90 days, monthly, and "manual on hypo
+> recall" all trace to the spec.**
+
+### Build order (EPIC 10)
+`S-1004` (synthetic data) → `S-1008` (live prediction wiring) → `S-1006`/`S-1007` (Gate-1
+promotion + shadow-clock preconditions) → `S-1001` (operator dashboard, incl. the promotion
+control) → `S-1002` (patient readout — needs live wiring **and** the gate) → `S-1003` (bolus
+UI) → `S-1005` (E2E, needs all of the above). `S-1009` (refit) and `S-1010` (profile update)
+are independent and can land any time.
+
+### S-1006 [SAFETY] — Gate-1 manual promotion — REQ-058, INV-2
+**Closes the review gap G1. Brings code into conformance with `07 §Retraining` ("Promotion
+is manual, on hypo recall").**
+**AC:** `gate1_status()` gains a **required** `is_promoted` input and opens **only** when
+`volume ∧ beats_baseline ∧ is_promoted`. `is_promoted` is read from the live
+`ModelArtifact.is_promoted` (the schema flag that today nothing consumes); it is set **only**
+by an explicit, audited operator action (never by code on a metric threshold, never an env
+var/flag). Fails closed: absent/unknown ⇒ not promoted.
+**TDD:** volume ✓ + beats-baseline ✓ + **not promoted ⇒ Gate 1 CLOSED** (the missing case
+today). Promoted but volume/recall not met ⇒ still closed. Promotion is a recorded action
+(audit-logged); no env var/param opens it. The `is_promoted` column is now referenced by
+`gate1_status` (grep proves it is wired, not dead).
+**Adversarial:** the tempting "auto-promote once metrics pass" is exactly what the spec
+forbids — a human must put her in front of the model on purpose.
+
+### S-1007 [SAFETY] — Gate-1 shadow-period precondition — REQ-048, INV-2
+**Closes G2. REQ-048 ("≥ 90 days shadow before patient-visible output") is currently enforced
+nowhere — a REQ with no covering test is a visible gap.**
+**AC:** Gate 1 additionally requires **≥ 90 days of shadow-mode operation** (measured from the
+first logged shadow prediction to now) before it can open. The 90-day constant traces to
+REQ-048, not to the team. Surfaced as a countdown on the operator dashboard.
+**TDD:** 89 days shadow, everything else ✓ ⇒ Gate 1 CLOSED; 90 days ⇒ eligible (still needs
+promotion, S-1006). The shadow clock is computed from logged prediction timestamps, not a
+stored boolean.
+
+### S-1008 — Live prediction wiring (per-meal orchestration) — REQ-059
+**Closes G3. The runtime loop is unit-built but nothing runs it on a real logged meal;
+S-1002/S-1003 have nothing to render without it, and S-1005 only tests it on synthetic data.**
+**AC:** On a logged meal, orchestrate the real path: derive features → `predict_proba` →
+`guard_prediction` → **`record_prediction` (INV-9: persisted before returned)** → serve to the
+readout. Uses the currently-promoted `ModelArtifact`; if none is promoted, the patient path
+returns the baseline (Gate 1 governs visibility). No new model logic — pure wiring over the
+shipped modules.
+**TDD:** a served prediction is persisted before return (mock persistence failure ⇒ nothing
+served, INV-9). With no promoted model, the patient path yields the baseline, never a raw
+model output. Guardrail refusals propagate as rendered states.
+
+### S-1009 — Monthly refit cadence — REQ-060
+**Closes G4. `07 §Retraining`: "Monthly refit, trailing 6 months, older data down-weighted."
+Currently no schedule exists.**
+**AC:** A monthly refit over a trailing 6-month window with older data down-weighted, writing
+a **new** `ModelArtifact` (never overwriting) that stays **unpromoted** until the operator
+promotes it (S-1006). A refit never auto-promotes.
+**TDD:** a refit produces a new artifact row with `is_promoted = False`. The trailing window
+and down-weighting are applied (not a full-history equal-weight fit).
+
+### S-1010 — Patient-profile update surface — REQ-061
+**Closes G5. Clinical constants are versioned (REQ-054) but there is no operator action to
+append a new version — the "keep ICR/ISF updatable later" ask has no surface.**
+**AC:** An operator-only action appends a **new** `patient_profile` version (e.g. a revised
+ICR/ISF/target); the prior version is retained (append-only, never mutated). Gate 2 and the
+bolus calculator read the latest version live. No clinical value is hardcoded.
+**TDD:** appending a version creates a new row and leaves the old intact; `recommend_bolus`
+and `gate2_status` reflect the new value on the next call (live, not cached).
 
 ---
 

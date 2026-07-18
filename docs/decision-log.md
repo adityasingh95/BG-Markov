@@ -642,3 +642,53 @@ existing REQ-040 and REQ-041–043; EPIC 10 adds their render layer without chan
 **Not started.** EPIC 10 is backlog only at this entry — no code yet. Each story still runs
 the full TDD loop (SDET RED first); the three `[SAFETY]` stories (S-1002/S-1003/S-1005)
 require a written invariant argument in their PR.
+
+## DL-034 — EPIC 10 review: operational-spine gaps added (S-1006..S-1010, S-1004 reclassified)
+**Story:** EPIC 10 · **Type:** backlog review / gap remediation · **Date:** 2026-07-18 ·
+**Requested by:** operator ("review the newly added items") · **Owner:** BA
+
+The first-cut EPIC 10 (S-1001–S-1005) was reviewed against the full end-to-end **usage
+sequence**. It scoped the UI render layer, the synthetic generator, and the E2E test, but
+**assumed the sequence's operational spine rather than storying it.** Five gaps were found;
+stories added. **No implementation started — backlog/spec only.**
+
+**The load-bearing finding (G1).** The sequence pivots on the operator *manually promoting*
+the model at Gate 1. In code, `gate1_status()` opens automatically on
+`valid_meals ≥ 150 ∧ model beats baseline`. The schema has `ModelArtifact.is_promoted`
+(commented *"manual only"*) but **nothing reads it** (only the migration references it). So the
+manual-promotion gate exists on paper and in the data model but was never wired. This also
+corrects an overstatement made to the operator in conversation ("promotion is never
+automatic") — today it is. → **S-1006**.
+
+**These are conformance fixes, not new gate decisions.** `07 §Retraining` (the clinical spec,
+which wins on clinical matters) already states *"Monthly refit, trailing 6 months, older data
+down-weighted. Promotion is manual, on hypo recall."* REQ-048 already requires *"Shadow mode
+≥ 90 days."* The team is **not choosing** any threshold here — 90 days, monthly, manual-on-
+hypo-recall all trace to existing spec/requirements. The stories bring the code up to the
+spec; they **tighten** Gate 1 (add a precondition), never relax it, so this is remediation,
+not a gate relaxation requiring escalation.
+
+**Gaps and stories:**
+- **G1 → S-1006 [SAFETY]** — wire `is_promoted` into `gate1_status`; open only with an
+  explicit audited manual promotion. REQ-058 (new).
+- **G2 → S-1007 [SAFETY]** — enforce the ≥ 90-day shadow clock as a Gate-1 precondition;
+  gives REQ-048 its first covering story (previously enforced nowhere).
+- **G3 → S-1008** — the live per-meal prediction wiring (features → model → guardrails →
+  persist INV-9 → serve); the runtime loop was unit-built but never orchestrated on a real
+  meal. REQ-059 (new).
+- **G4 → S-1009** — the monthly refit cadence from `07 §Retraining`, writing a new unpromoted
+  artifact. REQ-060 (new).
+- **G5 → S-1010** — an operator surface to append a new `patient_profile` version (the
+  "updatable ICR/ISF later" ask); constants versioned per REQ-054 but no append action
+  existed. REQ-061 (new).
+- **Q1 → S-1004 reclassified `[SAFETY]`** — its "fake data never reaches a production fit / is
+  never mistaken for hers" guard is a safety property; moved into `tests/forbidden/` with a
+  written argument.
+- **Q2** — an explicit EPIC 10 build order added (S-1002/S-1003 depend on S-1008; S-1005 on
+  all).
+
+**Why now / traceability.** Recorded the day of the review (2026-07-18) so the code-vs-spec
+divergence is visible rather than silently carried. Each new story runs the full TDD loop,
+RED first; the `[SAFETY]` ones (S-1006/S-1007) need a written invariant argument in their PR.
+The exact promotion mechanics and the shadow-clock start definition remain for the operator to
+confirm at build time, but the direction is spec-mandated.

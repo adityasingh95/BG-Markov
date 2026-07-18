@@ -374,3 +374,20 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
   - **REQ-057 → S-1005 [SAFETY] (end-to-end cycle test) — Backlog.** Drives synthetic data
     through logging → INV-7 → features → fit → temporal CV → metrics → gates → readout →
     shadow dashboard → bolus, asserting INV-1/2/7/9 and gate refusals **across** the chain.
+  - **★ Review addendum (2026-07-18, DL-034) — operational-spine stories added.** Holding
+    S-1001–S-1005 against the full usage sequence exposed that Gate 1 opens automatically and
+    `ModelArtifact.is_promoted` (schema, "manual only") is read nowhere — the manual-promotion
+    pivot of the sequence was unwired. Conformance to `07 §Retraining` / REQ-048, not new
+    gate decisions:
+    - **REQ-058 → S-1006 [SAFETY] (Gate-1 manual promotion) — Backlog.** Wire `is_promoted`
+      into `gate1_status`; open only on `volume ∧ beats_baseline ∧ manual promotion`.
+    - **REQ-048 → S-1007 [SAFETY] (Gate-1 shadow ≥ 90 days) — Backlog. FIRST COVERING
+      STORY** — REQ-048 was previously enforced nowhere (was a visible gap).
+    - **REQ-059 → S-1008 (live per-meal prediction wiring) — Backlog.** features → model →
+      guardrails → persist (INV-9) → serve; baseline when no model promoted.
+    - **REQ-060 → S-1009 (monthly refit cadence) — Backlog.** New unpromoted artifact per
+      `07 §Retraining`.
+    - **REQ-061 → S-1010 (patient-profile update surface) — Backlog.** Append-only new
+      profile version; updatable ICR/ISF/target read live.
+    - **REQ-056 → S-1004 reclassified `[SAFETY]`** — forbidden-import guard moved into
+      `tests/forbidden/`.
