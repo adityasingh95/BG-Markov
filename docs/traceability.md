@@ -391,3 +391,8 @@ and enforced at the gate (S-703). The config does **not** re-implement it.
       profile version; updatable ICR/ISF/target read live.
     - **REQ-056 → S-1004 reclassified `[SAFETY]`** — forbidden-import guard moved into
       `tests/forbidden/`.
+    - **REQ-041 / INV-1 → S-1011 [SAFETY] (retire Gate 2 / ICR gate) — PLANNED, not started
+      (DL-035, 2026-07-18).** Operator-requested de-gating: ICR becomes a plain profile value
+      with a `ValueError` present/>0 check (not a `SafetyViolation`). INV-1 to be marked
+      **retired** (not renumbered). Invariant-table edits are deferred to S-1011 execution,
+      which is gated on an explicit operator "go".

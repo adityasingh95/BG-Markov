@@ -692,3 +692,41 @@ divergence is visible rather than silently carried. Each new story runs the full
 RED first; the `[SAFETY]` ones (S-1006/S-1007) need a written invariant argument in their PR.
 The exact promotion mechanics and the shadow-clock start definition remain for the operator to
 confirm at build time, but the direction is spec-mandated.
+
+## DL-035 — Gate 2 / INV-1 (ICR gate) to be retired — de-gated to a plain profile value
+**Story:** S-1011 (EPIC 10) · **Type:** safety-invariant removal (planned) · **Date:**
+2026-07-18 · **Requested by:** operator · **Owner:** BA · **Status:** PLANNED — not executed.
+
+The operator has decided the clinician-confirmed-ICR **gate** (Gate 2, **INV-1**) is not
+wanted. This entry records the decision and its rationale; **no code, test, or invariant is
+changed at this entry.** Execution (S-1011) is gated on an explicit operator "go".
+
+**Decision.** Retire Gate 2 / INV-1 **as a gate**. ICR / ISF / target become ordinary
+versioned `patient_profile` parameters the bolus calculator reads directly — no
+confirmation ceremony, no hard-disable of the prescriptive module. This is a de-gating, not a
+change to the ICR value (still 9 g/U per DL-032, which stands).
+
+**Chosen fallback (operator, 2026-07-18): keep a basic input check.** `recommend_bolus` will
+raise an ordinary **`ValueError`** — explicitly **not** a `SafetyViolation`/`GateNotPassed` —
+if the ICR is missing or `≤ 0`, so the formula can never divide by null or a nonsensical
+ratio. The confirmation ceremony is removed; the arithmetic-safety check is not.
+
+**Kept:** INV-3 (never negative; cap-and-flag a typo), INV-4 (no bolus below BG 80), the
+no-ML-in-the-dose-path property, and Gate 1 / INV-2 (patient-visible output — a separate
+mechanism). `GateNotPassed` stays (Gate 1 uses it). **INV-1 is marked retired; INV-2…9 are
+not renumbered** (renumbering across the repo would be error-prone).
+
+**Honest safety note.** This permanently lowers a safety floor the project deliberately built:
+CLAUDE.md named the prescriptive gate "the most dangerous code in the system … the gate *is*
+the feature." After removal, the calculator will compute a dose from whatever ICR sits in the
+profile, with **no clinician-confirmation checkpoint** — only the present/positive `ValueError`
+and the retained INV-3/INV-4. Recorded here as a deliberate, operator-authorised decision so
+the change is loud, not silent. Residual mitigations: the ICR lives in the **versioned,
+append-only, auditable** profile, and the basic input check remains.
+
+**Supersedes.** The *gate* portion of DL-032 (which cleared Gate 2 by confirming the ICR). The
+confirmed ICR **value** from DL-032 is unaffected — only its status as a gate is removed.
+
+**Traceability.** REQ-041 (INV-1) is slated for retirement by S-1011; the removal is not yet
+reflected in the invariant tables (CLAUDE.md, `07 §11`, `traceability.md`) — those edits are
+part of S-1011's execution, deliberately deferred until the operator's go.

@@ -403,7 +403,60 @@ append a new version — the "keep ICR/ISF updatable later" ask has no surface.*
 ICR/ISF/target); the prior version is retained (append-only, never mutated). Gate 2 and the
 bolus calculator read the latest version live. No clinical value is hardcoded.
 **TDD:** appending a version creates a new row and leaves the old intact; `recommend_bolus`
-and `gate2_status` reflect the new value on the next call (live, not cached).
+reflects the new value on the next call (live, not cached).
+
+### S-1011 [SAFETY] — Retire Gate 2 / INV-1 (ICR de-gated) — REQ-041
+> **Operator-requested (2026-07-18, DL-035). PREPARED — NOT STARTED. Execution is gated on
+> an explicit operator "go".** This story removes a named safety invariant; it must not begin
+> until the operator confirms, and its PR carries a written safety argument.
+
+**Intent.** The clinician-confirmed-ICR gate (**Gate 2 / INV-1**) is removed as a *gate*.
+ICR / ISF / target become ordinary versioned `patient_profile` parameters the bolus calculator
+uses directly — no confirmation ceremony, no hard-disable. The **ICR value is unchanged**
+(still 9 g/U, DL-032); only its *gate status* goes.
+
+**Kept deliberately (not part of the removal):**
+- **A plain input check** — `recommend_bolus` raises **`ValueError`** (an ordinary error, **not**
+  `SafetyViolation`/`GateNotPassed`) when `icr` is missing or `≤ 0`, so the arithmetic never
+  divides by null/garbage. This is correctness, not the confirmation gate.
+- **INV-3** (never negative; cap-and-flag a typo) and **INV-4** (no bolus below BG 80) — the
+  bolus calculator keeps both.
+- **Gate 1 / INV-2** (patient-visible output) — a *different* mechanism, untouched.
+- **`GateNotPassed`** stays in `core/safety.py` — Gate 1 still uses it.
+- **INV numbering** — mark **INV-1 "retired"**; do **not** renumber INV-2…9 (renumbering nine
+  invariants across the repo is how a bug gets introduced).
+
+**AC (the removal, across all implementations):**
+- `prescribe/bolus.py` — drop `require_gate2`/`gate2_status`; `icr: float | None` → `icr: float`;
+  add the `ValueError` presence/positivity check. INV-3/INV-4 paths unchanged.
+- `prescribe/gates.py` — remove `Gate2Status`, `gate2_status`, `require_gate2`; keep Gate 1.
+- `core/safety.py` — remove `inv1_prescriptive_requires_gate2`; keep `GateNotPassed`; header
+  marks INV-1 retired.
+- `core/config.py` — retire/repurpose `prescriptive_enabled` (prescriptive no longer gated on a
+  confirmed ICR).
+- **Docs** — CLAUDE.md invariant table (INV-1 → retired) + "three under most pressure" note;
+  `01-prd.md` REQ-041; `07-clinical-model-spec.md` §11; this backlog (S-703, S-901, S-1003);
+  `traceability.md`; stories S-104/S-703/S-901; glossary + affected specs.
+- **Prototype** — remove the Gate 2 status line and the bolus screen's "disabled until Gate 2"
+  state (an absent ICR becomes a plain "profile incomplete", not a gate).
+
+**TDD (SDET first — tests updated to the new contract before Dev edits code):**
+- `test_gates.py` — remove the Gate 2 suite; Gate 1 suite unchanged.
+- `test_bolus.py` — remove the INV-1 `GateNotPassed`/no-bypass cases; **add**: `icr=None` and
+  `icr≤0` ⇒ `ValueError` (not `SafetyViolation`). Keep the INV-3 typo cap+flag, INV-4 BG-80
+  refusal, the 5 golden doses, and the carbs/IOB monotonicity properties.
+- `test_safety_invariants.py` / `test_safety_module_hygiene.py` — remove the INV-1 positive/
+  negative and any INV-1 hygiene assertion; the "no `assert`, one-function-per-invariant, zero
+  project imports" hygiene still holds for the remaining invariants.
+- config tests — update/remove `prescriptive_enabled`.
+
+**Written safety argument (required in the PR) [SAFETY].** Must argue: the ICR is a required
+input the formula cannot run without, so a present/positive `ValueError` check preserves
+arithmetic safety; the dose is still causal arithmetic with **no ML in the path**; **INV-3**
+and **INV-4** still bound and floor it; **Gate 1** still governs whether any model output
+reaches her; and the ICR remains in the **versioned, append-only, auditable** profile. State
+plainly what is given up: there is no longer a confirmation checkpoint before the calculator
+will compute on the configured ICR.
 
 ---
 
