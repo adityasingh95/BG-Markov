@@ -18,6 +18,7 @@ import pytest
 from core.safety import GateNotPassed
 from prescribe.gates import (
     GATE1_MIN_VALID_MEALS,
+    SHADOW_MIN_DAYS,
     gate1_status,
     require_gate1,
 )
@@ -27,7 +28,7 @@ from prescribe.gates import (
 
 def test_149_valid_meals_keeps_gate1_closed() -> None:
     status = gate1_status(valid_meals=149, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
-                          is_promoted=True)
+                          is_promoted=True, shadow_days=120)
     assert status.is_open is False
     with pytest.raises(GateNotPassed):
         require_gate1(status)
@@ -35,7 +36,7 @@ def test_149_valid_meals_keeps_gate1_closed() -> None:
 
 def test_150_valid_meals_beating_baseline_opens_gate1() -> None:
     status = gate1_status(valid_meals=150, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
-                          is_promoted=True)
+                          is_promoted=True, shadow_days=120)
     assert status.is_open is True
     require_gate1(status)  # must not raise
 
@@ -44,13 +45,13 @@ def test_volume_alone_never_opens_gate1() -> None:
     """★ 200 valid meals but hypo recall below baseline ⇒ STILL CLOSED. The model must
     EARN patient visibility; it is not granted by row count."""
     below = gate1_status(valid_meals=200, model_hypo_recall=0.40, baseline_hypo_recall=0.50,
-                         is_promoted=True)
+                         is_promoted=True, shadow_days=120)
     assert below.is_open is False
     with pytest.raises(GateNotPassed):
         require_gate1(below)
     # a tie does not open it either — the model must strictly beat the baseline
     tie = gate1_status(valid_meals=200, model_hypo_recall=0.50, baseline_hypo_recall=0.50,
-                       is_promoted=True)
+                       is_promoted=True, shadow_days=120)
     assert tie.is_open is False
 
 
@@ -61,14 +62,15 @@ def test_gate1_is_live_not_cached() -> None:
     """★ The gate result flips when the live input flips, within one process — no memo.
     A cached "open" is a silent safety failure (ADR-7)."""
     closed = gate1_status(valid_meals=10, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
-                          is_promoted=True)
+                          is_promoted=True, shadow_days=120)
     assert closed.is_open is False
     reopened = gate1_status(valid_meals=200, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
-                            is_promoted=True)
+                            is_promoted=True, shadow_days=120)
     assert reopened.is_open is True
     # and back again, same process — no memoisation anywhere
     assert gate1_status(
-        valid_meals=10, model_hypo_recall=0.9, baseline_hypo_recall=0.5, is_promoted=True
+        valid_meals=10, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
+        is_promoted=True, shadow_days=120,
     ).is_open is False
 
 
@@ -100,7 +102,7 @@ def test_metrics_alone_do_not_open_gate1_without_promotion() -> None:
     """
     status = gate1_status(
         valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
-        is_promoted=False,
+        is_promoted=False, shadow_days=120,
     )
     assert status.is_open is False
     assert status.meets_volume is True
@@ -114,24 +116,28 @@ def test_promotion_alone_is_never_sufficient() -> None:
     """★ Promotion is the LAST condition, not a way around the others. A human saying yes
     does not conjure 150 meals or a model that beats the baseline."""
     too_few = gate1_status(
-        valid_meals=149, model_hypo_recall=0.90, baseline_hypo_recall=0.50, is_promoted=True
+        valid_meals=149, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
+        is_promoted=True, shadow_days=120,
     )
     assert too_few.is_open is False
 
     not_better = gate1_status(
-        valid_meals=200, model_hypo_recall=0.40, baseline_hypo_recall=0.50, is_promoted=True
+        valid_meals=200, model_hypo_recall=0.40, baseline_hypo_recall=0.50,
+        is_promoted=True, shadow_days=120,
     )
     assert not_better.is_open is False
 
     tie = gate1_status(
-        valid_meals=200, model_hypo_recall=0.50, baseline_hypo_recall=0.50, is_promoted=True
+        valid_meals=200, model_hypo_recall=0.50, baseline_hypo_recall=0.50,
+        is_promoted=True, shadow_days=120,
     )
     assert tie.is_open is False
 
 
 def test_all_conditions_together_open_gate1() -> None:
     status = gate1_status(
-        valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50, is_promoted=True
+        valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
+        is_promoted=True, shadow_days=120,
     )
     assert status.is_open is True
     require_gate1(status)  # must not raise
@@ -146,10 +152,112 @@ def test_is_promoted_is_required_not_defaulted() -> None:
         )
 
 
+# --- S-1007 [SAFETY]: the 90-day shadow clock (REQ-048) ----------------------
+
+
+def test_89_shadow_days_keeps_gate1_closed_and_90_opens_it() -> None:
+    """★ The boundary, exactly. REQ-048 has existed since the PRD and was enforced
+    nowhere: every other condition could hold on day 3 and she would have been shown
+    model output. 90 days of *predicting before knowing* is the only evidence that
+    separates a model that generalises from one that memorised a retrospective split.
+    """
+    day89 = gate1_status(
+        valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
+        is_promoted=True, shadow_days=89,
+    )
+    assert day89.is_open is False
+    assert day89.meets_shadow_period is False
+    assert day89.shadow_days == 89
+    # every OTHER condition is satisfied — the shadow clock is the only thing holding it
+    assert day89.meets_volume is True
+    assert day89.beats_baseline is True
+    assert day89.is_promoted is True
+    with pytest.raises(GateNotPassed):
+        require_gate1(day89)
+
+    day90 = gate1_status(
+        valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
+        is_promoted=True, shadow_days=90,
+    )
+    assert day90.is_open is True
+    assert day90.meets_shadow_period is True
+    require_gate1(day90)  # must not raise
+
+
+def test_a_long_shadow_never_substitutes_for_the_other_conditions() -> None:
+    """★ Time is not evidence. Waiting 500 days does not conjure 150 meals, does not
+    make the model beat the baseline, and is not a human deciding she may see it.
+    The shadow clock JOINS the other conditions; it never stands in for one.
+    """
+    too_few = gate1_status(
+        valid_meals=149, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
+        is_promoted=True, shadow_days=500,
+    )
+    assert too_few.is_open is False and too_few.meets_shadow_period is True
+
+    not_better = gate1_status(
+        valid_meals=200, model_hypo_recall=0.40, baseline_hypo_recall=0.50,
+        is_promoted=True, shadow_days=500,
+    )
+    assert not_better.is_open is False and not_better.meets_shadow_period is True
+
+    unpromoted = gate1_status(
+        valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
+        is_promoted=False, shadow_days=500,
+    )
+    assert unpromoted.is_open is False and unpromoted.meets_shadow_period is True
+
+
+def test_shadow_days_is_required_not_defaulted() -> None:
+    """★ Same reasoning as `is_promoted` (S-1006): a default is a decision made once, by
+    this function, on behalf of every future call site — and it would let a caller omit
+    the question and still compile. Omission must be a type error, not a silent zero."""
+    with pytest.raises(TypeError):
+        gate1_status(  # type: ignore[call-arg]
+            valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
+            is_promoted=True,
+        )
+
+
+def test_zero_and_negative_shadow_days_keep_gate1_closed() -> None:
+    """Day one, and a clock that has gone backwards. Both resolve to *not yet*."""
+    for days in (0, 1, -7):
+        status = gate1_status(
+            valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
+            is_promoted=True, shadow_days=days,
+        )
+        assert status.is_open is False, f"gate opened at shadow_days={days}"
+        assert status.meets_shadow_period is False
+
+
+def test_gate1_status_reports_the_countdown_for_the_dashboard() -> None:
+    """The operator needs "day 61 of 90" rather than a bare "blocked" — a gate whose
+    remaining distance is invisible invites someone to go looking for a bypass."""
+    status = gate1_status(
+        valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
+        is_promoted=True, shadow_days=61,
+    )
+    assert status.shadow_days == 61
+    assert SHADOW_MIN_DAYS == 90
+    assert SHADOW_MIN_DAYS - status.shadow_days == 29
+
+
+def test_no_env_var_shortens_the_shadow_period(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No bypass exists — not by config flag, not by env var (03 §3)."""
+    for var in ("SHADOW_DAYS", "SHADOW_MIN_DAYS", "SKIP_SHADOW", "GATE1_PASSED", "DEBUG"):
+        monkeypatch.setenv(var, "0")
+    status = gate1_status(
+        valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
+        is_promoted=True, shadow_days=10,
+    )
+    assert status.is_open is False
+
+
 def test_no_env_var_promotes(monkeypatch: pytest.MonkeyPatch) -> None:
     for var in ("PROMOTE", "AUTO_PROMOTE", "IS_PROMOTED", "GATE1_PASSED", "DEBUG"):
         monkeypatch.setenv(var, "1")
     status = gate1_status(
-        valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50, is_promoted=False
+        valid_meals=200, model_hypo_recall=0.90, baseline_hypo_recall=0.50,
+        is_promoted=False, shadow_days=120,
     )
     assert status.is_open is False
