@@ -739,11 +739,17 @@ EPIC 10 changes surfaces that currently work, and **S-1011 removes a safety inva
 Before any of that lands, the operator asked for a version gate so there is an unambiguous,
 verifiable rollback path. This entry records it.
 
-**What was tagged.** `v1.0.0-epic9` — an annotated tag on the complete EPICs 1–9 build:
-445 tests, ~99.7% coverage, `ruff` + `mypy --strict` clean, CI green. Product code at the tag
-is **identical to `4bf5289`** (the S-901 traceability commit that closed EPIC 9); the commits
-in between are documentation and the demo script only — verified with
-`git diff 4bf5289..HEAD -- core prescribe models features data api cli tests` returning empty.
+**What was gated.** The complete EPICs 1–9 build: 445 tests, ~99.7% coverage, `ruff` +
+`mypy --strict` clean, CI green — re-verified locally immediately before the gate commit, not
+assumed from the earlier CI run. **Behavioural code at the gate is unchanged from `4bf5289`**
+(the S-901 traceability commit that closed EPIC 9); the only delta across the product packages
+is the one-line `__version__` bump in `core/__init__.py`, everything else in between being
+documentation and the demo script (verified with `git diff 4bf5289 7a7c3bf -- core prescribe
+models features data api cli tests`).
+
+**Rollback drill executed (2026-07-18).** Cloned the branch fresh, checked out `7a7c3bf`,
+confirmed the tree and version resolve correctly. The rollback path is tested, not asserted —
+the same discipline as the S-304 restore drill.
 
 **Versioning scheme adopted.**
 - A released gate carries a plain version (`1.0.0` in `pyproject.toml` **and**

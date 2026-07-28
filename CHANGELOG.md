@@ -34,10 +34,13 @@ Nothing in EPIC 10 has shipped yet at the time of this entry.
 > ```
 
 The last state before EPIC 10 (UI render layer, synthetic data, end-to-end tests, and the
-planned Gate-2 retirement) begins. Product code here is identical to commit `4bf5289`
-(*"docs(S-901): traceability … EPIC 9 complete, build finished"*); the commits between that
-and this tag are documentation and the demo script only — no `core/`, `models/`, `features/`,
-`prescribe/`, `data/`, `api/`, or `cli/` change.
+planned Gate-2 retirement) begins.
+
+**Behavioural code here is unchanged from commit `4bf5289`** (*"docs(S-901): traceability …
+EPIC 9 complete, build finished"*). The only difference across `core/`, `models/`, `features/`,
+`prescribe/`, `data/`, `api/`, `cli/`, and `tests/` is the one-line `__version__` string in
+`core/__init__.py` (`0.1.0` → `1.0.0`); everything else in between is documentation and the
+demo script. Verified with `git diff 4bf5289 7a7c3bf -- <those paths>`.
 
 ### What works at this tag
 - **EPIC 1 — Foundation.** Config loader, the nine safety invariants in `core/safety.py`,
