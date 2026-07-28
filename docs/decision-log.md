@@ -730,3 +730,35 @@ confirmed ICR **value** from DL-032 is unaffected — only its status as a gate 
 **Traceability.** REQ-041 (INV-1) is slated for retirement by S-1011; the removal is not yet
 reflected in the invariant tables (CLAUDE.md, `07 §11`, `traceability.md`) — those edits are
 part of S-1011's execution, deliberately deferred until the operator's go.
+
+## DL-036 — Version gate: `v1.0.0-epic9` tagged as the pre-EPIC-10 rollback baseline
+**Story:** release engineering (EPIC 10 prerequisite) · **Type:** process / release ·
+**Date:** 2026-07-18 · **Requested by:** operator · **Owner:** BA
+
+EPIC 10 changes surfaces that currently work, and **S-1011 removes a safety invariant**.
+Before any of that lands, the operator asked for a version gate so there is an unambiguous,
+verifiable rollback path. This entry records it.
+
+**What was tagged.** `v1.0.0-epic9` — an annotated tag on the complete EPICs 1–9 build:
+445 tests, ~99.7% coverage, `ruff` + `mypy --strict` clean, CI green. Product code at the tag
+is **identical to `4bf5289`** (the S-901 traceability commit that closed EPIC 9); the commits
+in between are documentation and the demo script only — verified with
+`git diff 4bf5289..HEAD -- core prescribe models features data api cli tests` returning empty.
+
+**Versioning scheme adopted.**
+- A released gate carries a plain version (`1.0.0` in `pyproject.toml` **and**
+  `core/__version__`, kept in sync).
+- The working branch carries a `.dev` version (`1.1.0.dev0`) whenever it is ahead of the last
+  gate, so the running code self-reports whether it is a released baseline or in-progress work.
+- `CHANGELOG.md` (new) records what each gate contains, **including its known gaps**, and the
+  rollback commands. README gains a Versioning & rollback section.
+
+**Known gaps recorded at the baseline, deliberately.** The changelog states plainly that at
+`v1.0.0-epic9` Gate 1 opens *automatically* on its metric conditions, `is_promoted` is read
+nowhere, and REQ-048's ≥90-day shadow period is unenforced (S-1006/S-1007 fix these). A
+rollback target must be documented honestly, including what is wrong with it — rolling back to
+a baseline whose weaknesses are undocumented is not a safety net.
+
+**Rollback contract.** `git checkout v1.0.0-epic9 && ./scripts/verify.sh`. Tags are immutable;
+nothing done in EPIC 10 can alter what this tag points to. Any rollback is verified by the
+CI-equivalent script before being trusted.

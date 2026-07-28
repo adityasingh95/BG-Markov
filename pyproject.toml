@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bg-markov"
-version = "0.1.0"
+version = "1.0.0"
 description = "Glycaemic prediction and bolus support system (single patient, localhost, v1)."
 requires-python = ">=3.12"
 

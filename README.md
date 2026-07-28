@@ -81,6 +81,24 @@ critical path) is next.
 
 ---
 
+## Versioning & rollback
+
+Working builds are **version-gated**: each is an annotated git tag and a CI-green state you
+can return to in one command. See `CHANGELOG.md` for what each tag contains.
+
+| Tag | What it is |
+|---|---|
+| `v1.0.0-epic9` | **The complete build, EPICs 1–9** — logging, data layer, features, model, validation, guardrails, and the bolus calculator. 445 tests, CI green. The rollback target for all EPIC 10 work. |
+
+```bash
+git checkout v1.0.0-epic9 && ./scripts/verify.sh   # verify the baseline
+git checkout -b fix/from-epic9 v1.0.0-epic9        # branch from it
+```
+
+The working branch carries a `.dev` version (e.g. `1.1.0.dev0`) whenever it is ahead of the
+last gate, so `python -c "import core; print(core.__version__)"` tells you immediately whether
+you are on a released baseline or on in-progress work.
+
 ## Operating rules for the executing agent
 
 **Session start — every session, no exceptions:**
