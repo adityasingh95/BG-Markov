@@ -165,9 +165,16 @@ requirements; EPIC 10 adds their render layer without relaxing any runtime gate.
 - Data cannot be re-collected. Loss is permanent.
 - The system must remain comprehensible to the operator in two years, when he has forgotten how it works and she still depends on it.
 
-## 9. Open Questions — Endocrinologist
+## 9. Open Questions — Clinical Decisions
 
-**BA owns this list. Gates 1 and 2 depend on it.**
+**BA owns this list. Gate 1 depends on it.**
+
+> **Retitled 2026-07-18 (DL-042).** Was *"Open Questions — Endocrinologist"*. Standing operator
+> direction: *"don't depend on an endocrinologist for anything."* These are still **clinical
+> decisions that Dev and SDET never make** (CLAUDE.md) — only the escalation path changed: they
+> go to **the operator**, who decides. The BA's obligation is correspondingly higher: put a
+> concrete, plainly-worded proposal in front of the operator rather than parking the question
+> behind someone who may never answer it. OQ-1/2/6 were already closed this way (DL-032).
 
 | # | Question | Blocks |
 |---|---|---|
@@ -178,5 +185,5 @@ requirements; EPIC 10 adds their render layer without relaxing any runtime gate.
 | OQ-5 | Confirm State 2 upper boundary at **80** mg/dL (raised from the standard 70). | State model |
 | OQ-6 | Confirm the 120–150 correction target is intentional for her age and duration. | **CONFIRMED 2026-07-17: target = 135 mg/dL still valid** (DL-032). |
 | OQ-7 | Is she aware of and does she approve of this system? | Everything |
-| **★ OQ-9** | **What makes held-out calibration "acceptable"?** `03 §3` and `04 §9` both list *"calibration acceptable (held-out)"* as a Gate-1 condition, but **no threshold is defined anywhere in the spec**, so it is enforced nowhere in code (found 2026-07-18, DL-041). Needed: a decision rule over the reliability curve `models/metrics.py::reliability_curve` already produces — e.g. a max or mean absolute gap between predicted probability and observed frequency, over which bins, with what minimum bin count. **This is a clinical acceptance threshold, not a team choice** (CLAUDE.md — escalate). Under-calibration matters asymmetrically here: a model that says "20% chance of a low" when the truth is 45% is the exact failure this project exists to prevent. | **Gate 1** — the fifth condition. The other four are enforced; until this is answered Gate 1 is *more permissive than the spec*, though still shut on the other four. Story **S-1012**. |
+| **★ OQ-9** | **What makes held-out calibration "acceptable"?** — **RESOLVED 2026-07-18 by the operator (DL-042).** Was: `03 §3` / `04 §9` list it as a Gate-1 condition with no threshold defined anywhere, so it was enforced nowhere (DL-041). **Answer: a deliberately coarse, asymmetric rule on the hypo probability** — 3 buckets (<20% / 20–50% / >50%), a bucket counts only at **≥ 20 predictions**, and the gap between claimed and observed rate must be **≤ 10 points when it UNDERSTATES risk** and **≤ 20 points when it overstates**. No qualifying bucket ⇒ **not acceptable** (fails closed). | **UNBLOCKS Gate 1's fifth condition.** Story **S-1012** is unblocked. |
 | **★ OQ-8** | **REVISIT — the Markov question (operator-flagged, 2026-07-18).** The project began as a Markov-chain design (DL-038) and was built as a pooled ordinal regression instead. **Revisit once ≥150 real meals exist**, when the small-n argument that drove the six deviations can be tested rather than assumed. Specifically: (a) is there now enough data per pre-meal state to make a transition-matrix view informative *as a diagnostic*, alongside — never replacing — the pooled model? (b) does binning `pre_bg` measurably lose anything, measured on real data? (c) does the name still fit? **Not blocking; do not act on this before the data exists.** | Post-Gate-1 review |

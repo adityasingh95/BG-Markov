@@ -1016,3 +1016,81 @@ signature while scoping the next story, not by a failing test. Nothing in the su
 caught it: a condition that was never written cannot fail. That is the standing weakness of
 requirement-level coverage, and the traceability matrix is the only instrument that addresses
 it — which is why an uncovered REQ is treated as a visible gap by this project's own rule.
+
+## DL-042 — OQ-9 resolved: the Gate-1 calibration rule (operator-approved)
+**Story:** S-1012 [SAFETY] · **Type:** clinical acceptance threshold — **escalated and
+answered**, not decided by the team · **Date:** 2026-07-18 · **Approved by:** the operator,
+explicitly, in response to a written proposal · **Supersedes the blocked state in DL-041**
+
+**Standing direction from the operator (2026-07-18):** *"don't depend on an endocrinologist for
+anything."* Clinical constants are therefore escalated **to the operator**, who decides. This
+does not change CLAUDE.md's rule — a clinical constant is still never chosen by Dev or SDET —
+only who the escalation goes to. The BA's job becomes putting a concrete, plainly-worded
+proposal in front of the operator rather than parking the question. **OQ-1/2/6 were already
+resolved this way (DL-032).** The `01-prd.md §9` list is retitled accordingly.
+
+### The question
+`03 §3` and `04 §9` both list `calibration acceptable (held-out)` as a Gate-1 condition. No
+document defined *"acceptable"*, so it was enforced nowhere (DL-041). **What is the rule?**
+
+### The answer (approved as proposed)
+
+1. **The hypo probability only** — `P(state ≤ 2)`. That is the number a warning is made of and
+   the number she would act on. Calibrating all five class probabilities would dilute the one
+   that matters into four that do not.
+2. **Three buckets:** `< 0.20`, `0.20–0.50`, `> 0.50`. **Not ten.**
+3. **A bucket is judged only at `≥ 20` predictions.** Below that, the observed rate is noise.
+4. **Asymmetric tolerance on `|claimed − observed|`:**
+   - **≤ 0.10 when the model UNDERSTATES the risk** — said 20%, happened 35%. It told her she
+     was probably fine and she was not. **This is the dangerous direction.**
+   - **≤ 0.20 when it overstates** — said 50%, happened 32%. A warning that did not pan out
+     costs her a fingerstick. That is not a harm.
+5. **Fails closed:** if no bucket reaches 20 predictions, calibration is **not acceptable**.
+   *Cannot judge* means *do not open*.
+
+### Why coarse — the reasoning that drove the shape
+
+At the point Gate 1 could open there are ~150 valid meals, of which perhaps 15–20 are lows. The
+conventional ten-bin reliability curve would spread those across ten buckets, three or four
+events each, and return a confident-looking verdict built on almost nothing. **Coarse is not a
+compromise here; it is the honest resolution of the evidence available.** A rule that cannot be
+satisfied except by luck is not a safety check — it is a coin toss with a serious face on it.
+
+### Why asymmetric
+
+This is the same asymmetry the rest of the system already carries and it is the reason the
+system exists: hypo-weighted training (S-601), rescued lows retained rather than dropped
+(INV-7), the warning band widened from 70 to 80 (`03 §1`), the refusal-over-a-guess rule
+(S-801). **She cannot feel a low.** Overstating risk spends a fingerstick. Understating it
+spends the only warning she gets. A symmetric rule would price those the same, and they are not
+the same.
+
+### What this does NOT do
+
+It does not open Gate 1, and it does not make the model good. It is the **fifth** of five
+conditions, joining volume, beats-baseline, the 90-day shadow clock and manual promotion. All
+five must hold. It is also **not a model-quality score** — it answers only *"are its percentages
+honest?"*, which is a different question from *"is it useful?"* (that is hypo recall vs baseline).
+
+### Revisiting
+
+Deliberately reviewable, not permanent. The natural trigger is the same as **OQ-8 / R-1**: once
+≥ 150 real meals exist, the bucket counts and observed gaps can be inspected against reality
+rather than against an estimate of what the data will look like. If real data shows the ≥ 20
+floor is never met, the rule is **not** to lower the floor — it is to conclude there is not yet
+enough evidence to judge calibration, which is the honest answer and keeps the gate shut.
+
+### Second decision, same session — dashboard verdict badges
+
+The operator also approved: **verdict badges are relative to the clinical baseline, never to an
+invented absolute standard.** Every metric on the shadow dashboard is scored *Better / About the
+same / Worse* against the simple arithmetic method she would use with no model at all. Rationale:
+`05b §7.2` asks for a `[Good]` badge on every row, but only three metrics have a bar defined
+anywhere (hypo recall vs baseline — the Gate-1 rule; false-alarm rate vs the `target_far = 0.10`
+already in `models/metrics.py`; and `β_insulin < 0`, which is INV-8 and a yes/no alarm). Printing
+`[Good]` on the rest would require inventing a threshold, and **an invented `[Good]` on the
+promotion screen is worse than no badge** — that screen is where a human decides to put someone
+who cannot feel a low in front of a model, and a green label reads as authority it has not
+earned, indistinguishable from the three that are real.
+**One sanctioned exception:** the Clarke grid's D/E zones are dangerous **by the measure's own
+construction**, not by a cut-off anyone here picks, so those are flagged directly.

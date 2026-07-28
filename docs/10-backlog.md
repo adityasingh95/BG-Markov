@@ -346,15 +346,26 @@ suite — **do not let it degrade into a smoke test.**
 > relax it. No threshold here is chosen by the team — 90 days, monthly, and "manual on hypo
 > recall" all trace to the spec.**
 
-### S-1012 [SAFETY] — Gate-1 calibration condition — REQ-058, INV-2 — **BLOCKED on OQ-9**
+### S-1012 [SAFETY] — Gate-1 calibration condition — REQ-058, INV-2 — **UNBLOCKED (OQ-9 resolved 2026-07-18, DL-042) — BUILD BEFORE S-1001**
 **The fifth Gate-1 condition. Found 2026-07-18 (DL-041) while building S-1001: `03 §3` and
 `04 §9` both list `calibration acceptable (held-out)` among the Gate-1 conditions, and
 `gate1_status()` implements the other four but not this one. The S-1007 note claiming code
 and spec now agreed was wrong; DL-041 corrects it.**
-**Why it is blocked, not just unbuilt:** *"acceptable"* has **no defined threshold anywhere in
-the spec**. Picking one is a clinical acceptance decision, not a team decision (CLAUDE.md —
-escalate). `models/metrics.py::reliability_curve` already produces the evidence; what is
-missing is the rule. **Do not invent a number to unblock the story.**
+**Why it was blocked:** *"acceptable"* had **no defined threshold anywhere in the spec**, and
+picking one is a clinical acceptance decision, not a team decision (CLAUDE.md — escalate). No
+number was invented; the question was put to the operator and **answered 2026-07-18 (DL-042)**.
+
+**The approved rule (DL-042) — coarse and asymmetric, on purpose:**
+1. **The hypo probability only** — `P(state ≤ 2)`. It is the number she would act on; the other
+   four class probabilities are not what a warning is made of.
+2. **Three buckets:** `< 0.20` / `0.20–0.50` / `> 0.50`. Not ten. At ~150 meals with ~15–20 lows,
+   ten bins is mostly noise wearing the costume of precision.
+3. **A bucket counts only at `≥ 20` predictions.** Below that the observed rate is not evidence.
+4. **Asymmetric tolerance** — `|claimed − observed|`:
+   **≤ 0.10 when the model UNDERSTATES risk** (said 20%, happened 35% — it told her she was fine
+   and she was not: the dangerous direction) and **≤ 0.20 when it overstates** (a warning that did
+   not pan out — a wasted fingerstick, not a harm).
+5. **Fails closed:** no bucket reaching 20 ⇒ **not acceptable**. Cannot judge means do not open.
 **AC (once OQ-9 is answered):** `gate1_status(..., calibration_ok: bool)` — required, not
 defaulted, same reasoning as `is_promoted` (S-1006) and `shadow_days` (S-1007). A named,
 REQ-traced constant for the threshold. `Gate1Status` reports it so S-1001 can show it in the
@@ -362,10 +373,9 @@ checklist. Fails closed: not computable ⇒ not acceptable.
 **TDD:** every other condition ✓ + calibration ✗ ⇒ CLOSED; the argument is required
 (`TypeError` on omission); a model with a wildly miscalibrated reliability curve does not open
 the gate; no env var or config flag substitutes.
-**Until it lands:** S-1001 renders the condition as **"not yet enforced — awaiting OQ-9"**
-rather than omitting it. A missing condition in a conjunction can only make the gate *more*
-permissive than the spec, so this is the honest rendering: the gap is visible on the very
-screen where Gate 1 gets opened.
+**Sequencing:** now built **before S-1001**, so the operator dashboard renders **five real
+conditions** rather than four plus a "not yet enforced" placeholder. The placeholder was the
+honest rendering of a gap; a live check is better than an honest gap.
 
 ### Build order (EPIC 10)
 `S-1004` (synthetic data) → `S-1008` (live prediction wiring) → `S-1006`/`S-1007` (Gate-1
