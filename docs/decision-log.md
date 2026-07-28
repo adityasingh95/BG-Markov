@@ -890,3 +890,28 @@ but it is a **clinical constant and remains unconfirmed**. Tracked as **OQ-5**, 
 **Naming.** "BG-Markov" comes from this source document. The name is retained as a codename; the
 glossary now states plainly that the model is an ordinal logistic regression and that no Markov
 process is modelled, so no future reader infers transition modelling that is not there.
+
+## DL-039 — S-1004: the synthetic generator lives in a top-level `synthetic/`, not `tests/`
+**Story:** S-1004 (EPIC 10) · **Type:** placement deviation from the story text · **Date:**
+2026-07-18 · **Owner:** BA
+
+`10-backlog.md` S-1004 says the generator *"lives under `tests/` / `scripts/` fixtures."* It will
+instead live in a new top-level package **`synthetic/`**. Recorded because it is a deviation from
+a written AC, not because it is contentious.
+
+**Reasons, both process-level:**
+1. **Role separation.** `tests/` is SDET's absolutely (CLAUDE.md). A generator under `tests/`
+   would be authored *and* tested by SDET — self-marking homework, exactly what the RED-first
+   loop prevents. As a top-level package it is **Dev-owned, SDET-tested**, and the loop holds.
+2. **`scripts/` must not import from `tests/`.** `scripts/demo_end_to_end.py` will consume the
+   generator; a script importing a test package normalises putting `tests/` on the production
+   path — the opposite of this story's intent.
+
+**The safety property is unchanged and still structural.** The `tests/forbidden/` guard
+(`detect_synthetic_import`, S-105 lineage) asserts no production package — `core`, `features`,
+`models`, `prescribe`, `data`, `api`, `cli` — imports `synthetic`. Moving the code did not weaken
+the guard; it changed what the guard names.
+
+**Toolchain:** `synthetic/` joins the `mypy --strict` scope. It is **not** added to the coverage
+gate — it is fixture code, covered by its own tests, and adding it would dilute a gate that
+exists to protect `core`/`features`/`models`/`prescribe`.
