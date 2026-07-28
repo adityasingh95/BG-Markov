@@ -1,6 +1,6 @@
 # Glycaemic Prediction & Bolus Support — Spec Pack
 
-A single-patient system that predicts 2-hour post-meal blood glucose and (once clinically gated) supports insulin dose calculation.
+A single-patient system that predicts 2-hour post-meal blood glucose (gated behind Gate 1) and supports insulin dose calculation.
 
 **Patient:** 59F, Type 1 Diabetes, 30 years duration. Fiasp (bolus), Tresiba (basal). TDD ~60 U.
 **Users:** the patient; her son as operator/developer.
@@ -12,7 +12,7 @@ A single-patient system that predicts 2-hour post-meal blood glucose and (once c
 
 This system is built for **one real person who cannot reliably feel a low.** After 30 years of T1D her glucagon counter-regulatory response is presumed absent and her adrenergic response blunted. She can be at 50 mg/dL and feel fine.
 
-Every unusual constraint in this pack — the gates, the guardrails, the shadow mode, the refusal to ship a dose calculator on an unconfirmed number — exists because of that fact.
+Every unusual constraint in this pack — Gate 1, the guardrails, the shadow mode, the cap-and-flag on an implausible dose — exists because of that fact.
 
 **A defect here is not a bug ticket.** When a guardrail is in your way, that is the guardrail working.
 
@@ -39,7 +39,7 @@ Every unusual constraint in this pack — the gates, the guardrails, the shadow 
 
 ---
 
-## Running & verifying the build (EPIC 1–2 shipped)
+## Running & verifying the build (EPICs 1–9 shipped)
 
 Requires **Python 3.12** and (for the accessibility tests) an internet
 connection so Playwright can fetch a Chromium build the first time.
@@ -61,8 +61,9 @@ python scripts/demo_epic2.py
 
 # 4. Watch the whole pipeline end-to-end on SYNTHETIC data (no DB, fixed seed):
 #    data in -> feature pipeline -> ordinal model -> operator shadow report ->
-#    the two gates -> the patient readout -> the bolus calculator (INV-1/3/4,
-#    the 900 g typo flagged not dosed, the already-low refusal, the null-ICR block).
+#    Gate 1 -> the patient readout -> the bolus calculator (INV-3/4: the 900 g typo
+#    flagged not dosed, the already-low refusal, and a missing ICR as a plain
+#    input error since Gate 2/INV-1 was retired by S-1011).
 #    On the seeded draw the model does NOT beat baseline, so Gate 1 stays CLOSED —
 #    that refusal is the system working, not failing.
 python scripts/demo_end_to_end.py
@@ -74,10 +75,13 @@ and every safety test (`tests/safety/`), forbidden-pattern guard
 (`tests/a11y/`, real Chromium) passing. The build status is enforced in CI on
 every push (`.github/workflows/ci.yml`).
 
-**What is built so far:** EPIC 1 (foundation, safety invariants INV-1..9,
-forbidden-pattern suite) and EPIC 2 (schema + migrations, reported timestamps,
-validity engine + INV-7, dish table). EPIC 3 (logging & durability — the
-critical path) is next.
+**What is built so far:** **EPICs 1–9 are complete** — foundation and safety
+invariants, data layer with reported timestamps and INV-7, logging & durability,
+derived features, baseline + parameters, the ordinal model, temporal CV and the
+metric suite, guardrails/kill-switch/prediction-log, and the bolus calculator.
+See `CHANGELOG.md` for the `v1.0.0-epic9` baseline. **EPIC 10** (UI render layer,
+synthetic data, end-to-end tests) is in progress; INV-1/Gate 2 was retired by
+S-1011 (DL-035), so INV-2..INV-9 are the live invariants.
 
 ---
 

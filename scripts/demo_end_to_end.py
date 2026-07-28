@@ -1,9 +1,10 @@
 """BG-Markov end-to-end demo on SYNTHETIC data (not real patient data).
 
 Drives the REAL code paths — feature pipeline, the ordinal model, the S-702 metric
-suite, the two gates, the patient readout, and the bolus calculator — so you can see
-what the system is like without touching a real record. Nothing here changes a clinical
-constant or opens a gate that hasn't been earned; the gates decide honestly on the data.
+suite, Gate 1, the patient readout, and the bolus calculator — so you can see what the
+system is like without touching a real record. Nothing here changes a clinical constant or
+opens a gate that hasn't been earned; Gate 1 decides honestly on the data.
+(Gate 2 / INV-1 was retired by S-1011 — a missing ICR is now a plain input error.)
 
     python scripts/demo_end_to_end.py
 
@@ -230,7 +231,7 @@ def main() -> None:
                           baseline_hypo_recall=base_hypo_recall)
     try:
         require_gate1(closed)
-    except Exception as e:  # GateNotPassed
+    except Exception as e:  # GateNotPassed (INV-2, Gate 1)
         print(f"  Today  → {type(e).__name__}: patient sees only the BASELINE estimate, "
               "never the model. This is the system refusing, by design.")
     print("  Once earned, the readout is hypo-risk-FIRST text (never a colour, never a "
@@ -239,7 +240,7 @@ def main() -> None:
     print("     (no dose, no bolus field exists on the patient readout at all)")
 
     # ----------------------------------------------------------- 6. BOLUS CALCULATOR
-    _hr("6.  BOLUS CALCULATOR  (INV-1/3/4 — the sharpest end, no ML in the path)")
+    _hr("6.  BOLUS CALCULATOR  (INV-3/4 — the sharpest end, no ML in the path)")
     print(f"  Profile: ICR {ICR:g} g/U · ISF {ISF:g} mg/dL/U · target {TARGET:g} mg/dL\n")
 
     def show(desc: str, **kw: float) -> None:
@@ -261,7 +262,7 @@ def main() -> None:
          icr=ICR, carbs_g=900.0, current_bg=180.0, iob=0.0)
     show("★ She is already LOW: BG 72 — treat the low first (INV-4)",
          icr=ICR, carbs_g=60.0, current_bg=72.0, iob=0.0)
-    show("★ No clinician-confirmed ICR (icr=None) — the machine never reaches the needle",
+    show("★ No ICR set on the profile (icr=None) — an input error, not a gate (S-1011)",
          icr=None, carbs_g=60.0, current_bg=180.0, iob=0.0)
 
     _hr("DONE — every number above came from the real modules, on synthetic data.")
