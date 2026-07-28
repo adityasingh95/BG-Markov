@@ -13,11 +13,9 @@ gate must not erode the other, and this file is the guard on that.
 
 from __future__ import annotations
 
-import inspect
-
 import pytest
 
-from core.safety import GateNotPassed, SafetyViolation
+from core.safety import GateNotPassed
 from prescribe.gates import (
     GATE1_MIN_VALID_MEALS,
     gate1_status,
