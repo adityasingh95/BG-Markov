@@ -298,7 +298,7 @@ the low first"; BG 80 ⇒ computes. carbs=900 ⇒ flagged-implausible (cap **and
 Golden: the 5 hand-computed doses render to 2 dp. **No IOB input element exists in the
 template.** Grep — the UI module imports nothing from `models/`.
 
-### S-1004 [SAFETY] — Synthetic-data generator — REQ-056
+### S-1004 [SAFETY] — Synthetic-data generator — REQ-056 — **DONE 2026-07-18**
 **Reclassified `[SAFETY]` on review (2026-07-18, DL-034): "fake data can never reach a
 production fit or be mistaken for hers" is a safety property, so the guard belongs in
 `tests/forbidden/` (S-105 lineage) with a written argument, not as a plain AC.**

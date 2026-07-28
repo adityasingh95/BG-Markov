@@ -32,7 +32,7 @@ jobs:
       # AC: mypy --strict clean on core (+ api S-102, + data S-201, + cli S-304,
       # + features S-401, + models S-501).
       - name: Types (mypy --strict)
-        run: mypy --strict core api data cli features models prescribe
+        run: mypy --strict core api data cli features models prescribe synthetic
 
       # AC: pytest clean + coverage gate at 90% on core + features (audit A1).
       # The toolchain tests additionally assert the ruff/mypy gates BITE on a
