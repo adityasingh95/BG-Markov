@@ -210,13 +210,16 @@ def main() -> None:
     model_recall = hr.recall
     for label, meals_seen in (("today (few valid meals)", 40), ("after collection", n)):
         g = gate1_status(valid_meals=meals_seen, model_hypo_recall=model_recall,
-                         baseline_hypo_recall=base_hypo_recall)
+                         baseline_hypo_recall=base_hypo_recall,
+                         is_promoted=False)  # S-1006: nobody has promoted it
         why = []
         if not g.meets_volume:
             why.append(f"needs ≥150 valid meals (has {meals_seen})")
         if not g.beats_baseline:
             why.append(f"model recall {model_recall:.0%} must strictly beat "
                        f"baseline {base_hypo_recall:.0%}")
+        if not g.is_promoted:
+            why.append("the operator has not promoted it (S-1006 — a human must decide)")
         state = "OPEN" if g.is_open else "CLOSED"
         print(f"  {label:26s}: Gate 1 {state}"
               + ("" if g.is_open else "  — " + "; ".join(why)))
@@ -228,7 +231,7 @@ def main() -> None:
     # Gate 1 is closed in reality, so build_patient_readout would refuse. Show that,
     # then show what the readout WOULD look like once earned (a promoted gate).
     closed = gate1_status(valid_meals=40, model_hypo_recall=model_recall,
-                          baseline_hypo_recall=base_hypo_recall)
+                          baseline_hypo_recall=base_hypo_recall, is_promoted=False)
     try:
         require_gate1(closed)
     except Exception as e:  # GateNotPassed (INV-2, Gate 1)
