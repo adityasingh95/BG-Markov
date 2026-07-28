@@ -37,21 +37,18 @@ class SafetyViolation(Exception):
 
 
 class GateNotPassed(SafetyViolation):
-    """A gated feature was reached before its gate opened (INV-1, INV-2).
+    """A gated feature was reached before its gate opened (INV-2).
 
     Maps to ``403 GATE_NOT_PASSED`` at the API boundary.
     """
 
 
-def inv1_prescriptive_requires_gate2(gate2_passed: bool) -> None:
-    """INV-1 — the prescriptive module is disabled until Gate 2 passes.
-
-    ``gate2_passed`` must be evaluated from live data on every call (ADR-7).
-    """
-    if not gate2_passed:
-        raise GateNotPassed(
-            "INV-1: prescriptive/bolus module is disabled until Gate 2 passes"
-        )
+# INV-1 — RETIRED (S-1011, DL-035). Gate 2 (a clinician-confirmed ICR gating the
+# prescriptive module) was removed at the operator's direction. The ICR is now an
+# ordinary value on the versioned ``patient_profile``; ``prescribe.bolus`` raises a
+# plain ``ValueError`` when it is missing or <= 0, because the formula divides by it.
+# INV-3 (bounds + cap-and-flag) and INV-4 (no bolus below BG 80) still bound the dose,
+# and Gate 1 / INV-2 is unaffected. The number is NOT reused: INV-2..INV-9 keep theirs.
 
 
 def inv2_patient_output_requires_gate1(gate1_passed: bool) -> None:

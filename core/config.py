@@ -4,11 +4,16 @@ This is the process configuration read at startup. It is **not** the versioned
 `patient_profile` DB table (S-201). It is immutable after load so no clinical
 constant can be mutated mid-run, and it rejects malformed input at load time.
 
-Safety note (INV-1 precondition — see docs/stories/S-103.md):
-``prescriptive_enabled`` is a *computed, read-only* property equal to
-``icr is not None``. It is a necessary precondition, **never** authorisation:
-INV-1 / Gate 2 are enforced in ``core/safety.py`` from live data on every call
-(ADR-7). No config value opens a gate. This module re-implements no invariant.
+Safety note (see docs/stories/S-103.md and S-1011.md): ``icr_present`` is a
+*computed, read-only* property equal to ``icr is not None``. It reports state; it
+never grants it. **No config value opens a gate**, and this module re-implements no
+invariant.
+
+``icr_present`` was ``prescriptive_enabled`` while Gate 2 / INV-1 existed. That gate
+is retired (S-1011, DL-035) and the property now enables nothing — it is named for
+what it is so a future reader cannot misread ``False`` as "the dose path is safely
+off". Gate 1 / INV-2 is unaffected and is still enforced live in ``core/safety.py``
+(ADR-7).
 """
 
 from __future__ import annotations
@@ -69,8 +74,15 @@ class ClinicalConfig(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def prescriptive_enabled(self) -> bool:
-        """Precondition flag: ICR is present. NOT a gate — INV-1 is evaluated live."""
+    def icr_present(self) -> bool:
+        """Whether an ICR is configured. **A completeness flag, not a gate.**
+
+        Was ``prescriptive_enabled`` while Gate 2 / INV-1 existed. That gate is retired
+        (S-1011, DL-035), so this enables nothing: reading ``False`` here must NOT be
+        taken as "the dose path is safely off". Enforcement lives in
+        ``prescribe.bolus.recommend_bolus``, which raises ``ValueError`` on a missing or
+        non-positive ICR.
+        """
         return self.icr is not None
 
 
