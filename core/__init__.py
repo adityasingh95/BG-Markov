@@ -7,4 +7,4 @@ can never pull in the heavier feature/model layers.
 
 from __future__ import annotations
 
-__version__ = "1.0.0"
+__version__ = "1.1.0.dev0"
