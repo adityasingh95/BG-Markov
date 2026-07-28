@@ -193,10 +193,10 @@ This is the **only real validation set** and the drift detector.
 `gate1_status()` **reads this column**: Gate 1 opens only on
 `volume ∧ beats_baseline ∧ calibration ∧ shadow_days ≥ 90 ∧ is_promoted` (REQ-058, S-1006).
 
-> ⏳ **Four of those five are enforced.** `calibration` is **not** — *"acceptable"* has no
-> defined threshold, and choosing one is a clinical decision (**OQ-9**, story **S-1012**,
-> DL-041). The others are live: volume, beats-baseline, `shadow_days` (S-1007), `is_promoted`
-> (S-1006).
+> ✅ **All five are enforced** as of 2026-07-18: volume, beats-baseline, `calibration_ok`
+> (S-1012 — the rule is OQ-9/DL-042, computed by `models/metrics.py::hypo_calibration`),
+> `shadow_days` (S-1007), `is_promoted` (S-1006). Each is **required, not defaulted**, so a
+> call site cannot omit a condition and still compile.
 
 - Set **only** by the explicit operator promotion action (`POST /api/operator/promote`). No
   refit, scheduled job, or metric threshold may write it (`07 §Retraining`).

@@ -449,11 +449,29 @@ missing or `<= 0` ICR. The config re-implements no invariant.
       no number was invented to unblock it. Gate 1 is a conjunction, so the omission can only
       make it *more* permissive than the spec, and the four enforced conditions hold it shut
       today (nothing is promoted).
-    - **OQ-9 / REQ-058 → S-1012 [SAFETY] (Gate-1 calibration condition) — BLOCKED.** ⚠️ **An
-      uncovered spec condition, visible by this project's own rule.** `gate1_status()` has no
-      `calibration_ok` argument. Blocked on a clinical acceptance threshold (OQ-9), not on
-      code: `models/metrics.py::reliability_curve` already produces the evidence. Rendered on
-      the S-1001 dashboard as *"not yet enforced — awaiting OQ-9"* rather than omitted.
+    - **OQ-9 / REQ-058 → S-1012 [SAFETY] (Gate-1 calibration condition) — ✅ DONE 2026-07-18.**
+      **Closes the DL-041 divergence: Gate 1 now implements all five conditions `03 §3` lists.**
+      The threshold was **escalated and answered, never invented** (OQ-9 → **DL-042**).
+      `models/metrics.py::hypo_calibration` on `P(state ≤ 2)`: three risk bands, judged only at
+      ≥ `HYPO_CALIB_MIN_BUCKET_N` (20) predictions, gap **≤ 0.10 understating / ≤ 0.20
+      overstating**. `gate1_status(..., calibration_ok)` **required, not defaulted**;
+      `gates.py` stays DB-free **and model-free** (it takes a `bool`, imports nothing new).
+      Tests `tests/unit/test_calibration.py` + `tests/safety/test_gates.py` (18):
+      ★ **the asymmetry** — two bands off by exactly 0.15, opposite verdicts (claimed 0.20 /
+      happened 0.35 fails; claimed 0.50 / happened 0.35 passes); the gap asserted **signed**,
+      so `abs()` cannot creep in unnoticed; boundaries exact both ways; ★ **19 is not evidence,
+      20 is**; ★ **fails closed with an honest reason** — the reason string is asserted *not*
+      to contain "acceptable"/"honest"/"good"/"fine"/"pass", because *cannot judge* is not
+      *no problem*; a too-few band is still **reported** and decides nothing either way; one
+      bad band fails the whole check; ★ **all five conditions required together** — each held
+      false alone shuts the gate, **the test that would have caught DL-041**; `calibration_ok`
+      required (`TypeError`); no env var flips it.
+      Four guards **seen to fire** before revert: `abs(gap)`, "cannot judge" as a pass, the
+      floor lowered 20→5, and the condition dropped from the conjunction.
+      ⚠️ **One real defect caught by the SDET boundary test:** `0.30 − 0.20` is
+      `0.10000000000000003`, so a bare `<=` failed DL-042 **at its own stated boundary** —
+      the approved rule was unimplementable as written. Fixed with a documented
+      `_FP_SLACK = 1e-9` (representation error only; the 0.101 case still fails).
     - **REQ-059 → S-1008 (live per-meal prediction wiring) — ✅ DONE 2026-07-18.**
       `prescribe/serving.py::serve_meal_prediction` — pure orchestration, no model logic:
       features → promoted model → guardrails → **persist (INV-9)** → serve. Baseline when no

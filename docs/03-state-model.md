@@ -144,16 +144,14 @@ Gates are evaluated **from live data on every call.** Never cached, never config
 > `data/promotion.py` and are audited.
 > ✅ The **≥ 90-day shadow clock is enforced** (S-1007, DL-040): `gate1_status()` requires
 > `shadow_days`, derived live from `prediction_log` and never stored.
-> ⏳ **`calibration acceptable (held-out)` is NOT enforced.** This diagram lists **five**
-> conditions; `gate1_status()` implements **four**. The S-1007 closing note claimed the two
-> now agreed — **that was wrong, and this corrects it.** The blocker is not code: *"acceptable"*
-> has **no defined threshold anywhere in the spec**, and choosing one is a clinical decision,
-> not a team decision (CLAUDE.md — escalate). Tracked as **OQ-9** and story **S-1012**; the
-> operator dashboard (S-1001) renders this condition as *not yet enforced* rather than
-> omitting it, so the gap is visible on the screen where Gate 1 is opened.
-> **Gate 1 is not weakened by this** — it is the conjunction, so a missing condition can only
-> ever make the gate *more* permissive than the spec, and the remaining four hold it shut today.
-> Recorded rather than left silent.
+> ✅ **`calibration acceptable (held-out)` is enforced** (S-1012, OQ-9/DL-042).
+> `gate1_status()` requires `calibration_ok`, computed by
+> `models/metrics.py::hypo_calibration` on `P(state ≤ 2)`: three risk bands, judged only at
+> ≥ 20 predictions each, gap ≤ **0.10 when it understates** risk and ≤ **0.20 when it
+> overstates** — asymmetric because understating is the direction that costs her a warning.
+> No qualifying band ⇒ **not acceptable** (cannot judge means do not open).
+> **All five conditions in the diagram are now implemented.** This box previously claimed
+> that after S-1007 — wrongly; DL-041 corrected it and S-1012 made it true.
 
 ---
 

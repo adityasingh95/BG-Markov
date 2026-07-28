@@ -346,7 +346,7 @@ suite — **do not let it degrade into a smoke test.**
 > relax it. No threshold here is chosen by the team — 90 days, monthly, and "manual on hypo
 > recall" all trace to the spec.**
 
-### S-1012 [SAFETY] — Gate-1 calibration condition — REQ-058, INV-2 — **UNBLOCKED (OQ-9 resolved 2026-07-18, DL-042) — BUILD BEFORE S-1001**
+### S-1012 [SAFETY] — Gate-1 calibration condition — REQ-058, INV-2 — **DONE 2026-07-18**
 **The fifth Gate-1 condition. Found 2026-07-18 (DL-041) while building S-1001: `03 §3` and
 `04 §9` both list `calibration acceptable (held-out)` among the Gate-1 conditions, and
 `gate1_status()` implements the other four but not this one. The S-1007 note claiming code
