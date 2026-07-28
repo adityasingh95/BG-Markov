@@ -378,7 +378,7 @@ REQ-048, not to the team. Surfaced as a countdown on the operator dashboard.
 promotion, S-1006). The shadow clock is computed from logged prediction timestamps, not a
 stored boolean.
 
-### S-1008 — Live prediction wiring (per-meal orchestration) — REQ-059
+### S-1008 — Live prediction wiring (per-meal orchestration) — REQ-059 — **DONE 2026-07-18**
 **Closes G3. The runtime loop is unit-built but nothing runs it on a real logged meal;
 S-1002/S-1003 have nothing to render without it, and S-1005 only tests it on synthetic data.**
 **AC:** On a logged meal, orchestrate the real path: derive features → `predict_proba` →

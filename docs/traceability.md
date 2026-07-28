@@ -401,8 +401,26 @@ missing or `<= 0` ICR. The config re-implements no invariant.
       into `gate1_status`; open only on `volume ∧ beats_baseline ∧ manual promotion`.
     - **REQ-048 → S-1007 [SAFETY] (Gate-1 shadow ≥ 90 days) — Backlog. FIRST COVERING
       STORY** — REQ-048 was previously enforced nowhere (was a visible gap).
-    - **REQ-059 → S-1008 (live per-meal prediction wiring) — Backlog.** features → model →
-      guardrails → persist (INV-9) → serve; baseline when no model promoted.
+    - **REQ-059 → S-1008 (live per-meal prediction wiring) — ✅ DONE 2026-07-18.**
+      `prescribe/serving.py::serve_meal_prediction` — pure orchestration, no model logic:
+      features → promoted model → guardrails → **persist (INV-9)** → serve. Baseline when no
+      model is promoted. `data/repositories.py::get_promoted_artifact` is the **first code to
+      read `is_promoted`** (unread since S-201) and **fails closed** — no promoted row ⇒ `None`
+      ⇒ baseline.
+      Tests `tests/integration/test_serving.py` (12): ★ **INV-9 — monkeypatch `serve_prediction`
+      to raise ⇒ nothing served** (S-802's discipline re-asserted *through the wiring*, where a
+      well-meaning `try/except` would downgrade a failed write to an unlogged prediction); the
+      returned `prediction_id` resolves to a real row; ★ **no promoted model ⇒ `predict_proba`
+      is never called** (spy asserts the *absence* of the call, so "baseline" holds because the
+      model never ran, not because the output looked baseline-shaped); ★ **promoted ≠ most
+      recent** — a newer unpromoted artifact is ignored, and an unpromoted one is ignored even
+      when it is the only one; refusals persist as values (`guardrail_fired` set), not
+      exceptions; INV-6 still raises through the chain.
+      ★ **Prediction is not gated; display is.** `serve_meal_prediction` takes **no gate
+      argument** and an AST guard asserts the module never calls `require_gate1` or
+      `build_patient_readout` — **verified adversarially**: planting `require_gate1()` in the
+      module makes the guard fail. Gating prediction would stop shadow mode accruing the
+      evidence Gate 1 needs, and the deadlock would look like caution.
     - **REQ-060 → S-1009 (monthly refit cadence) — Backlog.** New unpromoted artifact per
       `07 §Retraining`.
     - **REQ-061 → S-1010 (patient-profile update surface) — Backlog.** Append-only new
