@@ -441,8 +441,19 @@ missing or `<= 0` ICR. The config re-implements no invariant.
       ★ `tests/safety/test_readout.py` — everything earned **except** the shadow period
       (day 89) still raises `GateNotPassed`: INV-2 does not grade the reason a gate is closed.
       Guards **seen to fire** before being reverted (clamp removed / `shadow_complete` column
-      planted / default added). **Closes DL-034 gap G2 and the last code-vs-spec divergence in
-      `03 §3`.** Record: **DL-040**.
+      planted / default added). **Closes DL-034 gap G2.** Records: **DL-040**, and **DL-041** —
+      which corrects this entry's original claim that S-1007 closed *the last* `03 §3`
+      divergence. It did not: `03 §3` lists **five** Gate-1 conditions and
+      `calibration acceptable (held-out)` is enforced nowhere, with **no threshold defined in
+      any spec document**. Escalated as **OQ-9**; story **S-1012** written and **BLOCKED** —
+      no number was invented to unblock it. Gate 1 is a conjunction, so the omission can only
+      make it *more* permissive than the spec, and the four enforced conditions hold it shut
+      today (nothing is promoted).
+    - **OQ-9 / REQ-058 → S-1012 [SAFETY] (Gate-1 calibration condition) — BLOCKED.** ⚠️ **An
+      uncovered spec condition, visible by this project's own rule.** `gate1_status()` has no
+      `calibration_ok` argument. Blocked on a clinical acceptance threshold (OQ-9), not on
+      code: `models/metrics.py::reliability_curve` already produces the evidence. Rendered on
+      the S-1001 dashboard as *"not yet enforced — awaiting OQ-9"* rather than omitted.
     - **REQ-059 → S-1008 (live per-meal prediction wiring) — ✅ DONE 2026-07-18.**
       `prescribe/serving.py::serve_meal_prediction` — pure orchestration, no model logic:
       features → promoted model → guardrails → **persist (INV-9)** → serve. Baseline when no

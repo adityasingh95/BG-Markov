@@ -971,3 +971,48 @@ has watched fire is not a guard.
 
 **Scope.** This does not make Gate 1 open. Ninety days is a precondition, and all four conditions
 must hold.
+
+## DL-041 — Correction: Gate 1 has **five** spec conditions, not four; calibration is unenforced
+**Story:** found during S-1001 scoping · **Type:** ★ **correction of a prior claim** +
+escalation · **Date:** 2026-07-18 · **Owner:** BA
+
+**The correction.** The S-1007 closing note (DL-040, and the `03 §3` code-vs-spec box) stated
+that the gate diagram and `gate1_status()` *"now agree"* and that S-1007 closed *"the last
+code-vs-spec divergence in `03 §3`"*. **That was wrong.** `03 §3` lists **five** Gate-1
+conditions and `04 §9` repeats them:
+
+```
+n_valid_meals ≥ 150  ∧  hypo_recall > baseline  ∧  calibration acceptable (held-out)
+                     ∧  shadow_mode_days ≥ 90   ∧  is_promoted
+```
+
+`gate1_status()` implements **four**. `calibration acceptable (held-out)` is enforced nowhere.
+The claim is corrected in `03 §3`, `04 §9`, the traceability matrix and `docs/stories/S-1007.md`
+rather than quietly dropped — a wrong "we're done" note is worse than the gap it hides, because
+the next reader stops looking.
+
+**Why it is an escalation, not a story to just build.** *"Acceptable"* has **no defined
+threshold anywhere in the spec** — not in `03`, not in `04`, not in `07`. Choosing one is a
+clinical acceptance decision (CLAUDE.md: *"a clinical constant needs choosing or changing"* →
+escalate). The evidence already exists: `models/metrics.py::reliability_curve` produces the
+held-out reliability curve. What is missing is the **rule** over it: max or mean absolute gap
+between predicted probability and observed frequency, across which bins, with what minimum bin
+count. **No number was invented to unblock this.** Raised as **OQ-9**; story **S-1012** is
+written and explicitly **BLOCKED**.
+
+**Why this does not weaken Gate 1 today.** The gate is a *conjunction*. A missing condition can
+only ever make it **more permissive** than the spec, never less — and the four enforced
+conditions hold it shut today (Gate 1 is closed; nothing is promoted). So the exposure is real
+but bounded, and it is now visible rather than silent.
+
+**How S-1001 handles it.** The operator dashboard renders the checklist with **all five**
+conditions, the fifth marked *"not yet enforced — awaiting OQ-9"*, linked to this entry. The
+alternative — showing four and calling it the list — would put a *complete-looking* checklist
+on the exact screen where a human decides to put someone who cannot feel a low in front of a
+model. A visible gap on that screen is the point.
+
+**Process note.** This was found by reading the spec diagram line-by-line against the function
+signature while scoping the next story, not by a failing test. Nothing in the suite could have
+caught it: a condition that was never written cannot fail. That is the standing weakness of
+requirement-level coverage, and the traceability matrix is the only instrument that addresses
+it — which is why an uncovered REQ is treated as a visible gap by this project's own rule.
