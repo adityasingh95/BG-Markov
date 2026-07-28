@@ -25,8 +25,10 @@ from prescribe.readout import (
 )
 
 _STATES = (1, 2, 3, 4, 5)
-_OPEN = gate1_status(valid_meals=200, model_hypo_recall=0.9, baseline_hypo_recall=0.5)
-_CLOSED_149 = gate1_status(valid_meals=149, model_hypo_recall=0.9, baseline_hypo_recall=0.5)
+_OPEN = gate1_status(valid_meals=200, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
+                    is_promoted=True)
+_CLOSED_149 = gate1_status(valid_meals=149, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
+                          is_promoted=True)
 
 
 def _guarded(state: int, *, peak: float = 0.8, baseline_state: int | None = None,
