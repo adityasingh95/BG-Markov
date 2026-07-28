@@ -369,9 +369,26 @@ missing or `<= 0` ICR. The config re-implements no invariant.
     Backlog.** Route calls `require_gate2` first, no bypass; BG < 80 refuses; over-cap
     renders the flagged-implausible state; full arithmetic shown, framed as a suggestion,
     no autofill; imports nothing from `models/`.
-  - **REQ-056 → S-1004 (synthetic-data generator) — Backlog.** Seeded; reported-timestamp
-    discipline (ADR-8); forbidden-import guard keeps it out of `core`/`models`/`prescribe`/
-    `api` and it is never presented as real data.
+  - **REQ-056 → S-1004 [SAFETY] (synthetic-data generator) — ✅ DONE 2026-07-18.**
+    `synthetic/generator.py::generate(seed, days, start)` → `SyntheticDataset` (frozen
+    dataclasses; **imports no Session/engine**, so calling it cannot contaminate a store).
+    Tests `tests/unit/test_synthetic.py`: ★ same-seed **byte-identical** via a whole-dataset
+    digest (not field-by-field — that silently stops covering fields added later); different
+    seeds differ (else a constant passes); ★ **ADR-8 — `logged_at` strictly later than the
+    reported `datetime`, never equal**, because equal timestamps would let an E2E run pass
+    whether or not production respects the distinction; `elapsed_min` reconciles with
+    **reported** times; ★ AST scan finds no clock read and no **global**-RNG call
+    (`random.Random(seed)` exempt — SDET narrowed this on Dev's challenge, then re-verified
+    the rule still bites); both bolus-offset signs occur; net carbs never negative; ★ hypo
+    rate is a real **emergent** minority; ★ **`test_there_is_no_hypo_rate_knob`** — a caller
+    who could dial the hypo rate could dial the headline metric; rescued meals exist with
+    grams so INV-7 is testable end-to-end.
+    Guard `tests/forbidden/::detect_synthetic_import` (S-105 lineage) — **proven to bite
+    twice**: on a violating snippet via the pattern registry, and adversarially on a real
+    planted `models/_probe_leak.py`, which failed the build and was then removed.
+    **Placement deviates from the story text** (top-level `synthetic/`, not `tests/`) —
+    **DL-039**, for SDET/Dev role separation. `synthetic/` joins `mypy --strict`; deliberately
+    **not** added to the coverage gate (fixture code).
   - **REQ-057 → S-1005 [SAFETY] (end-to-end cycle test) — Backlog.** Drives synthetic data
     through logging → INV-7 → features → fit → temporal CV → metrics → gates → readout →
     shadow dashboard → bolus, asserting INV-1/2/7/9 and gate refusals **across** the chain.
