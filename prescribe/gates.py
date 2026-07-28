@@ -29,11 +29,17 @@ GATE1_MIN_VALID_MEALS = 150
 # Changing this number is changing a requirement, which is an escalation, not a code change.
 SHADOW_MIN_DAYS = 90
 
+# The calibration condition (03 §3, REQ-058) is passed in as a plain ``bool``. Its rule
+# lives in ``models/metrics.py::hypo_calibration`` (S-1012, OQ-9/DL-042) and its thresholds
+# are named there. This module deliberately does not import it: gates stay a pure function
+# of live inputs the caller reads fresh, with no dependency on the model layer.
+
 
 @dataclass(frozen=True)
 class Gate1Status:
-    """Gate 1 (patient-visible output). Open only when **all four** preconditions hold:
-    volume, beats-baseline, a long-enough shadow period, and deliberate promotion."""
+    """Gate 1 (patient-visible output). Open only when **all five** preconditions of
+    `03 §3` hold: volume, beats-baseline, honest percentages, a long-enough shadow
+    period, and deliberate promotion."""
 
     is_open: bool
     valid_meals: int
@@ -42,6 +48,7 @@ class Gate1Status:
     is_promoted: bool
     shadow_days: int
     meets_shadow_period: bool
+    calibration_ok: bool
     model_hypo_recall: float
     baseline_hypo_recall: float
 
@@ -53,35 +60,52 @@ def gate1_status(
     baseline_hypo_recall: float,
     is_promoted: bool,
     shadow_days: int,
+    calibration_ok: bool,
 ) -> Gate1Status:
-    """Evaluate Gate 1 from live inputs (S-1006/S-1007, REQ-058, REQ-048).
+    """Evaluate Gate 1 from live inputs (S-1006/S-1007/S-1012, REQ-058, REQ-048).
 
-    ``is_open`` iff **all four** hold: ≥ ``GATE1_MIN_VALID_MEALS`` valid meals, the model's
-    hypo recall **strictly** beats the clinical baseline, ≥ ``SHADOW_MIN_DAYS`` days of
-    shadow-mode operation, **and the operator has promoted the model on purpose**. Volume
-    alone never opens it; a tie does not either; a long shadow period is not evidence of
-    quality; and good metrics are a *precondition*, never permission (`07 §Retraining` —
-    "Promotion is manual").
+    ``is_open`` iff **all five** conditions of `03 §3` hold: ≥ ``GATE1_MIN_VALID_MEALS``
+    valid meals, the model's hypo recall **strictly** beats the clinical baseline, its hypo
+    probabilities are **honest** (``calibration_ok``), ≥ ``SHADOW_MIN_DAYS`` days of
+    shadow-mode operation, **and the operator has promoted the model on purpose**.
 
-    ``is_promoted`` and ``shadow_days`` are **required, not defaulted**. A default would be a
-    decision made once, by this function, on behalf of every future call site — and a caller
-    could then omit the question entirely and still compile. Requiring them turns a silent
-    omission into a type error. Both are read live: ``ModelArtifact.is_promoted`` via
-    ``data.repositories.get_promoted_artifact``, and the shadow count via
-    ``data.repositories.shadow_days`` — which derives it from ``prediction_log`` rather than
-    reading a stored flag. Both fail closed.
+    None of them substitutes for another. Volume alone never opens it; a tie does not
+    either; a long shadow period is not evidence of quality; honest percentages are not the
+    same as useful ones; and good metrics are a *precondition*, never permission
+    (`07 §Retraining` — "Promotion is manual").
+
+    ``is_promoted``, ``shadow_days`` and ``calibration_ok`` are **required, not defaulted**.
+    A default would be a decision made once, by this function, on behalf of every future
+    call site — and a caller could then omit the question entirely and still compile.
+    Requiring them turns a silent omission into a type error. All three are read live:
+    ``ModelArtifact.is_promoted`` via ``data.repositories.get_promoted_artifact``; the
+    shadow count via ``data.repositories.shadow_days``, derived from ``prediction_log``
+    rather than a stored flag; and calibration via
+    ``models.metrics.hypo_calibration``. All three fail closed.
+
+    **On the fifth condition.** It went unimplemented from S-703 to S-1012 — `03 §3` listed
+    it, no code read it, and no test could fail on a condition that was never written
+    (DL-041). Its threshold was missing rather than obvious, and was escalated and answered
+    rather than invented (OQ-9 → DL-042).
     """
     meets_volume = valid_meals >= GATE1_MIN_VALID_MEALS
     beats_baseline = model_hypo_recall > baseline_hypo_recall
     meets_shadow_period = shadow_days >= SHADOW_MIN_DAYS
     return Gate1Status(
-        is_open=meets_volume and beats_baseline and meets_shadow_period and is_promoted,
+        is_open=(
+            meets_volume
+            and beats_baseline
+            and meets_shadow_period
+            and calibration_ok
+            and is_promoted
+        ),
         valid_meals=valid_meals,
         meets_volume=meets_volume,
         beats_baseline=beats_baseline,
         is_promoted=is_promoted,
         shadow_days=shadow_days,
         meets_shadow_period=meets_shadow_period,
+        calibration_ok=calibration_ok,
         model_hypo_recall=model_hypo_recall,
         baseline_hypo_recall=baseline_hypo_recall,
     )

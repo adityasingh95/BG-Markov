@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from data.tables import ExIntensity, MealType
 from features.pipeline import FEATURE_NAMES, feature_vector, make_scaler, sample_weight
 from models.baseline import predict_baseline_state
+from models.metrics import hypo_calibration
 from models.ordinal import fit_ordinal, hypo_confidence_weights
 from models.shadow import build_shadow_report
 from models.state import bg_to_state
@@ -196,6 +197,8 @@ def main() -> None:
         unconstrained_beta_insulin=0.42,  # ≥0 ⇒ no confounding alarm (INV-8)
     )
     hr = report.hypo_recall
+    # S-1012 — Gate 1's fifth condition, computed from the SAME held-out predictions.
+    calib = hypo_calibration(hypo_score, te_hypo)
     print(f"  Hypo recall @ FAR≤10%     : {hr.recall:.0%}  (false-alarm {hr.far:.0%})")
     print(f"  Baseline hypo recall      : {base_hypo_recall:.0%}   ← the bar to beat")
     print(f"  Brier score               : {report.brier:.3f}   (lower is better)")
@@ -204,6 +207,11 @@ def main() -> None:
     print(f"  Off-by-one / severe error : {report.off_by_one:.0%} / {report.severe_error:.0%}")
     print(f"  β_insulin confounding flag: {report.beta_insulin_confounding}  "
           f"(unconstrained β={report.unconstrained_beta_insulin:+.2f})")
+    print(f"  Are its percentages honest: {calib.is_acceptable}  — {calib.reason}")
+    for b in calib.buckets:
+        judged = "judged" if b.counts else f"too few to judge (<{20})"
+        print(f"     {b.label:24s} n={b.n:<4d} said {b.mean_claimed:.0%}, "
+              f"happened {b.observed_rate:.0%}  [{judged}]")
 
     # ------------------------------------------------------- 4. GATE 1 (patient visibility)
     _hr("4.  GATE 1 — is she allowed to SEE the model yet?  (INV-2)")
@@ -215,7 +223,8 @@ def main() -> None:
         g = gate1_status(valid_meals=meals_seen, model_hypo_recall=model_recall,
                          baseline_hypo_recall=base_hypo_recall,
                          is_promoted=False,  # S-1006: nobody has promoted it
-                         shadow_days=days_shadowed)  # S-1007: derived, never stored
+                         shadow_days=days_shadowed,  # S-1007: derived, never stored
+                         calibration_ok=calib.is_acceptable)  # S-1012: honest percentages?
         why = []
         if not g.meets_volume:
             why.append(f"needs ≥150 valid meals (has {meals_seen})")
@@ -225,6 +234,8 @@ def main() -> None:
         if not g.meets_shadow_period:
             why.append(f"day {g.shadow_days} of {SHADOW_MIN_DAYS} shadow mode "
                        f"({SHADOW_MIN_DAYS - g.shadow_days} to go, REQ-048)")
+        if not g.calibration_ok:
+            why.append(f"its percentages are not shown to be honest ({calib.reason})")
         if not g.is_promoted:
             why.append("the operator has not promoted it (S-1006 — a human must decide)")
         state = "OPEN" if g.is_open else "CLOSED"
@@ -239,7 +250,7 @@ def main() -> None:
     # then show what the readout WOULD look like once earned (a promoted gate).
     closed = gate1_status(valid_meals=40, model_hypo_recall=model_recall,
                           baseline_hypo_recall=base_hypo_recall, is_promoted=False,
-                          shadow_days=12)
+                          shadow_days=12, calibration_ok=calib.is_acceptable)
     try:
         require_gate1(closed)
     except Exception as e:  # GateNotPassed (INV-2, Gate 1)

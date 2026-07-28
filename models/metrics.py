@@ -194,3 +194,144 @@ def severe_state_error_rate(pred_state: npt.ArrayLike, true_state: npt.ArrayLike
     (e.g. predicting State 4 when the truth is State 1)."""
     diff = np.abs(np.asarray(pred_state, dtype=int) - np.asarray(true_state, dtype=int))
     return float(np.mean(diff >= 2))
+
+
+# --- ★ Gate-1 calibration: "are its percentages honest?" (S-1012, OQ-9/DL-042) ---
+#
+# Not "is the model good?" — that is hypo recall vs the baseline, a separate Gate-1
+# condition. This asks only whether the number it puts on the risk is TRUE. A model can
+# rank meals correctly and still be badly wrong about magnitudes; she cannot feel a low,
+# so the number IS the warning.
+#
+# The four constants below were escalated and answered by the operator (OQ-9 → DL-042).
+# Changing one is changing an approved decision, not tuning a parameter.
+
+HYPO_CALIB_BUCKET_EDGES: tuple[float, float] = (0.20, 0.50)
+"""Three risk bands, not ten (DL-042). At ~150 meals with 15–20 lows, a ten-bin
+reliability curve spreads the evidence three or four events to a bin and returns a
+confident-looking verdict built on almost nothing. Coarse is the honest resolution of the
+data that will actually exist, not a compromise."""
+
+HYPO_CALIB_MIN_BUCKET_N: int = 20
+"""Below this a band is reported but **not judged** (DL-042) — its observed rate is noise.
+If real data never reaches this floor the rule is *not* to lower it: conclude there is not
+yet enough evidence, and leave the gate shut."""
+
+HYPO_CALIB_MAX_UNDERSTATEMENT: float = 0.10
+"""★ **The dangerous direction** (DL-042). Claimed 20%, happened 35% — it told her a meal
+was probably fine and it was not."""
+
+HYPO_CALIB_MAX_OVERSTATEMENT: float = 0.20
+"""Claimed 50%, happened 35% — she checked and was fine. That costs a fingerstick, not a
+harm, so it is priced differently. The asymmetry is the point (DL-042)."""
+
+_FP_SLACK: float = 1e-9
+"""Float representation only, **not** a widening of the approved rule. ``0.30 - 0.20``
+evaluates to ``0.10000000000000003``, so a bare ``<=`` fails DL-042 at its own stated
+boundary. 1e-9 on a probability is ~10 orders of magnitude below anything measurable here
+and cannot move a verdict that was not already at the edge; without it the rule is
+unimplementable as written."""
+
+
+@dataclass(frozen=True)
+class CalibrationBucket:
+    """One risk band. Reported whether or not it is judged — a band that vanishes from the
+    dashboard cannot be reasoned about by the operator."""
+
+    label: str
+    lower: float
+    upper: float
+    n: int
+    mean_claimed: float
+    observed_rate: float
+    counts: bool          # n >= HYPO_CALIB_MIN_BUCKET_N — judged at all?
+    gap: float            # ★ SIGNED: observed − claimed. Positive = UNDERSTATED the risk.
+    within_tolerance: bool
+
+
+@dataclass(frozen=True)
+class CalibrationVerdict:
+    is_acceptable: bool
+    buckets: tuple[CalibrationBucket, ...]
+    n_judged: int
+    reason: str           # plain language — this is what the operator reads
+
+
+def hypo_calibration(
+    hypo_score: npt.ArrayLike, is_hypo: npt.ArrayLike
+) -> CalibrationVerdict:
+    """Gate 1's fifth condition: are the model's hypo probabilities honest? (DL-042)
+
+    Operates on ``P(state <= 2)`` **only** — the number a warning is made of. Calibrating
+    all five class probabilities would dilute the one that matters into four that do not.
+
+    **Fails closed.** No band reaching ``HYPO_CALIB_MIN_BUCKET_N`` ⇒ not acceptable. An
+    empty result is *no evidence*, not *no problem*, and every ambiguity in this system
+    resolves toward the gate staying shut.
+    """
+    score = np.asarray(hypo_score, dtype=float).ravel()
+    hypo = np.asarray(is_hypo, dtype=float).ravel()
+    lo_edge, hi_edge = HYPO_CALIB_BUCKET_EDGES
+    # Edges belong to the UPPER band, so the three partition [0, 1] with no gap.
+    bands = (
+        ("says a LOW is unlikely", 0.0, lo_edge),
+        ("says a LOW is possible", lo_edge, hi_edge),
+        ("says a LOW is likely", hi_edge, 1.0),
+    )
+
+    buckets: list[CalibrationBucket] = []
+    for i, (label, lower, upper) in enumerate(bands):
+        is_last = i == len(bands) - 1
+        in_band = (score >= lower) & (score <= upper if is_last else score < upper)
+        n = int(in_band.sum())
+        claimed = float(score[in_band].mean()) if n else 0.0
+        observed = float(hypo[in_band].mean()) if n else 0.0
+        gap = observed - claimed  # ★ signed; abs() here would delete the asymmetry
+        judged = n >= HYPO_CALIB_MIN_BUCKET_N
+        tolerance = (
+            HYPO_CALIB_MAX_UNDERSTATEMENT if gap > 0 else HYPO_CALIB_MAX_OVERSTATEMENT
+        )
+        buckets.append(
+            CalibrationBucket(
+                label=label, lower=lower, upper=upper, n=n,
+                mean_claimed=claimed, observed_rate=observed, counts=judged,
+                gap=gap, within_tolerance=abs(gap) <= tolerance + _FP_SLACK,
+            )
+        )
+
+    judged_bands = [b for b in buckets if b.counts]
+    if not judged_bands:
+        return CalibrationVerdict(
+            is_acceptable=False,
+            buckets=tuple(buckets),
+            n_judged=0,
+            reason=(
+                f"Not enough data to judge yet — no risk band has "
+                f"{HYPO_CALIB_MIN_BUCKET_N} or more predictions."
+            ),
+        )
+
+    failing = [b for b in judged_bands if not b.within_tolerance]
+    if failing:
+        worst = max(failing, key=lambda b: abs(b.gap))
+        direction = "understates" if worst.gap > 0 else "overstates"
+        reason = (
+            f"In the band where it {worst.label}, it {direction} the risk: it said "
+            f"{worst.mean_claimed:.0%} on average, and {worst.observed_rate:.0%} of those "
+            f"meals actually went low."
+        )
+        return CalibrationVerdict(
+            is_acceptable=False, buckets=tuple(buckets),
+            n_judged=len(judged_bands), reason=reason,
+        )
+
+    return CalibrationVerdict(
+        is_acceptable=True,
+        buckets=tuple(buckets),
+        n_judged=len(judged_bands),
+        reason=(
+            f"Its percentages match what actually happened, across "
+            f"{len(judged_bands)} risk band(s) with "
+            f"{HYPO_CALIB_MIN_BUCKET_N}+ predictions each."
+        ),
+    )
