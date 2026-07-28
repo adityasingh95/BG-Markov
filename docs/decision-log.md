@@ -1094,3 +1094,43 @@ who cannot feel a low in front of a model, and a green label reads as authority 
 earned, indistinguishable from the three that are real.
 **One sanctioned exception:** the Clarke grid's D/E zones are dangerous **by the measure's own
 construction**, not by a cut-off anyone here picks, so those are flagged directly.
+
+## DL-043 — OQ-5 resolved: the low/in-range line stays at 80 mg/dL
+**Story:** state model (`03 §1`), open since S-501 · **Type:** clinical constant — **escalated
+and answered** · **Date:** 2026-07-18 · **Approved by:** the operator, on a written proposal
+(escalation path per DL-042)
+
+**The question.** State 2's upper edge sits at **80**; the standard clinical line is **70**. A
+reading of 75 is therefore labelled *a low* by this system and *in range* by convention.
+
+**The answer: keep 80.**
+
+**Why.**
+- **Warning time.** She cannot feel a low coming. A 75 that is still falling is a 55 twenty
+  minutes later. Starting the warning at 80 buys roughly 10 mg/dL — which is time to eat
+  something, and time is the only thing a warning can actually give her.
+- **One number, one meaning.** `core.safety.BOLUS_BG_FLOOR = 80` (INV-4) already refuses to
+  suggest insulin below 80, written separately and for a different reason. Aligning the warning
+  edge means *below 80 is caution territory* reads the same way everywhere. Two adjacent
+  thresholds doing similar jobs at different numbers is how a future reader gets confused about
+  which one governs.
+
+**Accepted costs — recorded, not glossed.**
+- **More false alarms** in the 70–79 band: readings that would have levelled out on their own now
+  get flagged. This has a real ceiling. A system that cries wolf gets ignored, and an ignored
+  system is worse than no system. **If the shadow-mode dashboard shows a large share of flagged
+  lows are 70–79 readings that resolved unaided, that is the signal to revisit** — it belongs
+  next to the `outside_window` escape hatch in `04 §5` as a *decide-from-data* item.
+- **Not comparable to published literature.** Hypo recall measured against an 80 line cannot be
+  read against studies anchored at 70. Acceptable for a system built for exactly one person, but
+  it must never be reported as if it were comparable.
+
+**Why it was settled now rather than later.** Every stored meal is categorised through this line.
+Changing it in eight months silently re-labels the entire training set, redefines "a low" for the
+model, and makes last month's recall figures mean something different from this month's — with
+no error and no warning. Cheap to decide before there is history; expensive after.
+
+**Code impact: none.** `models/state.py::STATE_BOUNDARIES` was already `(54, 80, 181, 251)` and
+`tests/unit/test_state.py` already pins it exactly, including the 79/80 edge. **What closed is
+the caveat, not the value** — the boundary had been carrying an "unconfirmed" marker since S-501
+and the docs asserted something the project had not actually decided.

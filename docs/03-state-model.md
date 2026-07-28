@@ -12,12 +12,25 @@ The model's output space. Ordered — this matters, and it is why the model is *
 | State | Range (mg/dL) | Label | Clinical meaning |
 |---|---|---|---|
 | **1** | < 54 | Severe hypoglycaemia | Emergency. |
-| **2** | 54 – 79 | Hypoglycaemia | **Upper bound raised from the standard 70.** She cannot feel a low; this buys a warning band. |
+| **2** | 54 – 79 | Hypoglycaemia | **Upper bound raised from the standard 70 — confirmed, OQ-5/DL-043.** She cannot feel a low; this buys a warning band. |
 | **3** | 80 – 180 | Target | Aligned to her 120–150 correction target. |
 | **4** | 181 – 250 | Hyperglycaemia | |
 | **5** | > 250 | Severe hyperglycaemia | |
 
-**Boundaries:** `[54, 80, 181, 251]`. Confirm State 2's upper edge with the endocrinologist (OQ-5).
+**Boundaries:** `[54, 80, 181, 251]`. **Confirmed 2026-07-18 by the operator (OQ-5, DL-043) —
+the line stays at 80.**
+
+> **Why 80 and not the standard 70.** She cannot feel a low. A 75 that is still falling is a 55
+> twenty minutes later and nobody in the room knows. The raised edge buys ~10 mg/dL of warning
+> time, and it matches `core.safety.BOLUS_BG_FLOOR = 80` (INV-4) so *below 80* means one thing
+> everywhere in the system rather than two similar things at two numbers.
+> **Accepted costs, recorded not glossed:** more false alarms in the 70–79 band (and a system
+> that cries wolf gets ignored, which is worse than useless), and hypo-recall figures that are
+> **not directly comparable** to published literature anchored at 70.
+> **Changing this later re-labels all history** — every stored meal is categorised through this
+> line, so a change silently redefines "a low" across the training set and makes last month's
+> recall figures mean something different. That is precisely why it was settled before there is
+> data, rather than left open.
 
 ### Rules
 
