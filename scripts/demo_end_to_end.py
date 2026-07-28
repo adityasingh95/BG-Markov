@@ -32,7 +32,7 @@ from models.ordinal import fit_ordinal, hypo_confidence_weights
 from models.shadow import build_shadow_report
 from models.state import bg_to_state
 from prescribe.bolus import recommend_bolus
-from prescribe.gates import gate1_status, require_gate1
+from prescribe.gates import SHADOW_MIN_DAYS, gate1_status, require_gate1
 
 # --- clinician-confirmed profile (DL-032), read as parameters, never hardcoded ----
 ICR = 9.0      # g carb / unit
@@ -208,30 +208,38 @@ def main() -> None:
     # ------------------------------------------------------- 4. GATE 1 (patient visibility)
     _hr("4.  GATE 1 — is she allowed to SEE the model yet?  (INV-2)")
     model_recall = hr.recall
-    for label, meals_seen in (("today (few valid meals)", 40), ("after collection", n)):
+    # shadow_days is DERIVED in production (data.repositories.shadow_days, from
+    # prediction_log timestamps) — hard-coded here only because this demo has no DB.
+    scenarios = (("today (few valid meals)", 40, 12), ("after collection", n, 90))
+    for label, meals_seen, days_shadowed in scenarios:
         g = gate1_status(valid_meals=meals_seen, model_hypo_recall=model_recall,
                          baseline_hypo_recall=base_hypo_recall,
-                         is_promoted=False)  # S-1006: nobody has promoted it
+                         is_promoted=False,  # S-1006: nobody has promoted it
+                         shadow_days=days_shadowed)  # S-1007: derived, never stored
         why = []
         if not g.meets_volume:
             why.append(f"needs ≥150 valid meals (has {meals_seen})")
         if not g.beats_baseline:
             why.append(f"model recall {model_recall:.0%} must strictly beat "
                        f"baseline {base_hypo_recall:.0%}")
+        if not g.meets_shadow_period:
+            why.append(f"day {g.shadow_days} of {SHADOW_MIN_DAYS} shadow mode "
+                       f"({SHADOW_MIN_DAYS - g.shadow_days} to go, REQ-048)")
         if not g.is_promoted:
             why.append("the operator has not promoted it (S-1006 — a human must decide)")
         state = "OPEN" if g.is_open else "CLOSED"
         print(f"  {label:26s}: Gate 1 {state}"
               + ("" if g.is_open else "  — " + "; ".join(why)))
-    print("  NOTE: even when both conditions hold, the FINAL open is an operator's "
-          "manual call — never automatic.")
+    print("  NOTE: even when every automatic condition holds, the FINAL open is an "
+          "operator's manual call — never automatic.")
 
     # ------------------------------------------------------ 5. WHAT SHE SEES (readout)
     _hr("5.  PATIENT READOUT  (INV-2: gated; no dose ever shown to her)")
     # Gate 1 is closed in reality, so build_patient_readout would refuse. Show that,
     # then show what the readout WOULD look like once earned (a promoted gate).
     closed = gate1_status(valid_meals=40, model_hypo_recall=model_recall,
-                          baseline_hypo_recall=base_hypo_recall, is_promoted=False)
+                          baseline_hypo_recall=base_hypo_recall, is_promoted=False,
+                          shadow_days=12)
     try:
         require_gate1(closed)
     except Exception as e:  # GateNotPassed (INV-2, Gate 1)

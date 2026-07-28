@@ -16,7 +16,14 @@ from sqlalchemy.orm import Session
 
 from core import safety
 from core.validity import exclusion_reasons, is_hypo_outcome, is_valid
-from data.tables import BolusLog, CorrectionEvent, HypoRescueLog, MealEvent, ModelArtifact
+from data.tables import (
+    BolusLog,
+    CorrectionEvent,
+    HypoRescueLog,
+    MealEvent,
+    ModelArtifact,
+    PredictionLog,
+)
 from features.iob import iob_at
 from models.isf import ISFResult, derive_isf
 
@@ -189,3 +196,29 @@ def get_promoted_artifact(session: Session) -> ModelArtifact | None:
     return session.scalars(
         select(ModelArtifact).where(ModelArtifact.is_promoted.is_(True))
     ).first()
+
+
+def shadow_days(session: Session, *, now: dt.datetime) -> int:
+    """Whole days of shadow-mode operation so far (S-1007, REQ-048).
+
+    Measured from the **earliest** ``prediction_log.created_at`` to ``now``. This is a
+    **derived count, never a stored boolean**: a ``shadow_complete`` flag would be written
+    once — by whoever ran the migration or the backfill — and would then be true forever
+    regardless of what the data said. A count re-answered on every call cannot drift from
+    reality (the same principle as ADR-7, "gates are evaluated live, never cached").
+
+    ``now`` is **injected**, not read here. The project has exactly one sanctioned wall-clock
+    reader (``core.clock``, ADR-8), and an injected ``now`` makes the day-89/day-90 boundary
+    testable without waiting a quarter.
+
+    **Fails closed.** No predictions ⇒ ``0``. A negative interval — clock skew, a restored
+    backup, a row dated in the future — is clamped to ``0`` rather than surfacing as elapsed
+    time or as a negative number a later ``>=`` might mishandle. Every ambiguity resolves
+    toward *not yet*.
+    """
+    earliest = session.scalars(
+        select(PredictionLog.created_at).order_by(PredictionLog.created_at).limit(1)
+    ).first()
+    if earliest is None:
+        return 0
+    return max(0, (now - earliest).days)

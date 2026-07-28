@@ -24,17 +24,24 @@ from core.safety import inv2_patient_output_requires_gate1
 # data.adherence.GATE1_VALID_MEALS (asserted by a test).
 GATE1_MIN_VALID_MEALS = 150
 
+# REQ-048 — "shadow mode ≥ 90 days before patient-visible output". Named and traced
+# deliberately: `90` as a literal inside a condition invites a future reader to tune it.
+# Changing this number is changing a requirement, which is an escalation, not a code change.
+SHADOW_MIN_DAYS = 90
+
 
 @dataclass(frozen=True)
 class Gate1Status:
-    """Gate 1 (patient-visible output). Open only when the volume floor is met **and**
-    the model beats the clinical baseline on hypo recall."""
+    """Gate 1 (patient-visible output). Open only when **all four** preconditions hold:
+    volume, beats-baseline, a long-enough shadow period, and deliberate promotion."""
 
     is_open: bool
     valid_meals: int
     meets_volume: bool
     beats_baseline: bool
     is_promoted: bool
+    shadow_days: int
+    meets_shadow_period: bool
     model_hypo_recall: float
     baseline_hypo_recall: float
 
@@ -45,28 +52,36 @@ def gate1_status(
     model_hypo_recall: float,
     baseline_hypo_recall: float,
     is_promoted: bool,
+    shadow_days: int,
 ) -> Gate1Status:
-    """Evaluate Gate 1 from live inputs (S-1006, REQ-058).
+    """Evaluate Gate 1 from live inputs (S-1006/S-1007, REQ-058, REQ-048).
 
-    ``is_open`` iff **all three** hold: ≥ ``GATE1_MIN_VALID_MEALS`` valid meals, the model's
-    hypo recall **strictly** beats the clinical baseline, **and the operator has promoted the
-    model on purpose**. Volume alone never opens it; a tie does not either; and good metrics
-    are a *precondition*, never permission (`07 §Retraining` — "Promotion is manual").
+    ``is_open`` iff **all four** hold: ≥ ``GATE1_MIN_VALID_MEALS`` valid meals, the model's
+    hypo recall **strictly** beats the clinical baseline, ≥ ``SHADOW_MIN_DAYS`` days of
+    shadow-mode operation, **and the operator has promoted the model on purpose**. Volume
+    alone never opens it; a tie does not either; a long shadow period is not evidence of
+    quality; and good metrics are a *precondition*, never permission (`07 §Retraining` —
+    "Promotion is manual").
 
-    ``is_promoted`` is **required, not defaulted**. A default would be a decision made once,
-    by this function, on behalf of every future call site — and a caller could then omit the
-    question entirely and still compile. Requiring it turns a silent omission into a type
-    error. It is read from the live ``ModelArtifact.is_promoted`` (see
-    ``data.repositories.get_promoted_artifact``), which fails closed.
+    ``is_promoted`` and ``shadow_days`` are **required, not defaulted**. A default would be a
+    decision made once, by this function, on behalf of every future call site — and a caller
+    could then omit the question entirely and still compile. Requiring them turns a silent
+    omission into a type error. Both are read live: ``ModelArtifact.is_promoted`` via
+    ``data.repositories.get_promoted_artifact``, and the shadow count via
+    ``data.repositories.shadow_days`` — which derives it from ``prediction_log`` rather than
+    reading a stored flag. Both fail closed.
     """
     meets_volume = valid_meals >= GATE1_MIN_VALID_MEALS
     beats_baseline = model_hypo_recall > baseline_hypo_recall
+    meets_shadow_period = shadow_days >= SHADOW_MIN_DAYS
     return Gate1Status(
-        is_open=meets_volume and beats_baseline and is_promoted,
+        is_open=meets_volume and beats_baseline and meets_shadow_period and is_promoted,
         valid_meals=valid_meals,
         meets_volume=meets_volume,
         beats_baseline=beats_baseline,
         is_promoted=is_promoted,
+        shadow_days=shadow_days,
+        meets_shadow_period=meets_shadow_period,
         model_hypo_recall=model_hypo_recall,
         baseline_hypo_recall=baseline_hypo_recall,
     )
