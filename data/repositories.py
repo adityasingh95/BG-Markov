@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from core import safety
 from core.validity import exclusion_reasons, is_hypo_outcome, is_valid
-from data.tables import BolusLog, CorrectionEvent, HypoRescueLog, MealEvent
+from data.tables import BolusLog, CorrectionEvent, HypoRescueLog, MealEvent, ModelArtifact
 from features.iob import iob_at
 from models.isf import ISFResult, derive_isf
 
@@ -172,3 +172,20 @@ def derive_isf_from_correction_events(
         if e.bg_after is not None
     ]
     return derive_isf(triples, current_isf=current_isf, current_source=current_source)
+
+
+def get_promoted_artifact(session: Session) -> ModelArtifact | None:
+    """The model artifact currently promoted for serving, or ``None`` (S-1008, REQ-059).
+
+    **Fails closed.** No promoted row ⇒ ``None`` ⇒ the caller serves the clinical baseline
+    and never a model output. "Promoted" and "most recent" are different questions: a newer
+    but unpromoted artifact is ignored, because promotion is a deliberate, audited human act
+    (`07 §Retraining`) and a refit deliberately writes an *unpromoted* row (REQ-060).
+
+    This reads ``model_artifact.is_promoted`` to answer **"which model serves?"**. S-1006
+    separately makes Gate 1 *require* promotion, answering **"may she see it?"** — two
+    different questions on the same flag.
+    """
+    return session.scalars(
+        select(ModelArtifact).where(ModelArtifact.is_promoted.is_(True))
+    ).first()
