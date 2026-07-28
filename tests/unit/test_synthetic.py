@@ -98,14 +98,18 @@ def test_no_generated_clinical_timestamp_depends_on_the_wall_clock() -> None:
                 "now", "today", "utcnow", "fromtimestamp"
             }:
                 offenders.append(f"{path.name}: .{node.attr}()")
-            # `random.foo()` at module scope = a shared global RNG, not the seeded one
+            # Using the process-GLOBAL RNG (`random.random()`, `random.choice()`,
+            # `random.seed()`) is forbidden: it is shared mutable state, so output would
+            # depend on whatever else touched it. `random.Random(seed)` is the sanctioned
+            # opposite — it CONSTRUCTS an isolated, seeded instance — so it is allowed.
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
                 and isinstance(node.func.value, ast.Name)
                 and node.func.value.id == "random"
+                and node.func.attr != "Random"
             ):
-                offenders.append(f"{path.name}: random.{node.func.attr}()")
+                offenders.append(f"{path.name}: random.{node.func.attr}() (global RNG)")
     assert not offenders, f"generator reads the clock or a global RNG: {offenders}"
 
 
