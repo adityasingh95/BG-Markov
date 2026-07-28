@@ -36,7 +36,7 @@ correction_units = (current_bg − target_bg) / ISF
 
 An ISF that is *too high* merely under-corrects, which is recoverable. **The error is asymmetric, and our default sits on the dangerous side if wrong.**
 
-ISF 30 is internally consistent with a 60 U TDD, so the catastrophic case is unlikely — **but the 1800-rule is a population heuristic and individual ISF varies widely around it.** This is why INV-1 hard-blocks the prescriptive module, and why correction events (§6) are the highest-priority data the system collects.
+ISF 30 is internally consistent with a 60 U TDD, so the catastrophic case is unlikely — **but the 1800-rule is a population heuristic and individual ISF varies widely around it.** This was why INV-1 hard-blocked the prescriptive module. **INV-1 is retired** (S-1011, DL-035) at the operator's direction, which makes correction events (§6) — the only causally clean read on ISF — *more* important, not less: with no confirmation gate, the derived ISF and her review of the displayed arithmetic are what stand between a wrong constant and a wrong dose.
 
 ---
 
@@ -259,7 +259,7 @@ def recommend_bolus(carbs_g, current_bg, icr, isf, target_bg, iob):
 
 | Guardrail | |
 |---|---|
-| **INV-1** | **Disabled until Gate 2.** Hard block. Not a warning. Not a config flag. |
+| ~~**INV-1**~~ | **RETIRED (S-1011, DL-035).** Was: disabled until Gate 2. The dose path is now bounded by INV-3/INV-4 only; a bad ICR is a `ValueError`, not a `SafetyViolation`. |
 | **INV-4** | Refuse below BG 80 → "Treat the low first." |
 | **INV-3** | Cap at 15 U. **A cap event is FLAGGED as implausible input, never silently clipped.** A typo must not produce a lethal dose. |
 | **INV-3** | Never negative. |

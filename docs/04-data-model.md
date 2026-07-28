@@ -23,7 +23,7 @@ She logs at the laptop, not at the table — often 30–40 minutes after eating.
 |---|---|---|---|
 | `profile_id` | int PK | No | |
 | `effective_from` | date | No | **Version every change. Never overwrite.** (REQ-054) |
-| `icr` | float | **Yes** | g carb per unit. **Null blocks Gate 2** (INV-1). Expected 7–10. |
+| `icr` | float | **Yes** | g carb per unit. Expected 7–10. **Null no longer blocks a gate** (Gate 2 retired, S-1011) — the calculator raises `ValueError` on null/`<= 0`. |
 | `isf` | float | No | mg/dL per unit. Default 30. |
 | `isf_source` | enum | No | `default` \| `endo` \| `derived` |
 | `target_bg` | int | No | 135 |

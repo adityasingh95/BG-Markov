@@ -42,7 +42,7 @@
 > ISF sits in the **denominator** of the correction term: `correction = (BG − target) / ISF`.
 > An ISF that is **too low causes over-dosing.**
 > At BG 250, target 135: assuming ISF 30 gives 3.8 U. If her true ISF is 50, that dose drops her by 191 mg/dL — **to 59 mg/dL. A hypo.**
-> This is why INV-1 hard-blocks the prescriptive module until ISF is confirmed.
+> This was why INV-1 hard-blocked the prescriptive module until ISF was confirmed. **INV-1 is retired** (S-1011, DL-035) — the dose path is now bounded by INV-3/INV-4 and by her review of the shown arithmetic, not by a confirmation gate.
 
 ## 3. Clinical — Nutrition & Activity
 

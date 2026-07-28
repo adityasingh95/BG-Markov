@@ -120,18 +120,18 @@ spinner, or an empty screen** — silence reads as "all clear" to someone who ca
 
 **No dose, bolus, or unit figure appears on this surface in any of the five states.**
 
-## 5. Bolus Calculator (F-5) — REQ-041..043, INV-1/3/4
+## 5. Bolus Calculator (F-5) — REQ-042/043, INV-3/4  ·  *(REQ-041/INV-1 retired)*
 
-### F-5.1 Gating **[SAFETY]**
-**Hard-disabled until Gate 2** (ICR confirmed AND ISF confirmed or derived). No preview. No silent background computation.
+### F-5.1 ~~Gating~~ — retired **[SAFETY]**
+~~Hard-disabled until Gate 2 (ICR confirmed AND ISF confirmed or derived).~~
 
-> **⚠ Retiring (DL-035).** The operator has decided to de-gate ICR. Under **S-1011**, Gate 2 and
-> INV-1 are removed: ICR/ISF/target become ordinary versioned profile values, and a missing or
-> `≤ 0` ICR raises an ordinary **`ValueError`** (not a `SafetyViolation`) so the formula can
-> never divide by null. **INV-3, INV-4, and the no-ML-in-the-dose-path rule are unaffected.**
-> This section stands as written until S-1011 executes.
+> **RETIRED (S-1011, DL-035, 2026-07-18).** Gate 2 and INV-1 are **removed**. ICR/ISF/target are
+> ordinary versioned profile values; a missing or `≤ 0` ICR raises an ordinary **`ValueError`**
+> (deliberately not a `SafetyViolation`) so the formula can never divide by null.
+> **INV-3, INV-4, and the no-ML-in-the-dose-path rule are unaffected.** The heading above is
+> kept for traceability; there is no longer a gate on this screen.
 
-### F-5.2 The calculator (post Gate 2)
+### F-5.2 The calculator
 - Inputs: carbs, current BG. **IOB is computed, never entered.**
 - Output shows the **full arithmetic**, so she can check it by hand:
 

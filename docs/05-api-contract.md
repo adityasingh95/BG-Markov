@@ -162,11 +162,13 @@ Daily Tresiba dose. Effective basal returns the EWMA value plus `titration_locko
 
 ### `POST /api/bolus-recommendation`
 
-**INV-1:** `icr is None` → **`403 GATE_NOT_PASSED`. No fixture, mock, config flag, or env var bypasses this.**
+**ICR (S-1011, DL-035 — Gate 2 / INV-1 retired):** a missing or `≤ 0` ICR →
+**`422 INVALID_PROFILE`**, an ordinary input error, **not** `403 GATE_NOT_PASSED`. The
+formula divides by the ICR, so it is rejected before any arithmetic.
 
-> **⚠ Retiring (DL-035).** Under **S-1011** this becomes `422 INVALID_PROFILE` on a missing or
-> `≤ 0` ICR — an ordinary input error, not a gate. **INV-3 and INV-4 responses are unchanged**,
-> and IOB stays **derived, never accepted in the request body** (REQ-020).
+**INV-4 unchanged:** BG < 80 → refusal ("treat the low first").
+**INV-3 unchanged:** an over-cap dose is returned capped **and flagged** as implausible input.
+**REQ-020 unchanged:** IOB is **derived, never accepted in the request body**.
 
 ```json
 { "carbs_g": 60, "current_bg": 190 }

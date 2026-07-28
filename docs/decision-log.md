@@ -695,11 +695,11 @@ confirm at build time, but the direction is spec-mandated.
 
 ## DL-035 — Gate 2 / INV-1 (ICR gate) to be retired — de-gated to a plain profile value
 **Story:** S-1011 (EPIC 10) · **Type:** safety-invariant removal (planned) · **Date:**
-2026-07-18 · **Requested by:** operator · **Owner:** BA · **Status:** PLANNED — not executed.
+2026-07-18 · **Requested by:** operator · **Owner:** BA · **Status:** ✅ **EXECUTED 2026-07-18** (S-1011).
 
 The operator has decided the clinician-confirmed-ICR **gate** (Gate 2, **INV-1**) is not
 wanted. This entry records the decision and its rationale; **no code, test, or invariant is
-changed at this entry.** Execution (S-1011) is gated on an explicit operator "go".
+changed at this entry.** Execution (S-1011) was gated on an explicit operator "go", which was given the same day; see the execution note at the end of this entry.
 
 **Decision.** Retire Gate 2 / INV-1 **as a gate**. ICR / ISF / target become ordinary
 versioned `patient_profile` parameters the bolus calculator reads directly — no
@@ -815,3 +815,23 @@ execute a safety-invariant removal the operator has explicitly held (DL-035, "pr
 
 **Story docs remain just-in-time.** Per the CLAUDE.md loop, BA writes `docs/stories/S-nnn.md`
 at the start of each story. Writing all eleven now would be speculative and would rot.
+
+### DL-035 execution note (2026-07-18)
+**Operator go given; S-1011 executed the same day.** Delivered exactly as planned, TDD-first:
+BA story + written safety argument → SDET RED (11 failures seen) → Dev GREEN → BA docs sweep.
+
+- **Removed:** `inv1_prescriptive_requires_gate2`, `Gate2Status`, `gate2_status`,
+  `require_gate2`, and the gate call in `prescribe/bolus.py`. Removed, **not left dormant** —
+  tests assert the symbols are absent, because a leftover gate function invites re-wiring.
+- **Added:** a plain `ValueError` in `recommend_bolus` for a missing/`<= 0` ICR, raised before
+  any arithmetic. A **discrimination test** asserts it is neither a `SafetyViolation` nor a
+  `GateNotPassed` — pinning the *kind*, so a future refactor cannot quietly reinstate a gate.
+- **Renamed:** `ClinicalConfig.prescriptive_enabled` → `icr_present` (an "enabled" flag that
+  enables nothing is a misreading hazard in a safety system).
+- **Unchanged, deliberately:** INV-3 (cap-and-flag, never negative), INV-4 (BG-80 refusal),
+  the 5 golden doses, carbs/IOB monotonicity, the no-`models`-import AST guard, and
+  **Gate 1 / INV-2** in full. `GateNotPassed` remains — INV-2 uses it.
+- **INV-1 is marked retired everywhere and the number is NOT reused.** INV-2..INV-9 keep theirs.
+
+**Verified:** 442 tests pass, 99.73% coverage, `ruff` clean, `mypy --strict` clean.
+**Rollback:** `git checkout 7a7c3bf` (`v1.0.0-epic9`), the pre-EPIC-10 baseline (DL-036).

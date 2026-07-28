@@ -38,13 +38,13 @@
 │  │                                                  │  │
 │  │  api/           routes, templates                │  │
 │  │  ─────────────────────────────────────────────   │  │
-│  │  core/safety.py     INV-1..9  ← ZERO INTERNAL    │  │
-│  │  core/gates.py      Gate 0/1/2   DEPENDENCIES    │  │
+│  │  core/safety.py     INV-2..9  ← ZERO INTERNAL    │  │
+│  │  prescribe/gates.py Gate 0/1     DEPENDENCIES    │  │
 │  │  core/guardrails.py                              │  │
 │  │  ─────────────────────────────────────────────   │  │
 │  │  features/      IOB · basal EWMA · exercise      │  │
 │  │  models/        baseline · ordinal · ICR/ISF     │  │
-│  │  prescribe/     bolus calc  (Gate 2, NO ML)      │  │
+│  │  prescribe/     bolus calc  (ungated, NO ML)     │  │
 │  │  data/          repositories                     │  │
 │  │  cli/           refit · export · backup · drill  │  │
 │  └────────────────────┬─────────────────────────────┘  │

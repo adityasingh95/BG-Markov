@@ -26,7 +26,7 @@ EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
                                               → EPIC 8 (Guardrails/Output)
                                                         │
                                                         ▼
-                                              EPIC 9 (Prescriptive — Gate 2)
+                                              EPIC 9 (Prescriptive)
                                                         │
                                                         ▼
                           EPIC 10 (Integration, UI & End-to-End Validation)
@@ -36,7 +36,7 @@ EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
 
 1. **Ship EPIC 3 first.** The model was the whole design conversation but it is **not the bottleneck** — three months of her logging is. **Every week spent on the ordinal model before logging is live is a week added to the END of the project.**
 2. **S-304 (restore drill) runs in month one, before there is real data to lose.** The story is not done until the drill has been **executed**.
-3. **EPIC 9 does not start until S-703 (gate enforcement) is merged and green.** The bolus calculator is five lines and it is the most dangerous code in the system. **The gates must exist before the thing they gate.**
+3. **EPIC 9 did not start until S-703 (gate enforcement) was merged and green.** The bolus calculator is five lines and it is the most dangerous code in the system. *(Gate 2 was later retired by S-1011/DL-035; **Gate 1 still gates patient-visible output**, and INV-3/INV-4 still bound the dose.)*
 
 ---
 
@@ -51,11 +51,11 @@ EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
 **TDD:** `axe` passes. Usable at 200% zoom. Every numeric field asserts `inputmode`.
 
 ### S-103 [SAFETY] — Config loader
-**AC:** Frozen pydantic model; mutation raises. `icr: null` permitted at load but sets `prescriptive_enabled = False`. Unknown keys raise. `isf <= 0` raises. `max_bolus_u > 25` raises.
-**TDD:** Property — any config with `icr is None` ⇒ `prescriptive_enabled == False`. Config cannot raise `max_bolus_u` above the hard-coded ceiling.
+**AC:** Frozen pydantic model; mutation raises. `icr: null` permitted at load but sets `icr_present = False` *(named `prescriptive_enabled` until S-1011 retired Gate 2)*. Unknown keys raise. `isf <= 0` raises. `max_bolus_u > 25` raises.
+**TDD:** Property — any config with `icr is None` ⇒ `icr_present == False`. Config cannot raise `max_bolus_u` above the hard-coded ceiling.
 
 ### S-104 [SAFETY] — Safety invariants module
-**AC:** INV-1..9, each **one named function** in `core/safety.py`. Raises `SafetyViolation` — **never `assert`**. **Zero internal project imports** (ADR-6).
+**AC:** INV-1..9, each **one named function** in `core/safety.py` *(INV-1 retired by S-1011; INV-2..9 keep their numbers)*. Raises `SafetyViolation` — **never `assert`**. **Zero internal project imports** (ADR-6).
 **TDD:** Positive + negative per invariant. **AST test: no `assert` in `core/safety.py`.** Grep test: no other module re-implements an invariant.
 
 ### S-105 [SAFETY] — ★ Forbidden-pattern test suite
@@ -195,7 +195,7 @@ EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
 **AC:** Hypo recall @ fixed FAR (**primary**), Brier, reliability diagram, MAE, Clarke grid, off-by-one. **Plain accuracy is NOT reported.**
 **TDD:** Golden — published Clarke pairs land in documented zones. Grep — `accuracy_score` absent from the reporting module.
 
-### S-703 [SAFETY] — ★ Gate enforcement — REQ-040, 041, INV-1, INV-2
+### S-703 [SAFETY] — ★ Gate enforcement — REQ-040, INV-2  *(REQ-041/INV-1 retired by S-1011)*
 **EPIC 9 is blocked until this is merged and green.**
 **AC:** Gates evaluated from **live data on every call. Never cached** (ADR-7).
 **TDD:**
@@ -225,19 +225,21 @@ Calibration, hypo recall, Clarke grid, predictions vs actuals, `β_insulin < 0` 
 
 ---
 
-## EPIC 9 — Prescriptive (Gate 2)
+## EPIC 9 — Prescriptive
 
-> **BLOCKED until S-703 is merged and green.**
-> **BLOCKED until the endocrinologist confirms ICR (OQ-1) and ISF (OQ-2).**
-> Five lines of code. The most dangerous code in the system.
+> *(Historical: was BLOCKED until S-703 was green and the endocrinologist confirmed ICR/ISF.
+> Both cleared; the ICR **gate** was then retired by S-1011/DL-035 — the confirmed values
+> stand, only the gate is gone.)*
+> Five lines of code. **Still the most dangerous code in the system**, now bounded by INV-3
+> and INV-4 rather than by a gate.
 
 ### S-901 [SAFETY] — Bolus calculator — REQ-041..043
-**AC:** The clinical formula. **No ML in this path.** INV-1/3/4 enforced. Full arithmetic displayed. Framed as a suggestion for review.
+**AC:** The clinical formula. **No ML in this path.** INV-3/4 enforced (INV-1 retired by S-1011; a bad ICR is a `ValueError`). Full arithmetic displayed. Framed as a suggestion for review.
 **TDD:**
 - **INV-4:** BG 79 ⇒ refuses. BG 80 ⇒ computes.
 - **INV-3:** `carbs_g = 900` (typo for 90) ⇒ **capped at 15 U AND flagged implausible.** Assert **both** the cap and the flag.
 - **INV-3:** Negative computed dose ⇒ returns 0.0.
-- **INV-1:** `icr = None` ⇒ raises. **Assert no fixture, mock, or config bypasses.**
+- **~~INV-1~~ (retired, S-1011):** `icr = None` / `<= 0` ⇒ **`ValueError`**, asserted to be neither a `SafetyViolation` nor a `GateNotPassed`.
 - Golden: 5 hand-computed doses to 2 dp.
 - Property: non-decreasing in carbs; non-increasing in IOB.
 
@@ -255,7 +257,7 @@ Calibration, hypo recall, Clarke grid, predictions vs actuals, `β_insulin < 0` 
 >
 > **Building a UI does not open a gate.** The patient readout and bolus screens render the
 > *already-gated* logic: the readout route calls `require_gate1` first (INV-2) and the bolus
-> route `require_gate2` first (INV-1). Before those gates, the screens render the refusal /
+> route formerly `require_gate2` (INV-1, **now retired** — S-1011). Before Gate 1, the screens render the refusal /
 > baseline state — never a blank, never a dose. Runtime gating is unchanged.
 >
 > The operator dashboard (S-1001), the synthetic-data generator (S-1004), and the E2E test
@@ -282,18 +284,19 @@ as a **rendered answer, never a blank, never an error page**. Hypo risk is the h
 prediction; no query param, header, or env var flips it. `axe` passes. A grep/DOM test
 asserts no dose-like field is present on the readout template.
 
-### S-1003 [SAFETY] — Bolus calculator UI — REQ-041, REQ-042, REQ-043, INV-1, INV-3, INV-4
+### S-1003 [SAFETY] — Bolus calculator UI — REQ-042, REQ-043, INV-3, INV-4
 **The most dangerous screen in the system. Clinical-deployment gated.**
-**AC:** A form + route over `recommend_bolus`. **The route calls `require_gate2` first, no
-bypass** (INV-1) — `icr = None` renders a "disabled until Gate 2" state, not a form that
-computes. Refuses below BG 80 (INV-4). An over-cap dose renders the **flagged implausible**
-state (INV-3), never a silent 15 U. Shows the **full arithmetic**; frames the number as *a
-suggestion for review*, not an instruction; **does not autofill the dose into any action or
-log**. No ML in the path (the UI calls only `recommend_bolus`).
-**TDD:** icr=None ⇒ disabled state rendered, no dose (asserted); no bypass param/env. BG 79
-⇒ "treat the low first" state; BG 80 ⇒ computes. carbs=900 ⇒ the flagged-implausible state
-renders (cap **and** flag both visible). Golden: the 5 hand-computed doses render to 2 dp.
-Grep — the UI module imports nothing from `models/`.
+**AC:** A form + route over `recommend_bolus`. **Ungated** (Gate 2/INV-1 retired, S-1011): a
+missing or `<= 0` ICR renders a plain *"profile incomplete — set the ICR"* state, not a gate
+refusal and not a computing form. Refuses below BG 80 (INV-4). An over-cap dose renders the
+**flagged implausible** state (INV-3), never a silent 15 U. **IOB is displayed read-only with
+its provenance and is never an input field** (REQ-020 — a typed IOB is a forbidden pattern,
+`detect_manual_iob`). Shows the **full arithmetic**; frames the number as *a suggestion for
+review*; **does not autofill the dose into any action or log**. No ML in the path.
+**TDD:** icr None/`<= 0` ⇒ the profile-incomplete state, no dose (asserted). BG 79 ⇒ "treat
+the low first"; BG 80 ⇒ computes. carbs=900 ⇒ flagged-implausible (cap **and** flag visible).
+Golden: the 5 hand-computed doses render to 2 dp. **No IOB input element exists in the
+template.** Grep — the UI module imports nothing from `models/`.
 
 ### S-1004 [SAFETY] — Synthetic-data generator — REQ-056
 **Reclassified `[SAFETY]` on review (2026-07-18, DL-034): "fake data can never reach a
@@ -322,7 +325,7 @@ end-to-end.
   on, yet present in `get_hypo_events()` and in the hypo-recall denominator.
 - **INV-2:** with < 150 valid meals, the patient readout path refuses; the operator dashboard
   still renders.
-- **INV-1:** the bolus path refuses with an unconfirmed ICR; confirmed ⇒ computes.
+- **ICR input check (S-1011):** the bolus path raises `ValueError` on a missing/`<= 0` ICR — asserted to be neither a `SafetyViolation` nor a `GateNotPassed`; a usable ICR ⇒ computes.
 - **INV-9:** every served prediction in the run is persisted **before** it is returned.
 - **No temporal leakage:** every CV fold satisfies `max(train.datetime) < min(test.datetime)`
   and shares no `date` across train/test.
@@ -405,10 +408,10 @@ bolus calculator read the latest version live. No clinical value is hardcoded.
 **TDD:** appending a version creates a new row and leaves the old intact; `recommend_bolus`
 reflects the new value on the next call (live, not cached).
 
-### S-1011 [SAFETY] — Retire Gate 2 / INV-1 (ICR de-gated) — REQ-041
-> **Operator-requested (2026-07-18, DL-035). PREPARED — NOT STARTED. Execution is gated on
-> an explicit operator "go".** This story removes a named safety invariant; it must not begin
-> until the operator confirms, and its PR carries a written safety argument.
+### S-1011 [SAFETY] — Retire Gate 2 / INV-1 (ICR de-gated) — REQ-041 — **DONE 2026-07-18**
+> **Operator go given 2026-07-18; executed the same day (DL-035).** Removed a named safety
+> invariant. Written safety argument in `docs/stories/S-1011.md`. Rollback baseline: `7a7c3bf`
+> (`v1.0.0-epic9`). Verified: 442 tests, ruff + `mypy --strict` clean, 99.73% coverage.
 
 **Intent.** The clinician-confirmed-ICR gate (**Gate 2 / INV-1**) is removed as a *gate*.
 ICR / ISF / target become ordinary versioned `patient_profile` parameters the bolus calculator

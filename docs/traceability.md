@@ -10,7 +10,7 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | _(none — infra)_ | S-101 | `tests/unit/test_toolchain.py`, `tests/unit/test_version.py` | ✅ Done |
 | **`05b §2`** (Accessibility NFR; no `REQ-nnn`) | S-102 | `tests/a11y/test_base_layout.py` (axe, inputmode, 18px, 48px, no-dish-`select`, 200 %-zoom reflow, colour-not-sole-signal) | ✅ Done |
 | _(config infra; feeds REQ-041/042/054)_ | S-103 | `tests/unit/test_config.py`, `tests/safety/test_config_frozen.py` | ✅ Done |
-| _(safety module; INV-1..9)_ | S-104 | `tests/safety/test_safety_invariants.py`, `tests/safety/test_safety_module_hygiene.py` | ✅ Done |
+| _(safety module; INV-2..9 — INV-1 retired S-1011)_ | S-104 | `tests/safety/test_safety_invariants.py`, `tests/safety/test_safety_module_hygiene.py` | ✅ Done |
 | _(forbidden-pattern guards; `09 §6`)_ | S-105 | `tests/forbidden/test_forbidden_patterns.py` | ✅ Done |
 | **REQ-002** (per-meal capture) | S-201 | `test_schema.py` (meal_event round-trips; `_meal` helper) | ✅ Schema done (form: S-301) |
 | **REQ-004** (clinical timestamps reported, never `now()`) | S-202 | `test_reported_timestamps.py` (differ; now() bound only to logged_at), plus S-105 `detect_datetime_now_on_clinical_ts` scanning `data/` | ✅ Done |
@@ -69,7 +69,7 @@ each invariant must still be *wired in* by the story that owns its feature.
 
 | INV | Function (`core/safety.py`) | Test(s) | Module | Wired into feature |
 |-----|-----------------------------|---------|--------|--------------------|
-| INV-1 | `inv1_prescriptive_requires_gate2` | `test_safety_invariants.py::test_inv1_*`; **wiring:** `test_gates.py` + `test_bolus.py` (icr=null ⇒ `recommend_bolus` raises `GateNotPassed`; ★ no bypass param/env/flag; gate open ⇒ **computes a real dose**) | ✅ S-104 | ✅ **S-703** (gate) + **S-901** — `prescribe/bolus.py::recommend_bolus` hard-gated on Gate 2 first line, live, no bypass; the calculator now fills the path |
+| ~~INV-1~~ **RETIRED** | ~~`inv1_prescriptive_requires_gate2`~~ — **removed** (S-1011, DL-035) | `test_safety_invariants.py::test_inv1_*`; **wiring:** `test_gates.py` + `test_bolus.py` (icr=null ⇒ `recommend_bolus` raises `GateNotPassed`; ★ no bypass param/env/flag; gate open ⇒ **computes a real dose**) | ✅ S-104 | ⛔ **RETIRED S-1011 (2026-07-18, DL-035)** — operator-directed de-gating. `recommend_bolus` now raises a plain `ValueError` on a missing/`<= 0` ICR; `test_bolus.py` asserts it is **neither** a `SafetyViolation` **nor** a `GateNotPassed`, and that the symbol is absent (not dormant). **INV-3/INV-4 unchanged; Gate 1/INV-2 unaffected. The number is not reused.** |
 | INV-2 | `inv2_patient_output_requires_gate1` | `test_safety_invariants.py::test_inv2_*`; **wiring:** `test_gates.py` (149 ⇒ `require_gate1` raises; 150+recall>baseline ⇒ opens; ★ 200 w/ recall≤baseline still closed); `test_readout.py` (patient surface raises at 149, no bypass) | ✅ S-104 | ✅ **S-703** (`require_gate1`) + **S-804** — the patient risk readout (`prescribe/readout.py`) is the first patient-reachable surface and calls `require_gate1` on its first line, no bypass; ungated model output cannot reach her |
 | INV-3 | `inv3_bolus_within_bounds` | `test_safety_invariants.py::test_inv3_*`; **wiring:** `test_bolus.py` (★ carbs=900 typo ⇒ capped 15 U **AND** `implausible_input` flagged; negative computed dose ⇒ 0.0) | ✅ S-104 | ✅ **S-901** — `recommend_bolus` caps + flags an implausible input (never a silent clip) and floors at 0; `inv3` re-asserts the bound |
 | INV-4 | `inv4_bolus_allowed_at_bg` | `test_safety_invariants.py::test_inv4_*`; **wiring:** `test_bolus.py` (BG 79 ⇒ refuses; BG 80 ⇒ computes) | ✅ S-104 | ✅ **S-901** — `recommend_bolus` refuses to dose below BG 80 (treat the low first) |
@@ -83,12 +83,13 @@ each invariant must still be *wired in* by the story that owns its feature.
 S-101 introduces no invariant logic. It provides the ruff/mypy/pytest/coverage
 gates that S-104 and S-105 rely on to be enforceable at all.
 
-**S-103 note on INV-1:** the config's `prescriptive_enabled` is a *computed
-precondition* (`icr is not None`), **not** the invariant. It can only force the
-prescriptive path OFF, never ON, and cannot be assigned or injected (adversarial
-tests prove this). INV-1 itself — "prescriptive disabled until Gate 2 passes",
-evaluated from live data per ADR-7 — is implemented in `core/safety.py` (S-104)
-and enforced at the gate (S-703). The config does **not** re-implement it.
+**S-103 note (updated by S-1011):** the config property is now `icr_present`
+(`icr is not None`) — renamed from `prescriptive_enabled` when Gate 2 / INV-1 was
+retired, because a property named "enabled" that enables nothing could be misread
+as "the dose path is safely off". It reports state, never grants it; it cannot be
+assigned or injected (adversarial tests prove this). Enforcement now lives in
+`prescribe/bolus.py::recommend_bolus`, which raises a plain `ValueError` on a
+missing or `<= 0` ICR. The config re-implements no invariant.
 
 ## Gaps / watch-list
 - ~~The 90% coverage gate is enforced in **CI only** this session (DL-002).~~

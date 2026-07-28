@@ -177,12 +177,12 @@ Scenario: Volume alone does not open Gate 1
 Scenario: The bolus calculator is blocked without a confirmed ICR
   Given icr is null
   When a bolus recommendation is requested
-  Then GATE_NOT_PASSED is returned                                   # INV-1
+  Then a 422 INVALID_PROFILE error is returned                       # S-1011: not a gate
 
 Scenario: No bypass exists
   Given icr is null
   Then no fixture, mock, config flag, or environment variable
-       can produce a bolus recommendation                            # INV-1
+       can produce a bolus recommendation without a usable ICR       # S-1011
 
 Scenario: Gates are never cached
   Given a gate was evaluated as passed a moment ago

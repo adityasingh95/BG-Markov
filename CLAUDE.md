@@ -56,11 +56,11 @@ A defect here is not a bug ticket. Write code accordingly.
 
 ## Safety invariants
 
-INV-1..INV-9 live in `core/safety.py`. They are why this system is safe to build at all.
+INV-2..INV-9 live in `core/safety.py` (INV-1 retired by S-1011 — **the number is not reused**). They are why this system is safe to build at all.
 
 | ID | Invariant |
 |---|---|
-| INV-1 | Prescriptive module disabled until Gate 2 passes. |
+| ~~INV-1~~ | **RETIRED (S-1011, DL-035).** Was: prescriptive module disabled until Gate 2. The ICR gate was removed at the operator's direction; `prescribe/bolus.py` now raises a plain `ValueError` on a missing/`<= 0` ICR. **The number is not reused.** |
 | INV-2 | No patient-visible model output until Gate 1 passes. |
 | INV-3 | Recommended bolus never negative; never exceeds `MAX_BOLUS_U` (15 U). |
 | INV-4 | No bolus recommended when `current_bg < 80`. |
@@ -79,7 +79,7 @@ INV-1..INV-9 live in `core/safety.py`. They are why this system is safe to build
 
 ### The three that will be under most pressure
 
-- **INV-1 (prescriptive gated on confirmed ICR).** It will be tempting to stub `icr = 8.3` to get EPIC 9 tests running. **Don't.** Use `GateNotPassed` and test the refusal path. The gate *is* the feature.
+- **~~INV-1~~ — retired (S-1011).** The prescriptive gate is gone by operator decision (DL-035). What now bounds the dose path is **INV-3** (never negative; cap-and-flag an implausible input) and **INV-4** (no bolus below BG 80) — treat *those* as the ones under pressure here, and do not weaken them while working in the same file. Never re-introduce a gate under a different name; a bad ICR is an input error, not a `SafetyViolation`.
 - **INV-7 (hypo-rescued meals retained).** The obvious refactor — "invalid rows get dropped from training" — silently deletes exactly the lows the system exists to predict. S-203 has a regression guard. Do not delete it when it becomes inconvenient.
 - **ADR-8 (reported timestamps).** Defaulting a clinical timestamp to `datetime.now()` is the most natural thing to write and it is wrong. She logs at the laptop 40 minutes after eating. Conflating log time with event time fabricates `bolus_offset_min` and `elapsed_min` — with no error, no warning, and no way to detect it afterwards.
 

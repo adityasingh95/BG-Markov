@@ -102,7 +102,7 @@ Explicitly not built. Do not build these.
 | ID | Requirement | Priority |
 |---|---|---|
 | REQ-040 | No patient-visible model output before Gate 1. (INV-2) | P0 |
-| REQ-041 | Prescriptive module hard-disabled before Gate 2. (INV-1) | P0 |
+| ~~REQ-041~~ | ~~Prescriptive module hard-disabled before Gate 2. (INV-1)~~ **RETIRED 2026-07-18 (S-1011, DL-035).** ICR is an ordinary versioned profile value; a missing/`<= 0` ICR raises `ValueError`. REQ-042/043 (INV-3/INV-4) still bind the dose path. | — |
 | REQ-042 | Bolus never negative, never above 15 U; a cap event is **flagged**, not silently clipped. (INV-3) | P0 |
 | REQ-043 | No bolus recommended below BG 80. (INV-4) | P0 |
 | REQ-044 | Predicted BG outside [20, 600] raises a hard error. (INV-6) | P0 |
@@ -126,7 +126,7 @@ Explicitly not built. Do not build these.
 |---|---|---|
 | REQ-055 | The operator shadow report is **rendered** (hypo recall @ FAR headline, Brier, calibration, Clarke grid, predictions-vs-actuals, `β_insulin < 0` alarm, live gate status). Operator-only; **never plain accuracy**; no dose on the screen. | P1 |
 | REQ-056 | A **seeded** synthetic-data generator produces a full logging cycle for tests/demos, honouring reported-timestamp discipline (ADR-8). **Never used on, imported by, or presented as, real patient data.** | P1 |
-| REQ-057 | An **end-to-end test** exercises the full pipeline on synthetic data and asserts the safety invariants (INV-1/2/7/9) and gate behaviour hold **across** the chain, not just in unit isolation. | P1 |
+| REQ-057 | An **end-to-end test** exercises the full pipeline on synthetic data and asserts the safety invariants (INV-2/7/9) and gate behaviour hold **across** the chain, not just in unit isolation. | P1 |
 | REQ-058 | Gate 1 opens **only on an explicit, audited manual promotion** (`is_promoted`); metrics alone never open it. Conforms `07 §Retraining` ("Promotion is manual, on hypo recall"). *(Added 2026-07-18, DL-034.)* | P0 |
 | REQ-059 | On each logged meal the live prediction path runs features → model → guardrails → **persist (INV-9) → serve**, using the currently-promoted model (baseline if none promoted). *(Added 2026-07-18, DL-034.)* | P0 |
 | REQ-060 | Monthly refit over a trailing 6-month window, older data down-weighted, writing a **new unpromoted** model artifact. Conforms `07 §Retraining`. *(Added 2026-07-18, DL-034.)* | P1 |
@@ -134,7 +134,7 @@ Explicitly not built. Do not build these.
 
 *REQ-048 (shadow mode ≥ 90 days before patient-visible output) gains its first covering story
 (S-1007) — it was previously enforced nowhere. Rendering of the patient readout (INV-2,
-REQ-040) and the bolus calculator (INV-1/3/4, REQ-041–043) is covered by those existing
+REQ-040) and the bolus calculator (INV-3/4, REQ-042–043) is covered by those existing
 requirements; EPIC 10 adds their render layer without relaxing any runtime gate.*
 
 ## 6. Success Criteria

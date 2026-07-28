@@ -19,7 +19,7 @@ Green-before-red is a **process failure**. If it happens, the test is deleted an
 
 | Layer | Location | Runs | Purpose |
 |---|---|---|---|
-| **Safety** | `tests/safety/` | Every commit | **INV-1..9. Adversarial.** Assume a future refactor will try to weaken these. |
+| **Safety** | `tests/safety/` | Every commit | **INV-2..9 (INV-1 retired, S-1011). Adversarial.** Assume a future refactor will try to weaken these. |
 | **Property** | `tests/property/` | Every commit | `hypothesis`. Monotonicity, bounds, invariance. |
 | **Golden** | `tests/golden/` | Every commit | Hard-coded clinical values. Locks curves against silent regression. |
 | **Unit** | `tests/unit/` | Every commit | Pure functions. |
@@ -65,7 +65,7 @@ The generator that feeds the E2E layer is itself safety-relevant.
 
 ## 3. ★ Safety Testing
 
-`core/safety.py` holds INV-1..INV-9. It **imports nothing from the project** (ADR-6) — this prevents circular weakening under refactor.
+`core/safety.py` holds **INV-2..INV-9** (INV-1 retired, S-1011 — **the number is not reused**). It **imports nothing from the project** (ADR-6) — this prevents circular weakening under refactor.
 
 ### Rules
 
@@ -78,7 +78,7 @@ The generator that feeds the E2E layer is itself safety-relevant.
 
 | Test | Why it will be attacked |
 |---|---|
-| **INV-1 no-bypass** | EPIC 9's tests cannot run without an ICR. The path of least resistance is to stub `icr = 8.3` in a fixture. **Don't.** Test the refusal path. The gate *is* the feature. |
+| **The ICR error's *kind*** | INV-1 is retired (S-1011). A bad ICR must raise a plain `ValueError` — **never** a `SafetyViolation`/`GateNotPassed`, and never a re-introduced gate under a new name. `test_bolus.py` pins this explicitly, because "something raised" is not the same assertion. |
 | **INV-7 regression guard** | 100 meals, 20 rescued → `get_hypo_events()` returns exactly 20. This exists **specifically** to catch a future refactor that drops invalid rows. It will look like dead weight. **It is not.** |
 | **INV-8 confounding** | Requires deliberately constructing a dataset where insulin *appears* to raise glucose. Someone will call it unrealistic. **It is the realistic case.** |
 | **INV-9 write-before-return** | Requires mocking a persistence failure and asserting **nothing** is returned. Easy to weaken into "logs a warning." |

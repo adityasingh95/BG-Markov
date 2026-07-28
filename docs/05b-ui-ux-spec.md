@@ -213,10 +213,10 @@ When a guardrail fires (`07` §9):
 
 ## 6. Bolus Calculator — F-5
 
-> **Gate status:** this screen was specified as *post Gate 2*. Gate 2 / INV-1 is **retiring**
-> (DL-035); under S-1011 the ICR becomes an ordinary profile value with a present/`> 0` check,
-> and the "disabled until Gate 2" state below is replaced by a plain *"profile incomplete"*
-> message. **INV-3 and INV-4 are unaffected and still bound this screen.**
+> **Gate status: ungated (S-1011, DL-035).** This screen was specified as *post Gate 2*; that
+> gate is **retired**. The ICR is an ordinary profile value, and a missing/`<= 0` one shows a
+> plain *"profile incomplete — set the ICR"* message, not a gate refusal.
+> **INV-3 and INV-4 still bound this screen**, and IOB is still displayed-never-typed.
 
 **Show the arithmetic.** She has done this maths by hand for 30 years. She should be able to check the machine.
 

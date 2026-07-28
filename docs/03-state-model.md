@@ -105,15 +105,12 @@ Gates are evaluated **from live data on every call.** Never cached, never config
    ┌───────────────────────▼─────────────────────────────┐
    │ GATE 1 — PATIENT-VISIBLE RISK OUTPUT                │
    │ Still shadow-logged. Guardrails active.             │
-   └───────────────────────┬─────────────────────────────┘
-                           │ icr_confirmed
-                           │ AND (isf_confirmed_by_endo
-                           │      OR n_clean_correction_events ≥ 5)
-   ┌───────────────────────▼─────────────────────────────┐
-   │ GATE 2 — PRESCRIPTIVE MODULE ENABLED   ⚠ RETIRING   │
-   │ Bolus calculator. NO ML in this path. (INV-1)       │
-   │ Slated for removal under S-1011 (DL-035).           │
    └─────────────────────────────────────────────────────┘
+
+   ~~GATE 2 — PRESCRIPTIVE~~  REMOVED (S-1011, DL-035, 2026-07-18)
+   The bolus calculator is no longer gated on a confirmed ICR. It runs
+   whenever a usable ICR exists on the profile, bounded by INV-3 / INV-4,
+   with NO ML in the path. Gate 1 above is unaffected.
 ```
 
 ### Gate rules
@@ -123,7 +120,7 @@ Gates are evaluated **from live data on every call.** Never cached, never config
 | **Volume alone is never sufficient for Gate 1.** | 200 meals with hypo recall *below* the clinical baseline → **still blocked.** The model must earn it. |
 | **★ Metrics alone are never sufficient either.** | Every automatic condition can hold and Gate 1 **stays closed** until the operator promotes the model *deliberately* (`model_artifact.is_promoted`, set only by an explicit audited action). Conforms `07 §Retraining` — *"Promotion is manual, on hypo recall."* Code never sets it on a threshold. |
 | **The shadow clock is a precondition, not a formality.** | `shadow_mode_days ≥ 90` (REQ-048) is computed from logged prediction timestamps, never a stored boolean. |
-| **Gate 2 is blocked on a human, not on code.** | It waits on the endocrinologist (OQ-1, OQ-2). No amount of engineering opens it. **⚠ Retiring** — the operator has decided to de-gate ICR (DL-035); S-1011 removes this gate and INV-1, replacing it with an ordinary present/`> 0` input check. Gate 1 is unaffected. |
+| **~~Gate 2~~ — REMOVED.** | Retired 2026-07-18 (S-1011, DL-035) at the operator's direction. The ICR is an ordinary versioned profile value; `recommend_bolus` raises a plain `ValueError` on a missing/`<= 0` ICR. **INV-3, INV-4 and Gate 1 are unaffected.** Do not re-introduce a dose gate under another name. |
 | **Gates only ever advance.** | A gate can be manually revoked by the operator. It never advances automatically past its condition. |
 | **No bypass exists.** | Not by fixture, not by mock, not by config flag, not by env var. SDET writes a test proving this for each gate. |
 
