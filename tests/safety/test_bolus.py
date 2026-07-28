@@ -3,10 +3,16 @@
 This is the only place in the system that recommends putting insulin into a person who
 cannot feel a low. It uses the clinical formula (no ML), refuses when she is already low,
 treats an impossible carb entry as a typo not a lethal dose, and never doses past 15 U or
-below 0. ICR 9 / ISF 30 / target 135 are the clinician-confirmed constants (DL-032).
-See docs/stories/S-901.md.
+below 0. ICR 9 / ISF 30 / target 135 are the clinical constants (DL-032).
+See docs/stories/S-901.md and docs/stories/S-1011.md.
 
-RED: `BolusRecommendation` / the new `recommend_bolus` signature do not exist yet.
+**S-1011 (DL-035): Gate 2 / INV-1 is RETIRED.** The ICR is an ordinary profile value;
+missing or <= 0 raises a plain `ValueError`, never a `SafetyViolation`. INV-3 and INV-4
+are UNCHANGED and their tests below are deliberately untouched — if this retirement ever
+drifts into weakening them, these fail.
+
+RED: `recommend_bolus` still raises `GateNotPassed` for a null icr; the ValueError
+contract and the INV-1-is-absent assertions do not hold yet.
 """
 
 from __future__ import annotations
@@ -61,27 +67,53 @@ def test_inv3_negative_computed_dose_returns_zero() -> None:
     assert rec.total_units == 0.0
 
 
-# --- INV-1: gate, no bypass -------------------------------------------------
+# --- ICR is a required input, NOT a gate (S-1011, DL-035) -------------------
+# Gate 2 / INV-1 was retired at the operator's direction. A missing or non-positive
+# ICR is now an ordinary input error, because the formula divides by it — never a
+# SafetyViolation, and never a confirmation ceremony.
 
 
-def test_inv1_null_icr_raises_and_has_no_bypass() -> None:
-    """★ icr = None ⇒ GateNotPassed; no override-style parameter exists."""
-    with pytest.raises(GateNotPassed):
+@pytest.mark.parametrize("bad_icr", [None, 0.0, -9.0])
+def test_missing_or_nonpositive_icr_raises_value_error(bad_icr: float | None) -> None:
+    """★ icr None / 0 / negative ⇒ ValueError, raised BEFORE any arithmetic."""
+    with pytest.raises(ValueError):
+        recommend_bolus(
+            icr=bad_icr, isf=_ISF, carbs_g=60.0, current_bg=150.0,
+            target_bg=_TARGET, iob=0.0,
+        )
+
+
+def test_bad_icr_is_an_ordinary_error_not_a_safety_violation() -> None:
+    """★ THE DISCRIMINATION TEST. The error must be a plain ValueError — NOT a
+    SafetyViolation and NOT a GateNotPassed.
+
+    This pins the *kind* of the behaviour, not just that something raises. Without
+    it, a future refactor could quietly reinstate a gate (or re-dress this check as
+    an invariant) and still pass every other test in this file."""
+    with pytest.raises(ValueError) as exc:
         recommend_bolus(
             icr=None, isf=_ISF, carbs_g=60.0, current_bg=150.0, target_bg=_TARGET, iob=0.0
         )
+    assert not isinstance(exc.value, SafetyViolation)
+    assert not isinstance(exc.value, GateNotPassed)
+
+
+def test_no_gate_or_bypass_parameter_exists() -> None:
+    """No gate lever survived the retirement, and none was introduced."""
     params = set(inspect.signature(recommend_bolus).parameters)
-    for lever in ("force", "override", "skip_gate", "bypass", "gate2_passed"):
+    for lever in ("force", "override", "skip_gate", "bypass", "gate2_passed", "allow"):
         assert lever not in params
 
 
-def test_inv1_no_env_var_bypass(monkeypatch: pytest.MonkeyPatch) -> None:
-    for var in ("FORCE_BOLUS", "SKIP_GATE", "GATE2_PASSED"):
-        monkeypatch.setenv(var, "1")
-    with pytest.raises(GateNotPassed):
-        recommend_bolus(
-            icr=None, isf=_ISF, carbs_g=60.0, current_bg=150.0, target_bg=_TARGET, iob=0.0
-        )
+def test_inv1_is_gone_from_the_dose_path() -> None:
+    """★ The retired invariant must be ABSENT, not dormant — a leftover gate
+    function is an invitation to re-wire it."""
+    import core.safety as safety
+
+    assert not hasattr(safety, "inv1_prescriptive_requires_gate2")
+    src = pathlib.Path(inspect.getfile(recommend_bolus)).read_text()
+    assert "require_gate2" not in src
+    assert "gate2_status" not in src
 
 
 # --- golden: 5 hand-computed doses ------------------------------------------

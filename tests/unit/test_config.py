@@ -95,7 +95,7 @@ def test_load_config_from_mapping() -> None:
     cfg = load_config({"icr": 8.3, "isf": 45.0})
     assert cfg.icr == 8.3
     assert cfg.isf == 45.0
-    assert cfg.prescriptive_enabled is True
+    assert cfg.icr_present is True
 
 
 def test_load_config_mapping_forbids_unknown_key() -> None:

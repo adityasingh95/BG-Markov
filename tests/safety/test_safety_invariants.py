@@ -22,16 +22,17 @@ def test_gatenotpassed_is_a_safetyviolation() -> None:
     assert issubclass(SafetyViolation, Exception)
 
 
-# --- INV-1: prescriptive disabled until Gate 2 -----------------------------
+# --- INV-1: RETIRED (S-1011, DL-035) ---------------------------------------
+# Gate 2 / INV-1 was removed at the operator's direction; the ICR is now an
+# ordinary profile value and `recommend_bolus` raises a plain ValueError when it
+# is missing or <= 0. `GateNotPassed` remains in use by INV-2 (Gate 1).
 
 
-def test_inv1_passes_when_gate2_open() -> None:
-    safety.inv1_prescriptive_requires_gate2(True)  # no raise
-
-
-def test_inv1_blocks_when_gate2_closed() -> None:
-    with pytest.raises(GateNotPassed):
-        safety.inv1_prescriptive_requires_gate2(False)
+def test_inv1_is_retired_and_gone() -> None:
+    """★ INV-1 must be ABSENT, not merely unused — a dormant gate function is an
+    invitation to re-wire it. `GateNotPassed` itself must remain (INV-2 uses it)."""
+    assert not hasattr(safety, "inv1_prescriptive_requires_gate2")
+    assert issubclass(GateNotPassed, SafetyViolation)
 
 
 # --- INV-2: no patient output until Gate 1 ---------------------------------
@@ -167,7 +168,6 @@ def test_inv9_raises_when_not_persisted() -> None:
 # --- No bypass -------------------------------------------------------------
 
 _INVARIANTS = [
-    safety.inv1_prescriptive_requires_gate2,
     safety.inv2_patient_output_requires_gate1,
     safety.inv3_bolus_within_bounds,
     safety.inv4_bolus_allowed_at_bg,
@@ -188,9 +188,7 @@ def test_no_invariant_exposes_a_bypass_parameter(fn: object) -> None:
 
 
 def test_env_vars_cannot_bypass_a_gate(monkeypatch: pytest.MonkeyPatch) -> None:
-    for var in ("BYPASS_SAFETY", "DEBUG", "SKIP_GATES", "UNSAFE", "DISABLE_INV1"):
+    for var in ("BYPASS_SAFETY", "DEBUG", "SKIP_GATES", "UNSAFE", "DISABLE_INV2"):
         monkeypatch.setenv(var, "1")
-    with pytest.raises(GateNotPassed):
-        safety.inv1_prescriptive_requires_gate2(False)
     with pytest.raises(GateNotPassed):
         safety.inv2_patient_output_requires_gate1(False)

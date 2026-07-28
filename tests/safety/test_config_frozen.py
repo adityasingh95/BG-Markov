@@ -1,12 +1,15 @@
-"""S-103 [SAFETY] — config immutability + the INV-1 precondition boundary.
+"""S-103 [SAFETY] — config immutability + the ICR-presence flag.
 
 Adversarial by intent (CLAUDE.md: assume a future refactor tries to weaken
-this). `prescriptive_enabled` must be a computed, read-only *precondition* —
-never a settable bypass — and the config must be immutable after load so no
-clinical constant can be mutated mid-run.
+this). The config must be immutable after load so no clinical constant can be
+mutated mid-run, and `icr_present` must stay a computed, read-only flag.
 
-These do NOT test INV-1 itself (that is enforced live in core/safety.py, S-104).
-They test that the config cannot be used to *defeat* it.
+**S-1011 (DL-035):** this property was `prescriptive_enabled` while Gate 2 / INV-1
+existed. With that gate retired it enables nothing, so it is named for what it
+actually is — a config-completeness flag. Keeping the old name would invite a
+future reader to misread `prescriptive_enabled is False` as "the dose path is
+safely off", which would be false. Enforcement now lives in `recommend_bolus`
+(a plain `ValueError` on a missing or <= 0 ICR).
 """
 
 from __future__ import annotations
@@ -25,15 +28,15 @@ from core.config import ClinicalConfig
         st.floats(min_value=0.1, max_value=50.0, allow_nan=False, allow_infinity=False),
     )
 )
-def test_prescriptive_enabled_iff_icr_present(icr: float | None) -> None:
-    """Property: prescriptive_enabled == (icr is not None), for every icr."""
+def test_icr_present_iff_icr_is_set(icr: float | None) -> None:
+    """Property: icr_present == (icr is not None), for every icr."""
     cfg = ClinicalConfig(icr=icr)
-    assert cfg.prescriptive_enabled == (icr is not None)
+    assert cfg.icr_present == (icr is not None)
 
 
-def test_icr_none_forces_prescriptive_disabled() -> None:
-    """icr is None ⇒ prescriptive_enabled is False, unconditionally."""
-    assert ClinicalConfig(icr=None).prescriptive_enabled is False
+def test_icr_none_means_not_present() -> None:
+    """icr is None ⇒ icr_present is False, unconditionally."""
+    assert ClinicalConfig(icr=None).icr_present is False
 
 
 def test_config_is_frozen_every_field_mutation_raises() -> None:
@@ -50,20 +53,20 @@ def test_config_is_frozen_every_field_mutation_raises() -> None:
             setattr(cfg, field, value)
 
 
-def test_prescriptive_enabled_cannot_be_assigned() -> None:
-    """It is not a settable field — assigning it raises, so it cannot be a bypass."""
+def test_icr_present_cannot_be_assigned() -> None:
+    """It is not a settable field — assigning it raises. It reports state; it never grants it."""
     cfg = ClinicalConfig(icr=None)
     with pytest.raises((ValidationError, AttributeError)):
-        cfg.prescriptive_enabled = True  # type: ignore[misc]
-    assert cfg.prescriptive_enabled is False
+        cfg.icr_present = True  # type: ignore[misc]
+    assert cfg.icr_present is False
 
 
-def test_prescriptive_enabled_cannot_be_injected_at_construction() -> None:
-    """Passing prescriptive_enabled=True with icr=None must NOT yield an enabled
+def test_icr_present_cannot_be_injected_at_construction() -> None:
+    """Passing icr_present=True with icr=None must NOT yield an enabled
     config. extra='forbid' rejects the injected key; the gate cannot be opened
     by a config value (03 §3: no config-flag bypass)."""
     with pytest.raises(ValidationError):
-        ClinicalConfig(icr=None, prescriptive_enabled=True)  # type: ignore[call-arg]
+        ClinicalConfig(icr=None, icr_present=True)  # type: ignore[call-arg]
 
 
 @given(
