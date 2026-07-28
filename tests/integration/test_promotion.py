@@ -134,14 +134,21 @@ def test_no_production_module_sets_is_promoted_outside_data_promotion() -> None:
         for path in pkg_dir.rglob("*.py"):
             tree = ast.parse(path.read_text())
             for node in ast.walk(tree):
-                # `x.is_promoted = ...`
+                # `<anything>.is_promoted = ...` — writing the flag on an ORM object.
                 if isinstance(node, ast.Assign):
                     for tgt in node.targets:
                         if isinstance(tgt, ast.Attribute) and tgt.attr == "is_promoted":
-                            offenders.append(f"{pkg}/{path.name}")
-                # `is_promoted=True` passed into a call (e.g. constructing an artifact)
-                if isinstance(node, ast.Call):
-                    for kw in node.keywords:
-                        if kw.arg == "is_promoted":
-                            offenders.append(f"{pkg}/{path.name} (kwarg)")
+                            offenders.append(f"{pkg}/{path.name}: .is_promoted = ...")
+                # `ModelArtifact(is_promoted=...)` — minting an already-promoted artifact.
+                # Narrow to ModelArtifact deliberately: passing/reporting `is_promoted` is
+                # REQUIRED elsewhere (gate1_status takes it; Gate1Status reports it so the
+                # dashboard can name the blocking condition). Only writes to the persisted
+                # flag are forbidden.
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "ModelArtifact"
+                    and any(kw.arg == "is_promoted" for kw in node.keywords)
+                ):
+                    offenders.append(f"{pkg}/{path.name}: ModelArtifact(is_promoted=...)")
     assert not offenders, f"is_promoted is written outside data/promotion.py: {offenders}"
