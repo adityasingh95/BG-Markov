@@ -353,7 +353,7 @@ control) → `S-1002` (patient readout — needs live wiring **and** the gate) �
 UI) → `S-1005` (E2E, needs all of the above). `S-1009` (refit) and `S-1010` (profile update)
 are independent and can land any time.
 
-### S-1006 [SAFETY] — Gate-1 manual promotion — REQ-058, INV-2
+### S-1006 [SAFETY] — Gate-1 manual promotion — REQ-058, INV-2 — **DONE 2026-07-18**
 **Closes the review gap G1. Brings code into conformance with `07 §Retraining` ("Promotion
 is manual, on hypo recall").**
 **AC:** `gate1_status()` gains a **required** `is_promoted` input and opens **only** when

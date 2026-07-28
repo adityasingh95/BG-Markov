@@ -397,8 +397,23 @@ missing or `<= 0` ICR. The config re-implements no invariant.
     `ModelArtifact.is_promoted` (schema, "manual only") is read nowhere — the manual-promotion
     pivot of the sequence was unwired. Conformance to `07 §Retraining` / REQ-048, not new
     gate decisions:
-    - **REQ-058 → S-1006 [SAFETY] (Gate-1 manual promotion) — Backlog.** Wire `is_promoted`
-      into `gate1_status`; open only on `volume ∧ beats_baseline ∧ manual promotion`.
+    - **REQ-058 → S-1006 [SAFETY] (Gate-1 manual promotion) — ✅ DONE 2026-07-18.**
+      `gate1_status(..., is_promoted)` — **required, not defaulted** — opens only on
+      `volume ∧ beats_baseline ∧ is_promoted`. `data/promotion.py::promote_model` /
+      `revoke_promotion` are the **only** writers, both audited to `audit_log`
+      (old→new, `changed_by`).
+      Tests `tests/safety/test_gates.py` + `tests/integration/test_promotion.py` (17):
+      ★ **the case the shipped code got wrong** — volume ✓ + beats-baseline ✓ + **not
+      promoted ⇒ CLOSED**; ★ promotion alone never suffices (149 meals / recall ≤ baseline /
+      a tie all stay closed) — promotion is the **last** condition, not a bypass;
+      ★ **`is_promoted` is required** (omitting it raises `TypeError`), so a future default
+      cannot quietly restore the old behaviour; no env var promotes; ★ **promoting v2 demotes
+      v1 atomically**, both audited, because two promoted rows would make the served model
+      depend on row order; unknown version raises and creates nothing; revoke clears + audits
+      and takes effect on the next call (ADR-7); ★ **AST — no production module writes
+      `is_promoted` outside `data/promotion.py`** (narrowed by SDET on Dev's challenge to the
+      two real write paths, so `Gate1Status(is_promoted=…)` may still *report* it).
+      **Closes DL-034 gap G1.**
     - **REQ-048 → S-1007 [SAFETY] (Gate-1 shadow ≥ 90 days) — Backlog. FIRST COVERING
       STORY** — REQ-048 was previously enforced nowhere (was a visible gap).
     - **REQ-059 → S-1008 (live per-meal prediction wiring) — ✅ DONE 2026-07-18.**

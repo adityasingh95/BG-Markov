@@ -124,11 +124,12 @@ Gates are evaluated **from live data on every call.** Never cached, never config
 | **Gates only ever advance.** | A gate can be manually revoked by the operator. It never advances automatically past its condition. |
 | **No bypass exists.** | Not by fixture, not by mock, not by config flag, not by env var. SDET writes a test proving this for each gate. |
 
-> **Code-vs-spec status (2026-07-18).** This state machine is the target. `gate1_status()`
-> currently evaluates **only** volume ∧ hypo-recall — the shadow clock and manual promotion are
-> **not yet enforced in code**, and `model_artifact.is_promoted` is read nowhere. S-1006 and
-> S-1007 bring the code into conformance with this spec; until they land, the gate is weaker
-> than this diagram. Recorded in DL-034 rather than left as a silent divergence.
+> **Code-vs-spec status (updated 2026-07-18).** ✅ **Manual promotion is now enforced**
+> (S-1006): `gate1_status()` requires `is_promoted`, and `model_artifact.is_promoted` is read
+> by both `gate1_status` (*may she see it?*) and `get_promoted_artifact` (*which model
+> serves?*). Writes go only through `data/promotion.py` and are audited. ⏳ **The ≥90-day
+> shadow clock is still NOT enforced** — S-1007 closes that; until it lands the gate remains
+> weaker than this diagram in that one respect. Recorded rather than left silent (DL-034).
 
 ---
 

@@ -198,9 +198,10 @@ This is the **only real validation set** and the drift detector.
 - **Fails closed:** absent, unknown, or unreadable ⇒ *not promoted*.
 - A refit writes a **new row with `is_promoted = false`** (REQ-060). Promotion never inherits.
 
-> **Known gap (2026-07-18):** in the shipped code this column is written by nothing and **read
-> by nothing** — `gate1_status()` currently ignores it, so Gate 1 opens on metrics alone. S-1006
-> wires it. Recorded in DL-034; until then the deployed gate is weaker than this spec.
+> ✅ **Wired 2026-07-18 (S-1006).** `gate1_status()` now reads it, and it is written **only**
+> by `data/promotion.py::promote_model` / `revoke_promotion` — both audited, with the incumbent
+> demoted in the same transaction so two promoted rows cannot exist. An AST test asserts no
+> other production module writes the flag.
 
 **The shadow clock** (`shadow_days`, REQ-048) is derived from `prediction_log` timestamps —
 first logged shadow prediction to now. It is **never a stored boolean**, because a stored flag
