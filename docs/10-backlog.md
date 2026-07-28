@@ -463,6 +463,42 @@ will compute on the configured ICR.
 
 ---
 
+## ★ REVISIT LATER — parked, not forgotten
+
+*Deliberately deferred items with a trigger condition. **Do not act on these before the trigger.**
+BA reviews this list whenever a trigger fires.*
+
+### ★ R-1 — The Markov question — **trigger: ≥ 150 real valid meals**
+**Raised by:** operator, 2026-07-18 · **Record:** DL-038 · **Open question:** OQ-8 ·
+**Source:** *"Blood sugar prediction using markov chain"* (operator-supplied)
+
+This project **began as a Markov-chain design** and was deliberately built as a single pooled
+ordinal regression instead. DL-038 records all six deviations and the reason for each. The
+dominant reason was **small-n**: the source design fits one model per pre-meal state and returns
+*"insufficient historical data"* below ~10–15 rows per state — which, at 150 meals, would have
+gone silent for **exactly the hypo states the system exists to predict**.
+
+**That argument is currently an estimate, not a measurement.** Once real data exists it can be
+tested. Revisit then:
+
+1. **Is a transition-matrix view now informative *as an operator diagnostic*?** Adding
+   `P(post-state | pre-state)` as a *descriptive* panel on the shadow dashboard is cheap and may
+   be clinically readable. It would **supplement, never replace**, the pooled model.
+2. **Does binning `pre_bg` measurably lose anything?** Currently forbidden on first-principles
+   grounds. With real data, quantify it rather than assume it.
+3. **Does the name still fit?** "BG-Markov" is the source document's framing (glossary §5).
+
+**Constraints on any future revisit — these do not lapse:**
+- **Per-pre-state sub-models stay forbidden** unless the data shows every state, *including 1
+  and 2*, has enough rows to fit. That is the whole point of the original objection.
+- **Plain accuracy stays unreported**, and **random splits stay forbidden** (day-level leakage).
+- **No ML in the dose path**, ever — the source's closing suggestion to expand the model into
+  dose recommendations is permanently declined.
+- Anything touching the state boundaries is a **clinical constant** → endocrinologist, not the
+  team (see OQ-5, State 2's upper bound at 79, still unconfirmed).
+
+---
+
 ## Traceability
 
 BA maintains **REQ-nnn → story → test → status** in `docs/traceability.md`.

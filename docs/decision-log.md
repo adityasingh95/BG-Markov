@@ -835,3 +835,58 @@ BA story + written safety argument → SDET RED (11 failures seen) → Dev GREEN
 
 **Verified:** 442 tests pass, 99.73% coverage, `ruff` clean, `mypy --strict` clean.
 **Rollback:** `git checkout 7a7c3bf` (`v1.0.0-epic9`), the pre-EPIC-10 baseline (DL-036).
+## DL-038 — Provenance: this project began as a Markov-chain design; why each mechanism was replaced
+**Story:** origin record (retrospective) · **Type:** provenance + design rationale ·
+**Date:** 2026-07-18 · **Raised by:** operator ("check for deviation from the original") ·
+**Owner:** BA · **★ REVISIT MARKER: see `01-prd.md` OQ-8 and `10-backlog.md` §REVISIT.**
+
+The source document — *"Blood sugar prediction using markov chain"* (operator-supplied, read in
+full, 2026-07-18) — is where this project and its name come from. Until now **no document
+recorded that origin**, so the rationale for departing from it lived only in CLAUDE.md's
+forbidden-pattern table, which never names the design it is rejecting. This entry closes that
+gap. **It changes no code.**
+
+**The goal is preserved exactly.** The source asks: *"Given my current pre-meal blood sugar and
+what I am about to eat/inject, what is the probability distribution of my blood sugar in 2
+hours?"* That is what the system answers, with the same 5-state output vector. Every requested
+feature survived: carbs, protein, fat, bolus, basal, meal-type one-hot (breakfast as the
+reference level, as specified), exercise duration and intensity. Fingersticks-not-CGM — the
+operator's own constraint — is honoured.
+
+**The mechanism was deliberately replaced. Six deviations, each with its reason:**
+
+| # | Source design | Built | Reason |
+|---|---|---|---|
+| 1 | `for state in range(1,6): fit(...)` — one model per pre-meal state | **One pooled model**, `pre_bg` continuous | ★ **The safety-critical one.** The source's own code falls back to `None` when a state has < 10–15 rows. At 150 meals with its own assumed 65 %-State-3 distribution, States 1 and 2 get ~7 and ~15 rows — so it would answer *"insufficient historical data"* **for exactly the hypo states the system exists to predict.** It would work from target range and go silent when she is already low. |
+| 2 | `multi_class='multinomial'` | **Ordinal** (`OrderedModel`) | Multinomial treats State 1 and State 5 as equally distant from State 3; the ordering is load-bearing. Also `multi_class` was removed in sklearn ≥ 1.7 — the source code no longer runs. |
+| 3 | Pre-meal **state** (binned) as the conditioning input | Pre-meal BG **continuous** | Binning discards resolution precisely where it matters: 79 and 55 are both "State 2" and are not the same risk. |
+| 4 | `exercise_intensity` as numeric **0/1/2** | **One-hot + duration interactions** | The source states intense exercise "can cause a temporary rise", then encodes 2 > 1 > 0 — which mathematically forbids the effect it just described. An internal contradiction in the source. |
+| 5 | **Raw daily basal dose** as a feature | **EWMA, 25 h half-life** | Tresiba acts ~42 h and reaches steady state in 3–4 days; today's dose is not today's effect. |
+| 6 | `classification_report` / accuracy; `train_test_split(random_state=42)` | **Hypo recall @ fixed FAR, Brier, calibration, Clarke grid; forward-chaining temporal CV** | On the source's own 65 %-State-3 distribution, always predicting State 3 scores ~65 % accuracy and catches **zero** lows. And because basal is constant within a day, a random split puts same-day meals in train and test — the model looks brilliant and is useless. |
+
+**Not in the source, added here:** reported-vs-logged timestamps (ADR-8), derived IOB, INV-7
+hypo-rescue retention, pre-bolus timing, fibre/net carbs, correction events, the gates,
+guardrails, kill switch, prediction log, backup + restore drill, and the bolus calculator.
+
+**One refusal worth recording.** The source closes by offering to *"expand this model to give
+optimal insulin dose recommendations instead of just predicting risks."* This build declines
+permanently: **no ML in the dose path** (AST-enforced). Given deviation #6 — a leakage-prone,
+accuracy-scored model that would look excellent — inverting it into dosing advice would have
+been the most dangerous thing the project could do. INV-8 (`β_insulin ≥ 0`) exists for the same
+reason: in observational data bolus is *chosen in response to* carbs and BG, so a naive fit
+learns that insulin raises glucose. The source does not mention confounding by indication.
+
+**Is it still a Markov chain?** In the sense the source meant — a transition model
+`P(post-state | pre-state, inputs)` with regression-parameterised probabilities — **yes, and the
+built model is a generalisation of it**: it conditions on pre-BG continuously and pools the rows
+into one ordinal fit. Bin the pre-BG and a transition matrix is recoverable. Strictly, there is
+**no transition matrix and no memorylessness assumption**, and the latter would be wrong here:
+IOB and prior meals mean the past demonstrably does not wash out.
+
+**Open deviation requiring clinical sign-off:** State 2's upper bound was moved **70 → 79 mg/dL**
+(State 3 starts at 80). Deliberate — it buys a warning band for someone who cannot feel a low —
+but it is a **clinical constant and remains unconfirmed**. Tracked as **OQ-5**, unchanged.
+
+**Naming.** "BG-Markov" comes from this source document. The name is retained as a codename; the
+glossary now states plainly that the model is an ordinal logistic regression and that no Markov
+process is modelled, so no future reader infers transition modelling that is not there.

@@ -77,7 +77,8 @@
 
 | Term | Definition |
 |---|---|
-| **Gate 0 / 1 / 2** | Progressive unlocks. See `03-state-model.md` §3. **Gate 2 is retiring** under S-1011 (DL-035). |
+| **"Markov" (the name)** | **A codename, not a description of the model.** The project began from a Markov-chain design document (DL-038) and kept its name. The model is a **single ordinal logistic regression**; there is **no transition matrix and no memorylessness assumption** — IOB and prior meals mean the past demonstrably does not wash out. The only genuine Markov chain is MCMC *sampling* inside the optional Bayesian fit, which is a numerical technique, not a model of glucose. Revisit: OQ-8 / backlog §R-1. |
+| **Gate 0 / 1 / 2** | Progressive unlocks. See `03-state-model.md` §3. **Gate 2 was retired** by S-1011 (DL-035); Gates 0 and 1 remain. |
 | **Promotion** | The operator's explicit, audited action opening Gate 1 (`model_artifact.is_promoted`). **Code never promotes** — good metrics are a precondition, not permission. |
 | **Shadow clock / shadow days** | Days since the first logged shadow prediction. A Gate 1 precondition (**≥ 90**, REQ-048). Computed from `prediction_log`, never a stored flag. |
 | **Report card** | The operator's shadow view: each metric shown as **value + plain-language meaning + technical term together**, so a non-statistician and a clinician can both read it. |
