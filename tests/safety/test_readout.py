@@ -26,9 +26,15 @@ from prescribe.readout import (
 
 _STATES = (1, 2, 3, 4, 5)
 _OPEN = gate1_status(valid_meals=200, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
-                    is_promoted=True)
+                    is_promoted=True, shadow_days=120)
 _CLOSED_149 = gate1_status(valid_meals=149, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
-                          is_promoted=True)
+                          is_promoted=True, shadow_days=120)
+# S-1007: everything earned EXCEPT the 90-day shadow period. The readout must refuse on
+# this alone — a short shadow is not a lesser kind of closed.
+_CLOSED_SHORT_SHADOW = gate1_status(
+    valid_meals=200, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
+    is_promoted=True, shadow_days=89,
+)
 
 
 def _guarded(state: int, *, peak: float = 0.8, baseline_state: int | None = None,
@@ -54,6 +60,13 @@ def test_gate1_closed_at_149_makes_the_surface_raise() -> None:
     """★ INV-2: no patient-visible output before Gate 1 — 149 valid meals raises."""
     with pytest.raises(GateNotPassed):
         _readout(gate1=_CLOSED_149)
+
+
+def test_a_short_shadow_period_alone_makes_the_surface_raise() -> None:
+    """★ S-1007 / REQ-048: 200 meals, beating baseline, promoted — but day 89 of 90.
+    The readout still raises. INV-2 does not grade the reason a gate is closed."""
+    with pytest.raises(GateNotPassed):
+        _readout(gate1=_CLOSED_SHORT_SHADOW)
 
 
 def test_no_bypass_parameter_exists() -> None:
