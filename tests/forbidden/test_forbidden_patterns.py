@@ -206,6 +206,27 @@ def detect_pre_bg_to_binner(tree: ast.AST) -> list[str]:
     return hits
 
 
+def detect_synthetic_import(tree: ast.AST) -> list[str]:
+    """S-1004 [SAFETY] — production code must never import the synthetic-data generator.
+
+    Synthetic rows are indistinguishable from hers by inspection. The two failure modes —
+    a fake row reaching a real fit, and a fake number displayed as a real reading — are
+    both silent, so the guard is structural rather than a convention. Same lineage as the
+    `datetime.now()` guard: cheap, and it will fire.
+    """
+    hits: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            mod = node.module or ""
+            if mod == "synthetic" or mod.startswith("synthetic."):
+                hits.append(f"production code imports from {mod}")
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "synthetic" or alias.name.startswith("synthetic."):
+                    hits.append(f"production code imports {alias.name}")
+    return hits
+
+
 # Registry: (id, detector, violating snippet, filename-context).
 _PATTERNS: list[tuple[str, object, str]] = [
     ("multi_class", detect_multi_class, "m = LogisticRegression(multi_class='multinomial')\n"),
@@ -224,6 +245,11 @@ _PATTERNS: list[tuple[str, object, str]] = [
         "meal.datetime = datetime.now()\n",
     ),
     ("pre_bg_to_binner", detect_pre_bg_to_binner, "state = bin_state(pre_bg)\n"),
+    (
+        "synthetic_import",
+        detect_synthetic_import,
+        "from synthetic.generator import generate\n",
+    ),
 ]
 
 _ALL_DETECTORS = [(pid, det) for pid, det, _ in _PATTERNS]
