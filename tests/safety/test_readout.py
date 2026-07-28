@@ -26,14 +26,14 @@ from prescribe.readout import (
 
 _STATES = (1, 2, 3, 4, 5)
 _OPEN = gate1_status(valid_meals=200, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
-                    is_promoted=True, shadow_days=120)
+                    is_promoted=True, shadow_days=120, calibration_ok=True)
 _CLOSED_149 = gate1_status(valid_meals=149, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
-                          is_promoted=True, shadow_days=120)
+                          is_promoted=True, shadow_days=120, calibration_ok=True)
 # S-1007: everything earned EXCEPT the 90-day shadow period. The readout must refuse on
 # this alone — a short shadow is not a lesser kind of closed.
 _CLOSED_SHORT_SHADOW = gate1_status(
     valid_meals=200, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
-    is_promoted=True, shadow_days=89,
+    is_promoted=True, shadow_days=89, calibration_ok=True,
 )
 
 
