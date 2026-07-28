@@ -20,7 +20,18 @@ Nothing in EPIC 10 has shipped yet at the time of this entry.
 
 ## [1.0.0-epic9] — 2026-07-18
 
-**The complete build, EPICs 1–9.** Tagged `v1.0.0-epic9`.
+**The complete build, EPICs 1–9.**
+
+> **★ The authoritative rollback target is the commit SHA `7a7c3bf`**
+> (`7a7c3bf9003d2ac2c39d018eea409bfd3967bf2e`), which is pushed and immutable on the branch.
+>
+> The annotated tag `v1.0.0-epic9` was created but **could not be pushed** — this session's git
+> proxy returns HTTP 403 for tag refs (branch refs only). The SHA is therefore the durable
+> marker. To publish the tag from a clone where you have normal git access:
+> ```bash
+> git tag -a v1.0.0-epic9 7a7c3bf -m "BG-Markov v1.0.0 — EPICs 1-9 complete"
+> git push origin v1.0.0-epic9
+> ```
 
 The last state before EPIC 10 (UI render layer, synthetic data, end-to-end tests, and the
 planned Gate-2 retirement) begins. Product code here is identical to commit `4bf5289`
@@ -75,20 +86,24 @@ all forbidden-pattern guards green · CI green (run #55).
 
 ## How to roll back
 
+Use the SHA `7a7c3bf` (it is pushed and immutable). If you have created the tag locally,
+`v1.0.0-epic9` works interchangeably.
+
 ```bash
 # inspect the baseline
-git show v1.0.0-epic9
+git show 7a7c3bf
 
 # return a working tree to it (detached)
-git checkout v1.0.0-epic9
-./scripts/verify.sh          # should be green
+git checkout 7a7c3bf
+./scripts/verify.sh          # must be green before you trust it
 
 # start a fix branch from the baseline
-git checkout -b fix/from-epic9 v1.0.0-epic9
+git checkout -b fix/from-epic9 7a7c3bf
 
 # discard EPIC 10 work on the current branch entirely (destructive — be sure)
-git reset --hard v1.0.0-epic9
+git reset --hard 7a7c3bf
 ```
 
-Tags are immutable markers: nothing done after `v1.0.0-epic9` can alter what that tag points
-to. Verify any rollback with `./scripts/verify.sh` before trusting it.
+A commit SHA is an immutable marker: nothing done after `7a7c3bf` can alter what it points to.
+**Always re-run `./scripts/verify.sh` after a rollback** — a rollback you have not verified is
+an assumption, not a safety net.

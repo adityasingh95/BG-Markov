@@ -759,6 +759,15 @@ nowhere, and REQ-048's ≥90-day shadow period is unenforced (S-1006/S-1007 fix 
 rollback target must be documented honestly, including what is wrong with it — rolling back to
 a baseline whose weaknesses are undocumented is not a safety net.
 
-**Rollback contract.** `git checkout v1.0.0-epic9 && ./scripts/verify.sh`. Tags are immutable;
-nothing done in EPIC 10 can alter what this tag points to. Any rollback is verified by the
-CI-equivalent script before being trusted.
+**Rollback contract.** `git checkout 7a7c3bf && ./scripts/verify.sh`. Any rollback is verified
+by the CI-equivalent script before being trusted — an unverified rollback is an assumption,
+not a safety net.
+
+**Constraint hit: the tag could not be pushed.** The annotated tag `v1.0.0-epic9` was created
+locally, but this session's git proxy returns **HTTP 403 for tag refs** (branch refs only);
+four attempts failed. Since the build container is ephemeral, a local-only tag would be lost.
+**The authoritative marker is therefore the commit SHA `7a7c3bf`**
+(`7a7c3bf9003d2ac2c39d018eea409bfd3967bf2e`), which *is* pushed on the branch and is equally
+immutable. CHANGELOG and README lead with the SHA and give the one-liner to publish the tag
+from a normal clone. Recorded rather than worked around: the environment restriction is real
+and the rollback path does not depend on the tag existing.

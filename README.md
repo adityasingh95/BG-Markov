@@ -86,14 +86,19 @@ critical path) is next.
 Working builds are **version-gated**: each is an annotated git tag and a CI-green state you
 can return to in one command. See `CHANGELOG.md` for what each tag contains.
 
-| Tag | What it is |
-|---|---|
-| `v1.0.0-epic9` | **The complete build, EPICs 1–9** — logging, data layer, features, model, validation, guardrails, and the bolus calculator. 445 tests, CI green. The rollback target for all EPIC 10 work. |
+| Gate | Commit | What it is |
+|---|---|---|
+| `v1.0.0-epic9` | **`7a7c3bf`** | **The complete build, EPICs 1–9** — logging, data layer, features, model, validation, guardrails, and the bolus calculator. 445 tests, CI green. The rollback target for all EPIC 10 work. |
 
 ```bash
-git checkout v1.0.0-epic9 && ./scripts/verify.sh   # verify the baseline
-git checkout -b fix/from-epic9 v1.0.0-epic9        # branch from it
+git checkout 7a7c3bf && ./scripts/verify.sh   # verify the baseline
+git checkout -b fix/from-epic9 7a7c3bf        # branch from it
 ```
+
+The **commit SHA is the authoritative marker** — it is pushed and immutable. The matching
+annotated tag could not be pushed from the build session (its git proxy rejects tag refs with
+HTTP 403), so create it from a normal clone if you want the friendly name:
+`git tag -a v1.0.0-epic9 7a7c3bf -m "EPICs 1-9 complete" && git push origin v1.0.0-epic9`
 
 The working branch carries a `.dev` version (e.g. `1.1.0.dev0`) whenever it is ahead of the
 last gate, so `python -c "import core; print(core.__version__)"` tells you immediately whether
