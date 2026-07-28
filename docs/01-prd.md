@@ -132,8 +132,9 @@ Explicitly not built. Do not build these.
 | REQ-060 | Monthly refit over a trailing 6-month window, older data down-weighted, writing a **new unpromoted** model artifact. Conforms `07 §Retraining`. *(Added 2026-07-18, DL-034.)* | P1 |
 | REQ-061 | An operator action appends a **new** `patient_profile` version (updatable ICR/ISF/target); prior versions retained; the calculator reads the latest live. *(Added 2026-07-18, DL-034.)* | P1 |
 
-*REQ-048 (shadow mode ≥ 90 days before patient-visible output) gains its first covering story
-(S-1007) — it was previously enforced nowhere. Rendering of the patient readout (INV-2,
+*REQ-048 (shadow mode ≥ 90 days before patient-visible output) gained its first covering story
+and its first enforcement in **S-1007, done 2026-07-18** (DL-040) — it was previously enforced
+nowhere. Rendering of the patient readout (INV-2,
 REQ-040) and the bolus calculator (INV-3/4, REQ-042–043) is covered by those existing
 requirements; EPIC 10 adds their render layer without relaxing any runtime gate.*
 

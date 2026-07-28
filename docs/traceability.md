@@ -48,7 +48,8 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-045 [SAFETY]** (every prediction written to `prediction_log` **before** it is returned — INV-9; write-then-display enforced, not incidental) | **S-802** | `tests/integration/test_prediction_log.py` (happy path — row persisted & queryable with correct fields by the time it returns; ★ mock persistence: `flush` leaves no id ⇒ INV-9 raises, `flush` raises ⇒ propagates — **no prediction returned** either way; `serve_prediction` maps a `GuardedPrediction`, persists first, sets `guardrail_fired` on a refusal; ★ serve refuses to return on a failed write) | ✅ Done — `data/predictions.py`; `record_prediction` flushes + `inv9_prediction_persisted` **before** the return; `serve_prediction` inherits the guarantee |
 | **REQ-047 [SAFETY]** (kill switch on drift; **re-arming is manual only** — a later good run must not silently re-enable it) | **S-803** | `tests/integration/test_kill_switch.py` (drift `rolling<baseline` trips + persists; ★ after a trip a **good** run leaves it tripped — `evaluate_kill_switch` only ever *sets*; ★ `rearm(operator_confirmed=False)` raises `ManualReArmRequired` & stays tripped, `=True` clears it; healthy model untripped; unknown version raises) | ✅ Done — `prescribe/kill_switch.py`; state persisted on `model_artifact.kill_switch_tripped`; the only un-trip door is manual, a machine cannot open it; fails safe to the baseline |
 | **REQ-040 [SAFETY]** (patient risk readout — hypo risk the headline; plain language; refusal a rendered state; **never advice**; INV-2 first patient-reachable surface) | **S-804** | `tests/safety/test_readout.py` (★ 149 valid meals ⇒ `build_patient_readout` raises `GateNotPassed`; ★ **no bypass** — no override param, no env var; hypo risk is the headline (State-2 ⇒ elevated/high, State-3 ⇒ in_range, State-5 ⇒ reduced); refusal rendered as a state (`state=None`, plain body, not a blank); ★ **never advice** — no `dose`/`bolus`/`units` attribute or directive; kill switch ⇒ baseline fallback; conflict shows both, no winner; severity/hypo_risk are **text** not colour) | ✅ Done — **closes EPIC 8**; `prescribe/readout.py`; `require_gate1` first, no bypass; a dose cannot ride a risk screen; signal is textual (a11y) |
-| **REQ-048** (shadow mode ≥90 days; operator reviews shadow output before any patient-visible output) | **S-805** | `tests/unit/test_shadow.py` (report aggregates hypo recall @ FAR / calibration bins / Clarke grid / MAE / off-by-one / severe; predictions-vs-actuals confusion sums to n; ★ `unconstrained β_ins<0` ⇒ `beta_insulin_confounding=True`, healthy ⇒ False; Clarke **D** danger preserved; multiclass Brier when a distribution is supplied) | ✅ Done — `models/shadow.py::build_shadow_report`; composes the S-702 metrics (no plain-accuracy headline) + surfaces the INV-8/S-503 confounding alarm on the operator's Gate-1 evidence screen |
+| **REQ-048** (shadow mode ≥90 days — **enforced by S-1007**, `gate1_status(..., shadow_days)` + `data.repositories.shadow_days`, derived from `prediction_log`, never a stored flag; see the EPIC 10 section below) | **S-1007** | `tests/safety/test_gates.py` + `tests/integration/test_shadow_clock.py` (★ 89 ⇒ closed / 90 ⇒ open; ★ 500 days never substitutes for volume, baseline or promotion; ★ required, not defaulted; ★ no predictions ⇒ 0; earliest row not latest, not the row count; ★ backwards clock ⇒ 0; ★ not memoised; ★ `now` keyword-only, no default; ★ no `shadow*` column on any table) | ✅ Done 2026-07-18 — **first enforcement of REQ-048**; `SHADOW_MIN_DAYS = 90` traced to the requirement; `prescribe/gates.py` stays DB-free; DL-040 |
+| **REQ-048** (operator reviews shadow output before any patient-visible output — the *evidence screen*) | **S-805** | `tests/unit/test_shadow.py` (report aggregates hypo recall @ FAR / calibration bins / Clarke grid / MAE / off-by-one / severe; predictions-vs-actuals confusion sums to n; ★ `unconstrained β_ins<0` ⇒ `beta_insulin_confounding=True`, healthy ⇒ False; Clarke **D** danger preserved; multiclass Brier when a distribution is supplied) | ✅ Done — `models/shadow.py::build_shadow_report`; composes the S-702 metrics (no plain-accuracy headline) + surfaces the INV-8/S-503 confounding alarm on the operator's Gate-1 evidence screen |
 | **REQ-041/042/043 [SAFETY]** (prescriptive bolus calculator — clinical formula only, **no ML in the dose path**; INV-1/3/4; full arithmetic shown; suggestion for review) | **S-901** | `tests/safety/test_bolus.py` (★ INV-4 BG 79 refuses / 80 computes; ★ INV-3 carbs=900 typo ⇒ capped 15 U **AND** `implausible_input` flagged; negative ⇒ 0.0; ★ INV-1 icr=null ⇒ `GateNotPassed`, no bypass param/env; ★ **5 golden hand-computed doses** to 2 dp; property — non-decreasing in carbs, non-increasing in IOB; **no `models` import** in the dose path; arithmetic shown + framed as review) | ✅ Done — **closes EPIC 9 (final story)**; `prescribe/bolus.py::recommend_bolus`; ICR 9 / ISF 30 / target 135 clinician-confirmed (DL-032), read from the versioned profile — no hardcoded constant; human gate + code gate both cleared |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 | `test_all_tables_present…` (basal_log) | ✅ Schema done (form: S-302/EPIC 3) |
@@ -414,8 +415,34 @@ missing or `<= 0` ICR. The config re-implements no invariant.
       `is_promoted` outside `data/promotion.py`** (narrowed by SDET on Dev's challenge to the
       two real write paths, so `Gate1Status(is_promoted=…)` may still *report* it).
       **Closes DL-034 gap G1.**
-    - **REQ-048 → S-1007 [SAFETY] (Gate-1 shadow ≥ 90 days) — Backlog. FIRST COVERING
-      STORY** — REQ-048 was previously enforced nowhere (was a visible gap).
+    - **REQ-048 → S-1007 [SAFETY] (Gate-1 shadow ≥ 90 days) — ✅ DONE 2026-07-18. FIRST
+      ENFORCEMENT AND FIRST TEST** — REQ-048 had existed since the PRD and was enforced
+      nowhere: no code read it, no test covered it. `SHADOW_MIN_DAYS = 90` in
+      `prescribe/gates.py`, commented with REQ-048 so tuning it is visibly *changing a
+      requirement*; `gate1_status(..., shadow_days)` — **required, not defaulted** — opens
+      only on `volume ∧ beats_baseline ∧ meets_shadow_period ∧ is_promoted`;
+      `Gate1Status` reports `shadow_days` + `meets_shadow_period` for the S-1001 countdown.
+      `data/repositories.py::shadow_days(session, *, now)` derives whole days from the
+      **earliest** `prediction_log.created_at`; `prescribe/gates.py` stays **DB-free**.
+      Tests `tests/safety/test_gates.py` + `tests/integration/test_shadow_clock.py` (17):
+      ★ **the boundary** — 89 days with every other condition satisfied ⇒ **CLOSED**, 90 ⇒
+      open; ★ **time is not evidence** — 500 shadow days with 149 meals / recall ≤ baseline /
+      unpromoted all stay closed; ★ **`shadow_days` is required** (`TypeError` on omission),
+      so a future default cannot restore the unenforced behaviour; 0/1/−7 days closed; no env
+      var shortens it; ★ **no predictions ⇒ 0** (fails closed on day one); counted from the
+      **earliest** row, not the latest (which would reset the clock every prediction) and not
+      the row count (200 predictions in a week ≠ 200 days); insertion order is not chronology;
+      ★ **a clock stepping backwards ⇒ 0, never negative**, and a future-dated row manufactures
+      no elapsed time; ★ **not memoised** — the answer rises *and falls* with `now` in one
+      session, and an earlier row inserted mid-session lengthens it immediately (ADR-7);
+      ★ **`now` is keyword-only with no default**, asserted via the signature (ADR-8 — one
+      sanctioned clock reader); ★ **no table may carry a `shadow*` column** — a stored
+      `shadow_complete` would be set once and then lie forever;
+      ★ `tests/safety/test_readout.py` — everything earned **except** the shadow period
+      (day 89) still raises `GateNotPassed`: INV-2 does not grade the reason a gate is closed.
+      Guards **seen to fire** before being reverted (clamp removed / `shadow_complete` column
+      planted / default added). **Closes DL-034 gap G2 and the last code-vs-spec divergence in
+      `03 §3`.** Record: **DL-040**.
     - **REQ-059 → S-1008 (live per-meal prediction wiring) — ✅ DONE 2026-07-18.**
       `prescribe/serving.py::serve_meal_prediction` — pure orchestration, no model logic:
       features → promoted model → guardrails → **persist (INV-9)** → serve. Baseline when no

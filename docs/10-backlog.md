@@ -368,15 +368,24 @@ today). Promoted but volume/recall not met ⇒ still closed. Promotion is a reco
 **Adversarial:** the tempting "auto-promote once metrics pass" is exactly what the spec
 forbids — a human must put her in front of the model on purpose.
 
-### S-1007 [SAFETY] — Gate-1 shadow-period precondition — REQ-048, INV-2
-**Closes G2. REQ-048 ("≥ 90 days shadow before patient-visible output") is currently enforced
-nowhere — a REQ with no covering test is a visible gap.**
+### S-1007 [SAFETY] — Gate-1 shadow-period precondition — REQ-048, INV-2 — **DONE 2026-07-18**
+**Closed G2. REQ-048 ("≥ 90 days shadow before patient-visible output") was enforced
+nowhere — a REQ with no covering test is a visible gap. This gave it its first
+enforcement and its first test. Record: DL-040.**
 **AC:** Gate 1 additionally requires **≥ 90 days of shadow-mode operation** (measured from the
 first logged shadow prediction to now) before it can open. The 90-day constant traces to
 REQ-048, not to the team. Surfaced as a countdown on the operator dashboard.
 **TDD:** 89 days shadow, everything else ✓ ⇒ Gate 1 CLOSED; 90 days ⇒ eligible (still needs
 promotion, S-1006). The shadow clock is computed from logged prediction timestamps, not a
 stored boolean.
+**Delivered:** `SHADOW_MIN_DAYS = 90` (commented with REQ-048) + `gate1_status(...,
+shadow_days)` **required, not defaulted**; `Gate1Status.shadow_days` / `.meets_shadow_period`
+for the S-1001 countdown; `data/repositories.py::shadow_days(session, *, now)` derived from the
+earliest `prediction_log.created_at`, `now` injected, clamped at 0. `prescribe/gates.py` stays
+DB-free. 17 tests incl. ★ the 89/90 boundary, ★ **time is not evidence** (500 days never
+substitutes for volume / baseline / promotion), ★ no table may carry a `shadow*` column, ★ the
+readout still raises at day 89 with everything else earned. Guards seen to fire before revert.
+**This closed the last code-vs-spec divergence in `03 §3`.**
 
 ### S-1008 — Live prediction wiring (per-meal orchestration) — REQ-059 — **DONE 2026-07-18**
 **Closes G3. The runtime loop is unit-built but nothing runs it on a real logged meal;

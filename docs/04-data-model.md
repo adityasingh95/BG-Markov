@@ -207,6 +207,12 @@ This is the **only real validation set** and the drift detector.
 first logged shadow prediction to now. It is **never a stored boolean**, because a stored flag
 can be set once and then lie forever.
 
+> ✅ **Wired 2026-07-18 (S-1007, DL-040).** `data/repositories.py::shadow_days(session, *, now)`
+> returns whole days from the **earliest** `prediction_log.created_at`; `gate1_status()` requires
+> it. `now` is injected (ADR-8 — `core/clock.py` stays the one wall-clock reader) and the result
+> is clamped at 0, so clock skew or a future-dated row reads as *not yet*. A test asserts **no
+> table carries a `shadow*` column**, so the stored-flag shortcut is closed structurally.
+
 ## 10. `audit_log`
 
 Every edit to a clinical record. She *will* mistype a BG; edits are permitted within 24 h and always audited.

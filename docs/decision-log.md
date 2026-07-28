@@ -915,3 +915,59 @@ the guard; it changed what the guard names.
 **Toolchain:** `synthetic/` joins the `mypy --strict` scope. It is **not** added to the coverage
 gate — it is fixture code, covered by its own tests, and adding it would dilute a gate that
 exists to protect `core`/`features`/`models`/`prescribe`.
+
+## DL-040 — S-1007: the shadow clock is a derived count with an injected `now`
+**Story:** S-1007 [SAFETY] (EPIC 10) · **Type:** design record + one process note · **Date:**
+2026-07-18 · **Owner:** BA
+
+REQ-048 (*"shadow mode ≥ 90 days before patient-visible output"*) has existed since the PRD and
+was **enforced nowhere** — no code read it, no test covered it. That is a visible gap by this
+project's own rule, and it is now closed. Recorded because the *shape* of the fix is the safety
+property, not the number 90.
+
+**Derived, never stored.** `data/repositories.py::shadow_days` computes whole days from the
+earliest `prediction_log.created_at` to `now`. The obvious alternative — a `shadow_complete`
+boolean on `model_artifact` — would be written once, by whoever ran the migration or the
+backfill, and would then be true forever regardless of what the data said. Nothing in a green
+build would reveal it. This is the same principle as **ADR-7** ("gates are evaluated live, never
+cached"), applied to a column instead of a cache. `tests/integration/test_shadow_clock.py`
+asserts **no table carries a `shadow*` column at all**, so the temptation is closed structurally
+rather than by convention.
+
+**`now` is injected.** Two reasons, both load-bearing: `core/clock.py` is the single sanctioned
+wall-clock reader (**ADR-8**), and an injected `now` makes the day-89/day-90 boundary testable
+without waiting a quarter. A signature test pins `now` as keyword-only with no default — a
+default would be a wall-clock read wearing a parameter's clothes.
+
+**Fails closed, clamped at zero.** Clock skew, a restored backup, or a future-dated row can put
+`now` behind the earliest prediction. The answer is `0` — *not yet* — never a negative number a
+later `>=` might mishandle.
+
+**`SHADOW_MIN_DAYS = 90` is named and traced to REQ-048.** `90` as a literal inside a condition
+invites a future reader to tune it. Named and commented, changing it is visibly *changing a
+requirement* — an escalation, not a code change.
+
+**Time is never evidence.** The shadow clock **joins** volume, beats-baseline and manual
+promotion; it substitutes for none of them. Tests assert 500 shadow days with 149 meals, or with
+recall ≤ baseline, or unpromoted, all stay **closed**. `Gate1Status` now reports `shadow_days`
+and `meets_shadow_period` so the operator dashboard (S-1001) can render *"day 61 of 90 — 29 to
+go"*; a gate whose remaining distance is invisible invites someone to go looking for a bypass.
+
+**`prescribe/gates.py` stays DB-free.** It still imports only `core.safety`. The gate is a pure
+function of live inputs the caller reads fresh — which is what makes "never cached" structurally
+true rather than a convention. The DB read lives in `data/repositories.py`.
+
+**Process note (recorded, not glossed).** The S-1007 RED commit updated `tests/safety/test_gates.py`
+but missed `tests/safety/test_readout.py`, which builds `Gate1Status` fixtures directly. Dev does
+not edit `tests/` (CLAUDE.md; DL-017/DL-028 lineage), so the call-site fix was made in a **second
+SDET commit** rather than folded into the GREEN commit — and it was used to add a real case:
+everything earned except the shadow period (day 89) must still raise `GateNotPassed`. The RED for
+that commit was seen with the product change stashed.
+
+**Guards seen to fire (adversarial verification, then reverted).** Removing the `max(0, …)` clamp
+failed the backwards-clock and future-row tests; adding a `shadow_complete` column failed the
+stored-flag test; giving `shadow_days` a default failed the required-argument test. A guard nobody
+has watched fire is not a guard.
+
+**Scope.** This does not make Gate 1 open. Ninety days is a precondition, and all four conditions
+must hold.

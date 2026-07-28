@@ -119,17 +119,19 @@ Gates are evaluated **from live data on every call.** Never cached, never config
 |---|---|
 | **Volume alone is never sufficient for Gate 1.** | 200 meals with hypo recall *below* the clinical baseline → **still blocked.** The model must earn it. |
 | **★ Metrics alone are never sufficient either.** | Every automatic condition can hold and Gate 1 **stays closed** until the operator promotes the model *deliberately* (`model_artifact.is_promoted`, set only by an explicit audited action). Conforms `07 §Retraining` — *"Promotion is manual, on hypo recall."* Code never sets it on a threshold. |
-| **The shadow clock is a precondition, not a formality.** | `shadow_mode_days ≥ 90` (REQ-048) is computed from logged prediction timestamps, never a stored boolean. |
+| **The shadow clock is a precondition, not a formality.** | `shadow_mode_days ≥ 90` (REQ-048) is computed from logged prediction timestamps, never a stored boolean. **Enforced since 2026-07-18 (S-1007):** `data.repositories.shadow_days(session, *, now)` derives whole days from the earliest `prediction_log.created_at`; `gate1_status` requires it. Clamped at 0, so clock skew reads as *not yet*. **Time is never evidence** — a long shadow substitutes for none of the other three conditions. |
 | **~~Gate 2~~ — REMOVED.** | Retired 2026-07-18 (S-1011, DL-035) at the operator's direction. The ICR is an ordinary versioned profile value; `recommend_bolus` raises a plain `ValueError` on a missing/`<= 0` ICR. **INV-3, INV-4 and Gate 1 are unaffected.** Do not re-introduce a dose gate under another name. |
 | **Gates only ever advance.** | A gate can be manually revoked by the operator. It never advances automatically past its condition. |
 | **No bypass exists.** | Not by fixture, not by mock, not by config flag, not by env var. SDET writes a test proving this for each gate. |
 
-> **Code-vs-spec status (updated 2026-07-18).** ✅ **Manual promotion is now enforced**
-> (S-1006): `gate1_status()` requires `is_promoted`, and `model_artifact.is_promoted` is read
-> by both `gate1_status` (*may she see it?*) and `get_promoted_artifact` (*which model
-> serves?*). Writes go only through `data/promotion.py` and are audited. ⏳ **The ≥90-day
-> shadow clock is still NOT enforced** — S-1007 closes that; until it lands the gate remains
-> weaker than this diagram in that one respect. Recorded rather than left silent (DL-034).
+> **Code-vs-spec status (updated 2026-07-18).** ✅ **This diagram and the code now agree.**
+> Manual promotion is enforced (S-1006): `gate1_status()` requires `is_promoted`, and
+> `model_artifact.is_promoted` is read by both `gate1_status` (*may she see it?*) and
+> `get_promoted_artifact` (*which model serves?*); writes go only through
+> `data/promotion.py` and are audited. ✅ The **≥ 90-day shadow clock is enforced** (S-1007,
+> DL-040): `gate1_status()` requires `shadow_days`, derived live from `prediction_log` and
+> never stored. `is_open` is now the conjunction of **all four** conditions in the diagram.
+> Both gaps recorded in DL-034 are closed; neither was left silent while it was open.
 
 ---
 
