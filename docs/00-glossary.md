@@ -77,7 +77,11 @@
 
 | Term | Definition |
 |---|---|
-| **Gate 0 / 1 / 2** | Progressive unlocks. See `03-state-model.md` §3. |
+| **Gate 0 / 1 / 2** | Progressive unlocks. See `03-state-model.md` §3. **Gate 2 is retiring** under S-1011 (DL-035). |
+| **Promotion** | The operator's explicit, audited action opening Gate 1 (`model_artifact.is_promoted`). **Code never promotes** — good metrics are a precondition, not permission. |
+| **Shadow clock / shadow days** | Days since the first logged shadow prediction. A Gate 1 precondition (**≥ 90**, REQ-048). Computed from `prediction_log`, never a stored flag. |
+| **Report card** | The operator's shadow view: each metric shown as **value + plain-language meaning + technical term together**, so a non-statistician and a clinician can both read it. |
+| **Synthetic data** | Seeded, generated records for tests and demos. **Never imported by production code and never presented as her data** (REQ-056). |
 | **INV-n** | Safety invariant. `core/safety.py`. See `CLAUDE.md`. |
 | **`datetime` vs `logged_at`** | `datetime` = when the event **happened** (reported by her). `logged_at` = system clock at submission. **Conflating them corrupts the model.** |
 | **`elapsed_min`** | Reported minutes between meal and post-meal reading. Valid window: **105–135**. |

@@ -138,7 +138,28 @@ If any form defaults a clinical time to `now()`, two fields become fiction:
 - Every artifact carries a manifest: data hash, row count, feature list, fit date, metrics, gate state.
 - Every `prediction_log` row records its **model version** (INV-9). Without it, shadow-mode analysis is uninterpretable.
 - **Promotion is manual.** A candidate ships only if it beats the incumbent on **hypo recall** on a held-out temporal fold.
+- **Refit never promotes** (REQ-060). `cli refit` writes a **new artifact with
+  `is_promoted = false`** over a trailing 6-month window with older data down-weighted
+  (`07 §Retraining`). Promotion is a separate, explicit, audited operator action (REQ-058) —
+  `gate1_status()` reads `is_promoted`, so an unpromoted refit changes nothing she sees.
 - Kill switch: `cli drift-check` (weekly). Trips → ML suppressed, **falls back to the clinical baseline**. **Re-arming is manual, always.**
+
+### 6.1 The live prediction path — REQ-059
+
+On each logged meal, one orchestration over already-built components — **no new model logic**:
+
+```
+meal logged
+  → features (iob_at, effective_basal, exercise encoding)
+  → promoted model .predict_proba        (none promoted ⇒ baseline only)
+  → guard_prediction                     (OOD / sparse / diffuse / conflict)
+  → record_prediction                    ★ INV-9: PERSISTED BEFORE RETURNED
+  → build_patient_readout                ★ INV-2: require_gate1 FIRST
+```
+
+**Ordering is the safety property**, not an implementation detail: the persist step precedes
+the return, and the gate check precedes the render. If persistence fails, **nothing is served**.
+Where no model is promoted, the patient path yields the **baseline** — never a raw model output.
 
 ---
 

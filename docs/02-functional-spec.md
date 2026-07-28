@@ -41,6 +41,13 @@ She logs **before** eating.
 - Portion via a multiplier stepper (`1 katori`, `2 rotis`) — not free-text grams.
 - Macros (carbs/protein/fat/fibre) auto-populate; `macro_confidence` = 95.
 - Unknown dish → free text, `macro_confidence` = 60, queued for the operator to add properly.
+- **Multiple dishes compose one meal.** Line items total live; **net carbs = carbs − fibre**
+  (floored at 0) is shown alongside carbs.
+- **Macro confidence is visible on the screen** — a 60% free-text item must be seen to be one,
+  because confidence becomes `sample_weight` in the model.
+- **`snack` is a first-class meal type** alongside breakfast/lunch/dinner (already in
+  `MealType`). Note: the feature pipeline currently one-hots only lunch/dinner, so snacks fall
+  into the breakfast reference level — a known modelling gap, not an intended encoding.
 
 ### F-1.2 Bolus timing — REQ-003 **[critical]**
 Fiasp peaks at ~55 min. Pre-bolusing 10 minutes versus injecting at the first bite materially changes the 2-hour value. **This field carries more signal than almost any other. It cannot be skipped.**
@@ -99,10 +106,30 @@ Given a planned meal + bolus, she sees the 2-hour risk.
 ### F-4.3 Baseline conflict — REQ-046
 If the clinical baseline and the ordinal model differ by more than one state, **both are shown** and the conflict is flagged. **The system does not pick a winner.**
 
+### F-4.4 Every outcome is a *rendered state* — never a blank **[SAFETY]**
+The readout surface has exactly five renderable outcomes. **None of them is an error page, a
+spinner, or an empty screen** — silence reads as "all clear" to someone who cannot feel a low.
+
+| State | When | What she sees |
+|---|---|---|
+| **Prediction** | confident, no conflict | hypo risk as the headline, in words |
+| **Refusal** | a guardrail fired (OOD / sparse / diffuse) | *"can't predict this one reliably"* — explicitly **not** reassurance |
+| **Conflict** | baseline vs model differ > 1 state | both shown, no winner, framed from the **more cautious** one |
+| **Baseline fallback** | kill switch tripped | the plain baseline estimate + that the model is paused |
+| **Gate 1 closed** | not yet promoted | the baseline only, stated plainly |
+
+**No dose, bolus, or unit figure appears on this surface in any of the five states.**
+
 ## 5. Bolus Calculator (F-5) — REQ-041..043, INV-1/3/4
 
 ### F-5.1 Gating **[SAFETY]**
 **Hard-disabled until Gate 2** (ICR confirmed AND ISF confirmed or derived). No preview. No silent background computation.
+
+> **⚠ Retiring (DL-035).** The operator has decided to de-gate ICR. Under **S-1011**, Gate 2 and
+> INV-1 are removed: ICR/ISF/target become ordinary versioned profile values, and a missing or
+> `≤ 0` ICR raises an ordinary **`ValueError`** (not a `SafetyViolation`) so the formula can
+> never divide by null. **INV-3, INV-4, and the no-ML-in-the-dose-path rule are unaffected.**
+> This section stands as written until S-1011 executes.
 
 ### F-5.2 The calculator (post Gate 2)
 - Inputs: carbs, current BG. **IOB is computed, never entered.**
@@ -139,6 +166,9 @@ Suggested:                      7.9 U
 - Predictions vs. actuals, calibration curve, hypo recall, Clarke grid.
 - Gate status: valid-meal count, what is blocking each gate.
 - Any `β_insulin < 0` warnings from the unconstrained fit — **a signal about the data, not a nuisance.**
+- **Each metric is presented as value + plain-language meaning + technical term, together.**
+  The operator may not be a statistician; "Brier 0.13" alone informs nobody, and dropping the
+  number informs no clinician. Show both. **Plain accuracy is never reported** (07 §9).
 
 ## 7. Operator Functions (F-7)
 
@@ -149,3 +179,16 @@ Suggested:                      7.9 U
 - Review and **manually re-arm** the kill switch.
 - `cli export` — full CSV.
 - `cli restore-drill`.
+
+### F-7.1 Model promotion — REQ-058 **[SAFETY]**
+**The only way Gate 1 opens.** An explicit, audited operator action setting
+`model_artifact.is_promoted`.
+
+- **Code never promotes.** No metric threshold, scheduled job, or refit may set the flag —
+  `07 §Retraining`: *"Promotion is manual, on hypo recall."*
+- Promotion is **refused** unless every automatic precondition already holds (≥150 valid meals,
+  hypo recall strictly beating baseline, acceptable calibration, **≥90 shadow days** per
+  REQ-048). The action is the *last* condition, not a way around the others.
+- A **refit produces a new, unpromoted artifact** (REQ-060). Promotion never carries over.
+- Revocable at any time; takes effect on the next call (gates are live, never cached — ADR-7).
+- The action is audit-logged: who, when, and the metric snapshot it was made against.

@@ -101,6 +101,7 @@ Gates are evaluated **from live data on every call.** Never cached, never config
                            │ AND hypo_recall > baseline
                            │ AND calibration acceptable (held-out)
                            │ AND shadow_mode_days ≥ 90
+                           │ AND is_promoted ← ★ OPERATOR, MANUAL
    ┌───────────────────────▼─────────────────────────────┐
    │ GATE 1 — PATIENT-VISIBLE RISK OUTPUT                │
    │ Still shadow-logged. Guardrails active.             │
@@ -109,8 +110,9 @@ Gates are evaluated **from live data on every call.** Never cached, never config
                            │ AND (isf_confirmed_by_endo
                            │      OR n_clean_correction_events ≥ 5)
    ┌───────────────────────▼─────────────────────────────┐
-   │ GATE 2 — PRESCRIPTIVE MODULE ENABLED                │
+   │ GATE 2 — PRESCRIPTIVE MODULE ENABLED   ⚠ RETIRING   │
    │ Bolus calculator. NO ML in this path. (INV-1)       │
+   │ Slated for removal under S-1011 (DL-035).           │
    └─────────────────────────────────────────────────────┘
 ```
 
@@ -119,9 +121,17 @@ Gates are evaluated **from live data on every call.** Never cached, never config
 | Rule | |
 |---|---|
 | **Volume alone is never sufficient for Gate 1.** | 200 meals with hypo recall *below* the clinical baseline → **still blocked.** The model must earn it. |
-| **Gate 2 is blocked on a human, not on code.** | It waits on the endocrinologist (OQ-1, OQ-2). No amount of engineering opens it. |
+| **★ Metrics alone are never sufficient either.** | Every automatic condition can hold and Gate 1 **stays closed** until the operator promotes the model *deliberately* (`model_artifact.is_promoted`, set only by an explicit audited action). Conforms `07 §Retraining` — *"Promotion is manual, on hypo recall."* Code never sets it on a threshold. |
+| **The shadow clock is a precondition, not a formality.** | `shadow_mode_days ≥ 90` (REQ-048) is computed from logged prediction timestamps, never a stored boolean. |
+| **Gate 2 is blocked on a human, not on code.** | It waits on the endocrinologist (OQ-1, OQ-2). No amount of engineering opens it. **⚠ Retiring** — the operator has decided to de-gate ICR (DL-035); S-1011 removes this gate and INV-1, replacing it with an ordinary present/`> 0` input check. Gate 1 is unaffected. |
 | **Gates only ever advance.** | A gate can be manually revoked by the operator. It never advances automatically past its condition. |
 | **No bypass exists.** | Not by fixture, not by mock, not by config flag, not by env var. SDET writes a test proving this for each gate. |
+
+> **Code-vs-spec status (2026-07-18).** This state machine is the target. `gate1_status()`
+> currently evaluates **only** volume ∧ hypo-recall — the shadow clock and manual promotion are
+> **not yet enforced in code**, and `model_artifact.is_promoted` is read nowhere. S-1006 and
+> S-1007 bring the code into conformance with this spec; until they land, the gate is weaker
+> than this diagram. Recorded in DL-034 rather than left as a silent divergence.
 
 ---
 

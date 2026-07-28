@@ -777,3 +777,41 @@ four attempts failed. Since the build container is ephemeral, a local-only tag w
 immutable. CHANGELOG and README lead with the SHA and give the one-liner to publish the tag
 from a normal clone. Recorded rather than worked around: the environment restriction is real
 and the rollback path does not depend on the tag existing.
+
+## DL-037 — EPIC 10 spec updates landed (the behaviour docs, not just the plan)
+**Story:** EPIC 10 (prerequisite to building S-1001…S-1010) · **Type:** specification ·
+**Date:** 2026-07-18 · **Requested by:** operator · **Owner:** BA
+
+DL-033/034 added EPIC 10 to the **planning** docs (backlog, PRD register, traceability), but
+the nine **behaviour** specs were untouched since the initial commit. A developer picking up
+S-1002 would have found a backlog entry and nothing else — no screen spec, no API contract, no
+state-machine rule. This entry records closing that gap **before** any EPIC 10 code.
+
+**Updated:** `03-state-model` (Gate 1 gains manual promotion + the 90-day shadow clock;
+Gate 2 marked retiring), `05b-ui-ux-spec` (dish picker/quantities/macros + snack; **IOB shown,
+never typed**; the report card's three-layer metric presentation; the promotion control),
+`02-functional-spec` (F-1.1 composition + snack; **F-4.4 the five rendered readout states**;
+F-5.1 retirement note; F-6.2 dual presentation; **F-7.1 promotion**), `05-api-contract`
+(`POST /api/operator/promote` with `409 PRECONDITIONS_NOT_MET`; bolus retirement note),
+`09-test-plan` (**§2.1 end-to-end/chain-level layer**, §2.2 synthetic-data rules),
+`04-data-model` (`is_promoted` as a **gate input**; the shadow clock derived from
+`prediction_log`), `06-tech-architecture` (**§6.1 the live prediction path**; refit never
+promotes), `00-glossary` (promotion, shadow clock, report card, synthetic data).
+
+**Two findings worth recording.**
+1. **The specs were already ahead of the code.** `03 §3` has *always* listed
+   `shadow_mode_days ≥ 90` and acceptable calibration as Gate 1 conditions; `02 F-5.2` has
+   always said *"IOB is computed, never entered."* So S-1007 and the derived-IOB requirement
+   are **conformance work, not new scope** — the code under-implements a spec that was right.
+   Each affected section now carries an explicit code-vs-spec status note rather than leaving
+   the divergence silent.
+2. **The prototype diverged from a standing safety rule.** Its bolus screen let IOB be *typed*;
+   `05b §6.0` now states the rule the build must follow — IOB is displayed read-only with its
+   provenance, and a typed IOB is a forbidden pattern with an AST guard (S-105).
+
+**Gate 2 handled without pre-empting S-1011.** Every Gate-2 section is annotated *"retiring
+under S-1011"* rather than expanded or deleted. Expanding would be wasted work; deleting would
+execute a safety-invariant removal the operator has explicitly held (DL-035, "prepare only").
+
+**Story docs remain just-in-time.** Per the CLAUDE.md loop, BA writes `docs/stories/S-nnn.md`
+at the start of each story. Writing all eleven now would be speculative and would rot.

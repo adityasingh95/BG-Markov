@@ -27,8 +27,39 @@ Green-before-red is a **process failure**. If it happens, the test is deleted an
 | **Integration** | `tests/integration/` | Every commit | Repositories, API routes, end-to-end flows. |
 | **Leakage** | `tests/leakage/` | Every commit | **Temporal splits.** The one class of bug that makes a model look brilliant and be useless. |
 | **A11y** | `tests/a11y/` | Pre-merge | `axe`. 200% zoom. |
+| **End-to-end** | `tests/e2e/` | Every commit | **The whole chain on synthetic data.** Catches invariants that hold in isolation but are bypassed by the wiring between stages. |
 
-**Coverage:** ≥ 90% on `core/`, `features/`, `models/`, `prescribe/`. Build fails below.
+**Coverage:** ≥ 90% on `core/`, `features/`, `models/`, `prescribe/`, `data.predictions`. Build fails below.
+
+### 2.1 End-to-end / chain-level testing — REQ-057 **[SAFETY]**
+
+Unit safety tests prove each invariant holds *where it is defined*. They cannot prove the
+**wiring** between stages preserves it. This layer drives one synthetic dataset through
+logging → validity/INV-7 → features → fit → temporal CV → metrics → gates → readout → shadow
+report → bolus, and asserts across the chain:
+
+| Assertion | Why it can only be caught here |
+|---|---|
+| **INV-7 across the chain** | A rescued low is absent from the training set the model is *actually fit on*, yet present in `get_hypo_events()` **and** in the hypo-recall denominator. Unit tests check the repository; only this checks what the fit consumed. |
+| **INV-2 end-to-end** | With <150 valid meals the patient path refuses while the operator dashboard still renders. |
+| **INV-9 end-to-end** | Every prediction served in the run was persisted *before* it was returned. |
+| **No temporal leakage** | Every fold satisfies `max(train.datetime) < min(test.datetime)` and shares no `date` across train/test. |
+| **Gate refusals** | Each gate refuses for the right reason, with no bypass, through the real call path. |
+
+**This must not be allowed to degrade into a smoke test.** "It ran without raising" is not an
+assertion. Every case above names a specific wrong-state and fails on it.
+
+### 2.2 Synthetic data — REQ-056 **[SAFETY]**
+
+The generator that feeds the E2E layer is itself safety-relevant.
+
+- **Seeded and reproducible** — a fixed seed yields byte-identical output, or a failure is not
+  investigable.
+- **Honours reported-timestamp discipline** (ADR-8): no generated clinical `datetime` comes from
+  the system clock.
+- **Never importable by production code.** A guard in `tests/forbidden/` asserts `core/`,
+  `models/`, `prescribe/`, `api/`, and `data/` do not import it. Synthetic rows must never reach
+  a real fit, and must never be presented as her data.
 
 ---
 

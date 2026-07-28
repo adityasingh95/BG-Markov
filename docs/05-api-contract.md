@@ -164,6 +164,10 @@ Daily Tresiba dose. Effective basal returns the EWMA value plus `titration_locko
 
 **INV-1:** `icr is None` → **`403 GATE_NOT_PASSED`. No fixture, mock, config flag, or env var bypasses this.**
 
+> **⚠ Retiring (DL-035).** Under **S-1011** this becomes `422 INVALID_PROFILE` on a missing or
+> `≤ 0` ICR — an ordinary input error, not a gate. **INV-3 and INV-4 responses are unchanged**,
+> and IOB stays **derived, never accepted in the request body** (REQ-020).
+
 ```json
 { "carbs_g": 60, "current_bg": 190 }
 ```
@@ -196,6 +200,25 @@ Daily Tresiba dose. Effective basal returns the EWMA value plus `titration_locko
 | `GET /api/operator/warnings` | Unconstrained `β_insulin < 0` warnings, drift, backup failures |
 | `POST /api/operator/profile` | New **versioned** profile row. Never an update. |
 | `POST /api/operator/kill-switch/rearm` | **Manual only.** Never automatic. |
+| `POST /api/operator/promote` | **[SAFETY]** Open Gate 1. Manual only — see below. |
+| `POST /api/operator/revoke` | Un-promote. Takes effect on the next call (gates are live). |
+
+### `POST /api/operator/promote` **[SAFETY]** — REQ-058
+
+The **only** way Gate 1 opens. Sets `model_artifact.is_promoted`. Operator-only.
+
+```json
+{ "model_version": "v3-2026-07-01", "confirmed": true }
+```
+
+- **`409 PRECONDITIONS_NOT_MET`** unless *every* automatic condition already holds — ≥150 valid
+  meals, hypo recall strictly above baseline, acceptable calibration, and **≥90 shadow days**
+  (REQ-048). The response body names which condition failed. The action is the **last**
+  condition, never a way around the others.
+- **No code path may call this.** Not a refit, not a scheduled job, not a metric threshold
+  (`07 §Retraining` — *"Promotion is manual, on hypo recall"*). SDET asserts it.
+- Audit-logged: who, when, and the metric snapshot promoted against.
+- A refit writes a **new, unpromoted** artifact (REQ-060); promotion never carries over.
 
 ## 7. Dishes
 

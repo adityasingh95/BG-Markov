@@ -185,8 +185,26 @@ This is the **only real validation set** and the drift detector.
 | `n_rows` | int | No | |
 | `feature_list` | json | No | |
 | `metrics` | json | No | Hypo recall, Brier, calibration, Clarke |
-| `is_promoted` | bool | No | **Manual promotion only** |
+| `is_promoted` | bool | No | **Manual promotion only** — see below |
 | `kill_switch_tripped` | bool | No | **Manual re-arm only** |
+
+### `is_promoted` is a **gate input**, not a label **[SAFETY]**
+
+`gate1_status()` **reads this column**: Gate 1 opens only on
+`volume ∧ beats_baseline ∧ calibration ∧ shadow_days ≥ 90 ∧ is_promoted` (REQ-058, S-1006).
+
+- Set **only** by the explicit operator promotion action (`POST /api/operator/promote`). No
+  refit, scheduled job, or metric threshold may write it (`07 §Retraining`).
+- **Fails closed:** absent, unknown, or unreadable ⇒ *not promoted*.
+- A refit writes a **new row with `is_promoted = false`** (REQ-060). Promotion never inherits.
+
+> **Known gap (2026-07-18):** in the shipped code this column is written by nothing and **read
+> by nothing** — `gate1_status()` currently ignores it, so Gate 1 opens on metrics alone. S-1006
+> wires it. Recorded in DL-034; until then the deployed gate is weaker than this spec.
+
+**The shadow clock** (`shadow_days`, REQ-048) is derived from `prediction_log` timestamps —
+first logged shadow prediction to now. It is **never a stored boolean**, because a stored flag
+can be set once and then lie forever.
 
 ## 10. `audit_log`
 
