@@ -96,7 +96,7 @@ class PatientProfile(Base):
 
     profile_id: Mapped[int] = mapped_column(primary_key=True)
     effective_from: Mapped[dt.date] = mapped_column()
-    icr: Mapped[float | None] = mapped_column(default=None)  # null blocks Gate 2
+    icr: Mapped[float | None] = mapped_column(default=None)  # null ⇒ calculator refuses (S-1011)
     isf: Mapped[float] = mapped_column(default=30.0)
     isf_source: Mapped[ISFSource] = mapped_column(SAEnum(ISFSource), default=ISFSource.default)
     target_bg: Mapped[int] = mapped_column(default=135)
