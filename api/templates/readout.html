@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Your meal · BG-Markov{% endblock %}
+{% block content %}
+{#
+  S-1002 [SAFETY] — the patient risk readout (05b §5, REQ-040, INV-2).
+  She may be reading this while low. Hypo risk leads, in WORDS.
+
+  NO TREATMENT AMOUNT APPEARS HERE, EVER. `PatientReadout` carries no such field by
+  construction (S-804), and `tests/safety/test_readout_ui.py` asserts that none of the
+  words for one appear anywhere in this file — including inside a comment. This note
+  therefore names none of them. The guard is deliberately blunt, because a rule you have
+  to reason about is a rule someone will reason their way past.
+#}
+<h1>Your meal</h1>
+
+{% if readout is none %}
+{# Before Gate 1 (03 §3 — "Logging only. No model. No output."). An honest state, not a
+   blank and not an error page. No number, no risk claim — see DL-045. #}
+<section class="risk" data-risk-cue aria-label="Nothing to show yet">
+  <span class="risk-icon" aria-hidden="true">🌱</span>
+  <div>
+    <p><strong>Nothing to tell you yet.</strong></p>
+    <p>
+      The system is still learning from what you log. It will stay quiet until it has
+      earned the right to say something useful.
+    </p>
+    <p>Test as usual.</p>
+  </div>
+</section>
+{% else %}
+<section class="risk" data-risk-cue aria-label="Risk readout">
+  <span class="risk-icon" aria-hidden="true">
+    {%- if readout.severity == "high" %}⚠{% elif readout.kind.value == "refusal" %}🤷{% else %}•{% endif -%}
+  </span>
+  <div>
+    <p class="metric-big"><strong>{{ readout.headline }}</strong></p>
+    <p>{{ readout.body }}</p>
+    <p class="muted">
+      Chance of a low: <strong>{{ readout.hypo_risk | replace("_", " ") }}</strong> ·
+      how strongly: <strong>{{ readout.severity }}</strong>
+    </p>
+    {% if readout.kind.value == "conflict" %}
+    <p>
+      The two methods disagree, so <strong>both</strong> are shown and neither is picked.
+      Standard calculation: <strong>{{ readout.baseline_state }}</strong>.
+      Learned model: <strong>{{ readout.model_state }}</strong>.
+    </p>
+    {% endif %}
+    <p>Test as usual.</p>
+  </div>
+</section>
+{% endif %}
+
+<p><a href="/">← Back</a></p>
+{% endblock %}

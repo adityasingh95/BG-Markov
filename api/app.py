@@ -53,6 +53,7 @@ from data.tables import BolusLog, BolusType, CorrectionEvent, LoggedBy, MealEven
 from models.metrics import CalibrationVerdict
 from models.shadow import ShadowReport
 from prescribe.gates import Gate1Status, gate1_status
+from prescribe.readout import PatientReadout, build_patient_readout
 
 _TEST_DELAY_MIN = 120  # 05b §3.1 — "test your BG" prompt is reported mealtime + 120
 _CORRECTION_FOLLOWUP_MIN = 240  # F-3.2 — correction +4 h follow-up BG
@@ -467,3 +468,46 @@ def operator_revoke(
             status_code=404, detail={"error": "UNKNOWN_MODEL_VERSION", "message": str(exc)}
         ) from exc
     return PromotionResult(model_version=payload.model_version, is_promoted=False)
+
+
+def load_patient_readout(session: Session, meal: MealEvent) -> PatientReadout | None:
+    """The readout for a logged meal, or ``None`` when there is nothing to say (S-1002).
+
+    **Today it returns ``None``, and that is correct.** Gate 1 is closed, so there is no
+    patient-visible model output (INV-2, `03 §3` — *"Logging only. No model. No output."*).
+    The live path — features → promoted model → guardrails → persist (INV-9) → serve —
+    exists in `prescribe/serving.py` (S-1008) and is wired in once a model is promoted.
+
+    It returns ``None`` rather than raising, because the *route* must not be in the business
+    of catching a safety exception and deciding what to render instead.
+    """
+    return None
+
+
+@app.get("/meals/{meal_id}/readout", response_class=HTMLResponse)
+def patient_readout(
+    meal_id: int, request: Request, session: Session = Depends(get_session)
+) -> HTMLResponse:
+    """What she sees about a meal (05b §5, REQ-040, INV-2, S-1002).
+
+    ★ **Two branches, no third.** With Gate 1 closed this renders an honest "nothing yet"
+    state and **never constructs a readout at all** — ``build_patient_readout`` is not
+    called, so there is no object to accidentally render. The alternative, catching
+    ``GateNotPassed`` and rendering the best available thing, would put a rendering
+    decision downstream of a safety exception; the next refactor catches it more broadly
+    and something leaks.
+
+    On the open path the gate is checked **twice** — here, and as the first line of
+    ``build_patient_readout`` (S-804). That is deliberate: the builder's check is the one a
+    future second caller cannot forget.
+
+    **No dose ever appears on this page.** `PatientReadout` has no such field, and a test
+    asserts no dose-like word appears in the template source either.
+    """
+    meal = session.get(MealEvent, meal_id)
+    if meal is None:
+        raise HTTPException(status_code=404, detail="meal not found")
+
+    gate1 = _live_gate1(session)
+    readout = load_patient_readout(session, meal) if gate1.is_open else None
+    return templates.TemplateResponse(request, "readout.html", {"readout": readout})
