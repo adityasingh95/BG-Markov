@@ -200,24 +200,53 @@ def test_the_page_never_suggests_testing_less(client: TestClient, meal_id: int) 
 # --- after Gate 1 (rendering, exercised through the readout builder) ----------
 
 
-def _open_gate(monkeypatch: pytest.MonkeyPatch, **kw: object) -> None:
-    """Point the route's readout seam at a built `PatientReadout`.
+def _open_gate(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch, **kw: object
+) -> None:
+    """Open Gate 1 **for real**, then point the readout seam at a built `PatientReadout`.
 
-    This exercises RENDERING. It is not a gate bypass: `build_patient_readout` still runs
-    `require_gate1` as its first line (S-804), and the tests above prove the closed path
-    never reaches it.
+    Deliberately NOT a patched gate. The five conditions are satisfied with real rows —
+    200 valid meals, 120 days of shadow history, a scored model, and a promotion that goes
+    through `POST /api/operator/promote` — so these rendering tests also prove the readout
+    appears **only after a genuine promotion**. Patching `_live_gate1` would have tested
+    the template against a gate that never opened.
+
+    `load_patient_readout` is the data seam (S-1008 wiring lands later); patching it
+    exercises RENDERING. `build_patient_readout` still runs `require_gate1` as its first
+    line (S-804), and the closed-path tests above prove it is never reached.
     """
     import numpy as np
 
     import api.app as app_module
+    from api.presenters import BaselineComparison
     from models.guardrails import guard_prediction
-    from prescribe.gates import gate1_status
+    from models.shadow import build_shadow_report
     from prescribe.readout import build_patient_readout
 
-    gate = gate1_status(
-        valid_meals=200, model_hypo_recall=0.9, baseline_hypo_recall=0.5,
-        is_promoted=True, shadow_days=120, calibration_ok=True,
+    class _Cal:
+        is_acceptable = True
+        n_judged = 3
+        reason = "its percentages match what happened"
+
+    def _evidence(_session: object) -> object:
+        is_hypo = np.array([1] * 20 + [0] * 40)
+        score = np.where(is_hypo == 1, 0.9, 0.1)
+        states = np.where(is_hypo == 1, 2, 3)
+        bg = np.where(is_hypo == 1, 67.0, 130.0)
+        report = build_shadow_report(
+            hypo_score=score, is_hypo=is_hypo, predicted_bg=bg, reference_bg=bg,
+            pred_states=states, actual_states=states, unconstrained_beta_insulin=0.4,
+        )
+        return (report, BaselineComparison(hypo_recall=0.5), _Cal())
+
+    monkeypatch.setattr(app_module, "load_shadow_evidence", _evidence)
+    _seed_gate1_evidence(db)
+    promoted = client.post(
+        "/api/operator/promote", json={"model_version": "v1", "confirmed": True}
     )
+    assert promoted.status_code == 200, f"the gate did not open for real: {promoted.text}"
+
+    gate = _live_gate1_for_test(db)
     state = int(kw.get("state", 2))
     peak = float(kw.get("peak", 0.8))
     probs = np.full(5, (1.0 - peak) / 4.0)
@@ -236,41 +265,75 @@ def _open_gate(monkeypatch: pytest.MonkeyPatch, **kw: object) -> None:
     monkeypatch.setattr(app_module, "load_patient_readout", lambda *_a, **_k: readout)
 
 
+def _seed_gate1_evidence(session: Session) -> None:
+    """200 valid meals, 120 days of shadow history, and one unpromoted artifact."""
+    from data.tables import ModelArtifact, PredictionLog
+
+    session.add(ModelArtifact(
+        version="v1", fit_date=_BASE, data_hash="h", n_rows=200,
+        feature_list=["pre_bg"], metrics={}, is_promoted=False,
+    ))
+    session.add(PredictionLog(
+        created_at=dt.datetime.now() - dt.timedelta(days=120),
+        model_version="v1", gate_state="shadow", input_features={},
+        predicted_distribution={}, baseline_state=3,
+    ))
+    for i in range(200):
+        when = _BASE + dt.timedelta(days=i // 3, hours=i % 3 * 5)
+        session.add(MealEvent(
+            datetime=when, logged_at=when + dt.timedelta(minutes=30),
+            logged_by=LoggedBy.patient, meal_type=MealType.lunch,
+            pre_bg=120, pre_bg_time=when, post_bg=140,
+            post_bg_time=when + dt.timedelta(minutes=120), elapsed_min=120,
+            meal_bolus_units=4.0, correction_bolus_units=0.0, bolus_offset_min=-10,
+            carbs_g=40.0, protein_g=10.0, fat_g=8.0, fiber_g=5.0,
+            macro_confidence=95, ex_duration_min=0, pre_ex_duration_min=0,
+            hypo_treatment=False, snack_during_window=False, is_valid=True,
+        ))
+    session.flush()
+
+
+def _live_gate1_for_test(session: Session):  # type: ignore[no-untyped-def]
+    import api.app as app_module
+
+    return app_module._live_gate1(session)
+
+
 def test_hypo_risk_is_the_headline_in_text(
-    client: TestClient, meal_id: int, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, db: Session, meal_id: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """★ 05b §5.1 — hypo risk leads, and it is WORDS. She may be reading this while low."""
-    _open_gate(monkeypatch, state=2)
+    _open_gate(client, db, monkeypatch, state=2)
     body = _body(client, meal_id)
     assert "low" in body
     assert "elevated" in body, "the text risk label must be rendered, not just a colour"
 
 
 def test_a_refusal_renders_as_words_not_a_blank(
-    client: TestClient, meal_id: int, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, db: Session, meal_id: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """★ 05b §5.3 — "Never fill the silence with a number." But do not leave a silence
     either: a refusal is a rendered answer."""
-    _open_gate(monkeypatch, state=3, in_distribution=False)
+    _open_gate(client, db, monkeypatch, state=3, in_distribution=False)
     body = _body(client, meal_id)
     assert "not confident" in body or "unlike" in body
     assert "test as usual" in body
 
 
 def test_a_conflict_shows_both_and_picks_no_winner(
-    client: TestClient, meal_id: int, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, db: Session, meal_id: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """★ 05b §5.4 — "The system does not pick a winner.\""""
-    _open_gate(monkeypatch, state=5, baseline_state=3)
+    _open_gate(client, db, monkeypatch, state=5, baseline_state=3)
     body = _body(client, meal_id)
     assert "both" in body or ("standard" in body and "model" in body)
     assert "test as usual" in body
 
 
 def test_a_tripped_kill_switch_shows_the_baseline_and_still_no_dose(
-    client: TestClient, meal_id: int, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, db: Session, meal_id: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _open_gate(monkeypatch, state=2, kill_switch=True)
+    _open_gate(client, db, monkeypatch, state=2, kill_switch=True)
     body = _body(client, meal_id)
     assert "paused" in body or "baseline" in body
     for banned in ("dose", "bolus", "units", "inject"):
