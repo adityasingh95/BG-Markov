@@ -1166,3 +1166,43 @@ write vaguely.
 **Ordering:** S-1001a first. S-1001b renders the five-condition checklist, so it wants the
 report card's presentation layer to exist. Neither is blocked by the other's absence in the
 sense that matters — Gate 1 is closed regardless.
+
+## DL-045 — S-1002: what the patient page shows BEFORE Gate 1 (documented tension)
+**Story:** S-1002 [SAFETY] · **Type:** ⚠️ **apparent doc conflict — resolved conservatively
+and escalated, not decided quietly** · **Date:** 2026-07-18 · **Owner:** BA
+
+**The tension.** Two documents point different ways about the patient readout pre-Gate-1:
+
+- **`03 §3`** — CLOSED: *"Logging only. **No model. No output.**"*; Gate 0: *"Metrics
+  computed. OPERATOR-VISIBLE ONLY. **Patient sees nothing.**"*
+- **`10-backlog.md` S-1002 AC** — *"before Gate 1 it renders the refusal / **baseline
+  state** as a rendered answer, never a blank, never an error page."*
+
+Read one way, the AC asks for a **baseline blood-glucose projection displayed to her today**.
+
+**The reading taken.** Before Gate 1 the page renders an honest *"nothing to tell you yet —
+keep logging"* state. No number, no risk claim, no projection.
+
+**Why this reading.**
+1. It satisfies what the AC is actually guarding against — *"a rendered answer, never a
+   blank, never an error page"*. A plain explanation is a rendered answer.
+2. It honours `03 §3`, which is the **state machine that governs gates** and says *no
+   output* in as many words. `03` is a safety document; the backlog is a planning one.
+3. **`BASELINE_FALLBACK` was built by S-804 for the kill switch**, which is a materially
+   different situation: she *has* been seeing output, it has been withdrawn, and the
+   baseline is what remains. Pre-Gate-1 she has never been told anything, so there is no
+   withdrawal to soften.
+4. The failure this project exists to prevent is *a number that gets trusted and is quietly
+   wrong*. A pre-Gate-1 baseline projection is a number she has every reason to trust — the
+   app put it in front of her — about which no evidence has been gathered for her
+   specifically. Shadow mode exists precisely because that evidence does not exist yet.
+
+**What would change if the operator disagrees.** If the intent really is to show her a
+baseline estimate during shadow mode, that is **a change of scope on the patient surface**,
+not an interpretation of an AC. It would need: a decision recorded here, a note on how it
+interacts with `03 §3`, and its own tests. It is a one-line template change and a
+deliberately large paperwork change — which is the right ratio for adding a clinical number
+to her screen.
+
+**Not blocked on the answer.** The conservative reading is safe under either intent: it
+shows her less, never more. If it is wrong, nothing has to be undone — only added.
