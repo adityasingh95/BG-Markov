@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from data.tables import LoggedBy, MealType
 
@@ -118,3 +118,22 @@ class PromotionResult(BaseModel):
 
     model_version: str
     is_promoted: bool
+
+
+class BasalCreate(BaseModel):
+    """`POST /api/basal` (S-1013, REQ-007).
+
+    ``time_taken`` is **required** and **reported** — when she injected. A server-side
+    default would be `datetime.now()` wearing a different hat, and it is the one field
+    whose fabrication silently distorts every later `effective_basal` (ADR-8).
+    """
+
+    date: dt.date
+    units: float = Field(gt=0)
+    time_taken: dt.time
+    logged_by: LoggedBy = LoggedBy.patient
+
+
+class BasalRecorded(BaseModel):
+    date: dt.date
+    units: float

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from core import safety
 from core.validity import exclusion_reasons, is_hypo_outcome, is_valid
 from data.tables import (
+    BasalLog,
     BolusLog,
     CorrectionEvent,
     HypoRescueLog,
@@ -129,6 +130,26 @@ def get_clean_correction_events(session: Session) -> list[CorrectionEvent]:
             .order_by(CorrectionEvent.datetime)
         )
     )
+
+
+def basal_doses(session: Session) -> list[tuple[dt.datetime, float]]:
+    """Every recorded basal dose as ``(reported timestamp, units)``, oldest first (S-1013).
+
+    **The only bridge** from ``basal_log`` to ``features.basal`` — the EWMA has been
+    correct and unreachable since S-402 (DL-046). The timestamp combines the reported
+    ``date`` and ``time_taken``: never ``logged_at``, and never midnight, because the EWMA
+    weights by elapsed time and a fabricated hour is a fabricated weight.
+
+    Ordered by the **reported** date. Insertion order is not chronology, and a day
+    backfilled later must not reorder the series.
+
+    ★ This returns the raw daily doses **only** so they can be smoothed. Using
+    ``BasalLog.units`` as a model feature directly is a forbidden pattern with an AST guard
+    (`detect_raw_basal_dose_as_feature`): Tresiba has ~42 h action and a 3–4 day steady
+    state, so today's dose is not today's effect.
+    """
+    rows = session.scalars(select(BasalLog).order_by(BasalLog.date)).all()
+    return [(dt.datetime.combine(r.date, r.time_taken), r.units) for r in rows]
 
 
 def boluses_before(session: Session, at: dt.datetime) -> list[tuple[dt.datetime, float]]:

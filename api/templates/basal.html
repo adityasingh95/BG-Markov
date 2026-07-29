@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Daily basal · BG-Markov{% endblock %}
+{% block content %}
+{#
+  S-1013 — the daily Tresiba. Two fields, and one of them is a REPORTED time.
+  The time is asked for rather than assumed: she takes it at night and often logs it the
+  next morning, and the smoothing that turns these doses into a model input weights by
+  elapsed time (ADR-8).
+#}
+<h1>Daily basal</h1>
+<p class="muted">Your long-acting insulin. One entry per day.</p>
+
+<form method="post" action="/api/basal" id="basal-form">
+  <label for="date">Which day
+    <input type="date" id="date" name="date" required />
+  </label>
+  <label for="units">How many units
+    <input type="text" inputmode="numeric" id="units" name="units"
+           data-field-kind="basal" required />
+  </label>
+  <label for="time_taken">What time did you take it?
+    <input type="time" id="time_taken" name="time_taken" required />
+    <small class="muted">
+      The time you actually injected — not the time you are filling this in.
+    </small>
+  </label>
+  <button type="submit">Save</button>
+</form>
+
+<p class="muted">
+  Entering a day again corrects it rather than adding a second dose, and the change is
+  recorded.
+</p>
+<p><a href="/">← Back</a></p>
+{% endblock %}

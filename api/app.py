@@ -23,6 +23,8 @@ from api.deps import get_session
 from api.presenters import BaselineComparison, gate1_conditions, shadow_rows
 from api.schemas import (
     AdherenceResponse,
+    BasalCreate,
+    BasalRecorded,
     CorrectionCreate,
     CorrectionCreated,
     CorrectionFollowup,
@@ -36,6 +38,7 @@ from api.schemas import (
 )
 from core.clock import SystemClock
 from data.adherence import GATE1_VALID_MEALS, adherence_metrics
+from data.basal import record_basal
 from data.promotion import promote_model, revoke_promotion
 from data.recording import (
     record_correction_event,
@@ -513,3 +516,31 @@ def patient_readout(
     gate1 = _live_gate1(session)
     readout = load_patient_readout(session, meal) if gate1.is_open else None
     return templates.TemplateResponse(request, "readout.html", {"readout": readout})
+
+
+@app.get("/basal", response_class=HTMLResponse)
+def basal_form(request: Request) -> HTMLResponse:
+    """The daily-Tresiba form (S-1013, REQ-007). Two fields: how much, and **when she
+    took it** — the reported time, never assumed (ADR-8)."""
+    return templates.TemplateResponse(request, "basal.html")
+
+
+@app.post("/api/basal", response_model=BasalRecorded)
+def create_basal(
+    payload: BasalCreate, session: Session = Depends(get_session)
+) -> BasalRecorded:
+    """Record or correct the daily basal dose (S-1013, REQ-007).
+
+    Re-posting a date is a **correction**, audited old → new — not a second dose.
+    ``time_taken`` is required by the schema, so the server never has to invent one.
+    """
+    row = record_basal(
+        session,
+        date=payload.date,
+        units=payload.units,
+        time_taken=payload.time_taken,
+        logged_by=payload.logged_by,
+        clock=SystemClock(),
+    )
+    session.commit()
+    return BasalRecorded(date=row.date, units=row.units)
