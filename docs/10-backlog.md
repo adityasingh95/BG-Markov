@@ -451,7 +451,7 @@ shipped modules.
 served, INV-9). With no promoted model, the patient path yields the baseline, never a raw
 model output. Guardrail refusals propagate as rendered states.
 
-### S-1013 — Basal capture (daily Tresiba) — REQ-007 — **BLOCKS S-1009**
+### S-1013 — Basal capture (daily Tresiba) — REQ-007 — **DONE 2026-07-18 (unblocks S-1009)**
 **Found 2026-07-18 while planning S-1009 (DL-046). `basal_log` exists as a table and
 `features/basal.py` computes `effective_basal` from it — and NOTHING CAN WRITE TO IT. No
 form, no endpoint, no recording function. The REQ-007 traceability row claimed the form was
@@ -467,7 +467,7 @@ date corrects rather than duplicates and is audited; `effective_basal` over reco
 matches the S-402 EWMA; the daily-dose field is never used directly as a model feature (the
 "today's basal dose" forbidden pattern).
 
-### S-1009 — Monthly refit cadence — REQ-060 — **BLOCKED on S-1013**
+### S-1009 — Monthly refit cadence — REQ-060 — **UNBLOCKED (S-1013 done 2026-07-18)**
 **Closes G4. `07 §Retraining`: "Monthly refit, trailing 6 months, older data down-weighted."
 Currently no schedule exists.**
 **AC:** A monthly refit over a trailing 6-month window with older data down-weighted, writing
