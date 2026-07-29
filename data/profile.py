@@ -66,9 +66,14 @@ def append_profile_version(
 ) -> ProfileUpdate:
     """Append a new profile version and report anything worth a second look.
 
-    **Refuses** ``icr <= 0`` / ``isf <= 0``: the calculator divides by both, so there is no
-    meaningful behaviour to fall back on and this is an input error at the door rather than
-    a ``ValueError`` three layers down.
+    **Refuses** ``icr <= 0`` / ``isf <= 0`` / ``target_bg <= 0``: the calculator divides by
+    the first two and measures every correction *from* the third, so there is no meaningful
+    behaviour to fall back on and this is an input error at the door rather than a
+    ``ValueError`` three layers down.
+
+    All three are refused **here**, not only in `ProfileVersionCreate`. The schema shuts the
+    HTTP door; this shuts the one every other caller uses — a CLI, a migration, a fixture,
+    the next screen. A guard that depends on which door you came in through is not a guard.
 
     **Flags but never blocks** an ICR outside `04 §1`'s expected 7–10, and any value that
     moves by a factor of ``LARGE_CHANGE_FACTOR`` from the current one.
@@ -80,6 +85,8 @@ def append_profile_version(
         raise ValueError(f"icr must be a positive number of grams per unit; got {icr!r}")
     if isf <= 0:
         raise ValueError(f"isf must be a positive number of mg/dL per unit; got {isf!r}")
+    if target_bg <= 0:
+        raise ValueError(f"target_bg must be a positive mg/dL reading; got {target_bg!r}")
 
     current = session.scalars(
         select(PatientProfile).order_by(
