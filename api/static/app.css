@@ -128,3 +128,89 @@ textarea,
 select {
   max-width: 100%;
 }
+
+/* --- S-1001a: operator shadow report card -------------------------------- */
+/* Screen-reader-only text. The gate checklist's ✓/✕ is aria-hidden decoration;
+   the meaning has to reach a screen reader in words (05b §2). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.gate-checklist {
+  list-style: none;
+  padding-left: 0;
+}
+.gate-checklist li {
+  padding: 0.35rem 0;
+  line-height: 1.5;
+}
+
+.metric-cards {
+  display: grid;
+  gap: 1rem;
+}
+.metric-card {
+  border: 1px solid var(--pico-muted-border-color, #cfd8dc);
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+}
+.metric-card dt {
+  font-weight: 700;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.metric-card dd {
+  margin: 0;
+}
+.metric-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0.2rem 0;
+}
+.metric-plain {
+  margin: 0.2rem 0;
+}
+.metric-technical {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+}
+
+/* Verdict badges. The WORD is the signal (05b §2) — the tint only reinforces it,
+   so every badge is fully legible with no colour vision at all. */
+.verdict {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.verdict-better { color: #1b5e20; }
+.verdict-same { color: #37474f; }
+.verdict-worse { color: #8d4b00; }
+.verdict-ok { color: #37474f; }
+.verdict-alarm { color: #b32d2e; }
+
+.empty-state {
+  border-left: 6px solid var(--pico-muted-border-color, #cfd8dc);
+  padding: 0.75rem 1rem;
+  background: #f5f7f8;
+  color: #1a1a1a;
+  border-radius: 4px;
+}
+
+/* Wide content scrolls inside its own box; the page never scrolls sideways. */
+details table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}

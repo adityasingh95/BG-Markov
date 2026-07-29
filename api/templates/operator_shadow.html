@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Operator · Shadow report · BG-Markov{% endblock %}
+{% block content %}
+{#
+  S-1001a — the operator's Gate-1 evidence screen (05b §7.2).
+  Operator-only. No model output reaches her from here, and no dose appears on it.
+  Every metric is shown three ways together: value, plain language, technical term.
+#}
+<h1>Shadow report</h1>
+<p class="muted">
+  Operator view. Nothing on this page is visible to her, and nothing here is a treatment
+  suggestion.
+</p>
+
+<section aria-labelledby="gate1-heading">
+  <h2 id="gate1-heading">Can she see the model yet?</h2>
+  <p class="metric-big">
+    Gate 1 is <strong>{{ "OPEN" if gate1.is_open else "CLOSED" }}</strong>
+    {%- if not gate1.is_open %} — all five must be true{% endif %}.
+  </p>
+  <ul class="gate-checklist">
+    {% for c in conditions %}
+    <li>
+      <span aria-hidden="true">{{ "✓" if c.met else "✕" }}</span>
+      <span class="visually-hidden">{{ "Met" if c.met else "Not met" }}:</span>
+      <strong>{{ c.plain }}</strong>
+      <span class="muted">{{ c.detail }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted">
+    Good numbers are not permission. The last line is a decision a person makes on purpose.
+  </p>
+</section>
+
+<section aria-labelledby="metrics-heading">
+  <h2 id="metrics-heading">How is it doing?</h2>
+
+  {% if not rows %}
+  <p class="empty-state">
+    <strong>No model has been fitted yet, so there is nothing to show.</strong>
+    This page fills in once meals have been logged and a model has been scored against
+    what actually happened. Until then the only thing that matters is that she keeps
+    logging.
+  </p>
+  {% else %}
+  <dl class="metric-cards">
+    {% for r in rows %}
+    <div class="metric-card">
+      <dt>
+        {{ r.heading }}
+        {% if r.verdict_label %}
+        <span class="verdict verdict-{{ r.verdict.value }}" data-verdict="{{ r.verdict.value }}">
+          {{ r.verdict_label }}
+        </span>
+        {% endif %}
+      </dt>
+      <dd>
+        <p class="metric-value">{{ r.value }}</p>
+        <p class="metric-plain">{{ r.plain }}</p>
+        {% if r.comparison %}<p class="muted">Compared with {{ r.comparison }}.</p>{% endif %}
+        <p class="metric-technical"><code>{{ r.technical }}</code></p>
+      </dd>
+    </div>
+    {% endfor %}
+  </dl>
+
+  <details>
+    <summary>Detailed charts</summary>
+    <h3>Predictions vs what actually happened</h3>
+    <table>
+      <caption>Rows: what it predicted. Columns: what her reading turned out to be.</caption>
+      <thead>
+        <tr><th scope="col">Predicted</th>{% for s in states %}<th scope="col">{{ s }}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for p in states %}
+        <tr>
+          <th scope="row">{{ p }}</th>
+          {% for a in states %}<td>{{ report.predictions_vs_actuals.get((p, a), 0) }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h3>Do its percentages match reality?</h3>
+    <table>
+      <caption>What it claimed, against how often that actually happened.</caption>
+      <thead>
+        <tr><th scope="col">It said</th><th scope="col">It happened</th><th scope="col">Out of</th></tr>
+      </thead>
+      <tbody>
+        {% for b in report.calibration %}
+        <tr>
+          <td>{{ "%.0f%%" | format(b.mean_predicted * 100) }}</td>
+          <td>{{ "%.0f%%" | format(b.observed_frequency * 100) }}</td>
+          <td>{{ b.count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h3>Clinical danger grid</h3>
+    <table>
+      <caption>Clarke zones. A and B are fine; D and E are the ones that matter.</caption>
+      <thead><tr>{% for z in "ABCDE" %}<th scope="col">{{ z }}</th>{% endfor %}</tr></thead>
+      <tbody><tr>{% for z in "ABCDE" %}<td>{{ report.clarke.get(z, 0) }}</td>{% endfor %}</tr></tbody>
+    </table>
+  </details>
+  {% endif %}
+</section>
+
+<p><a href="/operator">← Back to adherence</a></p>
+{% endblock %}

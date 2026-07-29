@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Operator · Adherence · BG-Markov{% endblock %}
+{% block title %}Operator · Adherence · BG-Markov<p><a href="/operator/shadow">Shadow report — how is the model doing? →</a></p>
+{% endblock %}
 {% block content %}
 <h1>Adherence</h1>
 <p class="muted">Operator view. No model output here.</p>
@@ -38,4 +39,5 @@
 {% else %}
 <p class="muted">No exclusions yet.</p>
 {% endif %}
+<p><a href="/operator/shadow">Shadow report — how is the model doing? →</a></p>
 {% endblock %}

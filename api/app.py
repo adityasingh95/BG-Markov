@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.deps import get_session
+from api.presenters import BaselineComparison, gate1_conditions, shadow_rows
 from api.schemas import (
     AdherenceResponse,
     CorrectionCreate,
@@ -39,8 +40,16 @@ from data.recording import (
     record_meal,
     record_post_bg,
 )
-from data.repositories import annotate_validity, iob_at_start_at
+from data.repositories import (
+    annotate_validity,
+    get_promoted_artifact,
+    iob_at_start_at,
+    shadow_days,
+)
 from data.tables import BolusLog, BolusType, CorrectionEvent, MealEvent
+from models.metrics import CalibrationVerdict
+from models.shadow import ShadowReport
+from prescribe.gates import gate1_status
 
 _TEST_DELAY_MIN = 120  # 05b §3.1 — "test your BG" prompt is reported mealtime + 120
 _CORRECTION_FOLLOWUP_MIN = 240  # F-3.2 — correction +4 h follow-up BG
@@ -313,4 +322,58 @@ def operator_dashboard(
         request,
         "operator.html",
         {"m": m, "gate1_target": GATE1_VALID_MEALS},
+    )
+
+
+def load_shadow_evidence(
+    session: Session,
+) -> tuple[ShadowReport | None, BaselineComparison, CalibrationVerdict | None]:
+    """What Gate-1 evidence currently exists (S-1001a).
+
+    The DB boundary for the report card. It answers *"what evidence is there?"* — never
+    *"may she see it?"*, which is Gate 1's job on an entirely different surface (INV-2,
+    S-1002).
+
+    **Today it returns nothing, and that is correct.** A shadow report needs predictions
+    with their outcomes backfilled (`prediction_log.actual_state`) and a scored model; no
+    model has been promoted and no meal has been logged. Rather than fabricate a report to
+    make the page look populated, the page renders an explicit empty state. Scoring a live
+    model from `prediction_log` arrives with the refit story (S-1009).
+    """
+    if get_promoted_artifact(session) is None:
+        return None, BaselineComparison(), None
+    return None, BaselineComparison(), None
+
+
+@app.get("/operator/shadow", response_class=HTMLResponse)
+def operator_shadow(
+    request: Request, session: Session = Depends(get_session)
+) -> HTMLResponse:
+    """The operator's Gate-1 evidence screen (05b §7.2, S-1001a, REQ-055).
+
+    Operator-only; not in the patient nav. **No dose appears here** and no plain-accuracy
+    figure exists anywhere on it. Gate 1 is read live (ADR-7) and all five of its
+    conditions are shown, met or not — a checklist that hides the unmet ones looks
+    complete when it is not.
+    """
+    report, baseline, calibration = load_shadow_evidence(session)
+    metrics = adherence_metrics(session, now=SystemClock().now())
+    status = gate1_status(
+        valid_meals=metrics.valid_meals,
+        model_hypo_recall=report.hypo_recall.recall if report else 0.0,
+        baseline_hypo_recall=baseline.hypo_recall or 0.0,
+        is_promoted=get_promoted_artifact(session) is not None,
+        shadow_days=shadow_days(session, now=SystemClock().now()),
+        calibration_ok=bool(calibration and calibration.is_acceptable),
+    )
+    return templates.TemplateResponse(
+        request,
+        "operator_shadow.html",
+        {
+            "rows": shadow_rows(report=report, baseline=baseline, calibration=calibration),
+            "report": report,
+            "gate1": status,
+            "conditions": gate1_conditions(status, has_model=report is not None),
+            "states": (1, 2, 3, 4, 5),
+        },
     )
