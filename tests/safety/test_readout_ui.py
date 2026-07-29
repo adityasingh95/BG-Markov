@@ -28,7 +28,8 @@ from api.deps import get_session
 from data.db import create_all, make_engine, session_factory
 from data.tables import LoggedBy, MealEvent, MealType
 
-_TEMPLATE = pathlib.Path(__file__).resolve().parents[2] / "api/templates/readout.html"
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+_TEMPLATE = _REPO_ROOT / "api/templates/readout.html"
 _BASE = dt.datetime(2026, 1, 1, 8, 0)
 
 
@@ -107,22 +108,48 @@ def test_the_closed_page_makes_no_risk_claim_and_shows_no_number(
         assert claim not in body, f"the pre-Gate-1 page made a claim: {claim!r}"
 
 
-def test_build_patient_readout_is_never_called_while_the_gate_is_closed(
+def test_the_closed_path_does_not_even_load_a_readout(
     client: TestClient, meal_id: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """★ THE ADVERSARIAL ONE. The route must **branch**, not catch `GateNotPassed`.
+    """★ The closed branch must not reach the readout path at all.
 
-    Catching it would put the rendering decision downstream of a safety exception, and the
-    natural next refactor catches it somewhere broader and renders "the best we have". If
-    the closed path never constructs a readout, there is no object to accidentally render.
+    `raising=True` on purpose: patching a name the route never calls would make this pass
+    for free. This binds to the seam the open path actually uses, so if the closed branch
+    ever starts going through it, the page 500s instead of quietly rendering something.
     """
     import api.app as app_module
 
-    def _explode(**_kw: object) -> None:
-        raise AssertionError("build_patient_readout was called with Gate 1 closed")
+    def _explode(*_a: object, **_kw: object) -> None:
+        raise AssertionError("the readout path was entered with Gate 1 closed")
 
-    monkeypatch.setattr(app_module, "build_patient_readout", _explode, raising=False)
+    monkeypatch.setattr(app_module, "load_patient_readout", _explode)
     assert client.get(f"/meals/{meal_id}/readout").status_code == 200
+
+
+def test_the_route_never_catches_a_safety_exception() -> None:
+    """★ THE ADVERSARIAL ONE, tested where it can actually be seen.
+
+    The route must **branch**, not catch. Catching `GateNotPassed` would put the rendering
+    decision downstream of a safety exception, and the natural next refactor catches it
+    somewhere broader and renders "the best we have". A monkeypatch cannot prove this — a
+    route that never enters the path passes either way — so it is asserted on the source.
+    """
+    import ast
+
+    source = (_REPO_ROOT / "api/app.py").read_text()
+    caught: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.ExceptHandler) and node.type is not None:
+            names = ast.walk(node.type)
+            for sub in names:
+                if isinstance(sub, ast.Name) and sub.id in (
+                    "GateNotPassed", "SafetyViolation", "BaseException", "Exception"
+                ):
+                    caught.append(sub.id)
+    assert not caught, (
+        f"api/app.py catches {caught} — a safety exception must never become a "
+        "formatting decision"
+    )
 
 
 def test_no_query_param_or_header_opens_the_readout(
