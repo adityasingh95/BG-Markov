@@ -40,8 +40,10 @@ def _report(*, beta_insulin: float = 0.42, clarke_danger: bool = False):  # type
     score = np.where(is_hypo == 1, rng.uniform(0.5, 0.9, n), rng.uniform(0.0, 0.4, n))
     pred_states = np.where(is_hypo == 1, 2, 3)
     actual_states = np.where(is_hypo == 1, 2, 3)
-    predicted_bg = np.where(is_hypo == 1, 67.0, 130.0)
-    reference_bg = predicted_bg.copy()
+    reference_bg = np.where(is_hypo == 1, 67.0, 130.0)
+    # A small non-zero miss on purpose: with MAE exactly 0 no baseline can be strictly
+    # worse, and the lower-is-better direction test would silently degrade to SAME.
+    predicted_bg = reference_bg + 8.0
     if clarke_danger:
         # a genuine "failed to detect a low": truth 50, predicted 120 → Clarke D
         reference_bg = reference_bg.copy()
