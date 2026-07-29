@@ -295,7 +295,7 @@ See DL-044. The **only place Gate 1 can be opened**: the five-condition live che
 visible**, `POST /api/operator/promote` returning **409 PRECONDITIONS_NOT_MET** naming the
 failed condition, and `POST /api/operator/revoke`.
 
-### S-1002 [SAFETY] — Patient readout UI — REQ-040, INV-2
+### S-1002 [SAFETY] — Patient readout UI — REQ-040, INV-2 — **DONE 2026-07-18**
 **Discharges the S-804 deferred presentation note.**
 **AC:** A Jinja template + route rendering `PatientReadout`. **The route calls
 `require_gate1` first, no bypass** — before Gate 1 it renders the refusal / baseline state

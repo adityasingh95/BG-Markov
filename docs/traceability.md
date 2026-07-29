@@ -532,6 +532,32 @@ missing or `<= 0` ICR. The config re-implements no invariant.
       the first condition, and a planted `_refit_and_ship()` in `cli/`.
       Records: **DL-044**. **Deferred:** whether a tripped kill switch blocks promotion
       (`03 §4` silent — inventing the rule would be unsanctioned tightening).
+    - **REQ-040 / INV-2 → S-1002 [SAFETY] (patient readout UI) — ✅ DONE 2026-07-18.**
+      Discharges the S-804 deferred presentation note — **the first patient-reachable model
+      surface**. `GET /meals/{meal_id}/readout` + `readout.html`.
+      ★ **Two branches, no third:** with Gate 1 closed the route renders an honest "nothing
+      yet" state and **never constructs a readout**, so there is no object to accidentally
+      render; catching `GateNotPassed` would put a rendering decision downstream of a safety
+      exception. The gate is checked **twice** on the open path (route + the builder's first
+      line, S-804) — the builder's is the one a future second caller cannot forget.
+      **Pre-Gate-1 shows no number at all** — see **DL-045**, an escalated doc tension
+      (`03 §3` "no output" vs the backlog AC's "baseline state") resolved conservatively.
+      Tests `tests/safety/test_readout_ui.py` (14) + `tests/a11y/test_readout.py` (3):
+      ★ closed ⇒ 200 and a plain state, **no risk claim and no baseline number**;
+      ★ **`build_patient_readout` never called while closed** (monkeypatched to explode);
+      ★ no bypass by query param, header or env var; ★ **no dose-like token in the template
+      source or the rendered page** — S-804 made a dose impossible to *pass*, but nothing
+      stops a template writing one into a sentence; ★ **never scolds** (`05b §8`) and
+      ★ **never suggests testing less** (INV-5); hypo risk the headline in text; refusal
+      rendered as words with "Test as usual" (`05b §5.3`); conflict shows **both**, no winner
+      (`05b §5.4`); kill switch ⇒ baseline wording, still no dose; axe clean; no horizontal
+      overflow at 200% zoom.
+      Four guards **seen to fire** before revert — the route catching `GateNotPassed`, a dose
+      in prose, a baseline projection pre-Gate-1, and a scolding line.
+      ⚠️ **Three SDET defects recorded**, all "green for the wrong reason": 7 of 14 tests
+      passed before the route existed (absence asserted against a 404 body); the post-Gate-1
+      tests patched the readout but not the gate, so they graded the closed branch; and the
+      a11y suite pointed at a nonexistent meal, so axe was grading FastAPI's error page.
     - **REQ-059 → S-1008 (live per-meal prediction wiring) — ✅ DONE 2026-07-18.**
       `prescribe/serving.py::serve_meal_prediction` — pure orchestration, no model logic:
       features → promoted model → guardrails → **persist (INV-9)** → serve. Baseline when no

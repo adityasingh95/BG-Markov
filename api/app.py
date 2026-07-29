@@ -53,7 +53,7 @@ from data.tables import BolusLog, BolusType, CorrectionEvent, LoggedBy, MealEven
 from models.metrics import CalibrationVerdict
 from models.shadow import ShadowReport
 from prescribe.gates import Gate1Status, gate1_status
-from prescribe.readout import PatientReadout, build_patient_readout
+from prescribe.readout import PatientReadout
 
 _TEST_DELAY_MIN = 120  # 05b §3.1 — "test your BG" prompt is reported mealtime + 120
 _CORRECTION_FOLLOWUP_MIN = 240  # F-3.2 — correction +4 h follow-up BG
