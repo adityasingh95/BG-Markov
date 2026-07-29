@@ -305,7 +305,7 @@ as a **rendered answer, never a blank, never an error page**. Hypo risk is the h
 prediction; no query param, header, or env var flips it. `axe` passes. A grep/DOM test
 asserts no dose-like field is present on the readout template.
 
-### S-1003 [SAFETY] — Bolus calculator UI — REQ-042, REQ-043, INV-3, INV-4
+### S-1003 [SAFETY] — Bolus calculator UI — REQ-042, REQ-043, INV-3, INV-4 — **DONE 2026-07-18**
 **The most dangerous screen in the system. Clinical-deployment gated.**
 **AC:** A form + route over `recommend_bolus`. **Ungated** (Gate 2/INV-1 retired, S-1011): a
 missing or `<= 0` ICR renders a plain *"profile incomplete — set the ICR"* state, not a gate

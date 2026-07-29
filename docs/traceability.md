@@ -558,6 +558,41 @@ missing or `<= 0` ICR. The config re-implements no invariant.
       passed before the route existed (absence asserted against a 404 body); the post-Gate-1
       tests patched the readout but not the gate, so they graded the closed branch; and the
       a11y suite pointed at a nonexistent meal, so axe was grading FastAPI's error page.
+    - **REQ-042/043, INV-3, INV-4, REQ-020 → S-1003 [SAFETY] (bolus calculator UI) —
+      ✅ DONE 2026-07-18.** `recommend_bolus` had been tested since S-901 with nothing
+      rendering it. **`api/bolus.py` is a separate router precisely so "no ML in the dose
+      path" is checkable by inspection** — `api/app.py` imports `models.metrics`/`shadow`
+      for the dashboard, so the property would be untestable if the dose routes lived there.
+      Three states decided by **branching, never catching**: profile-incomplete (and it must
+      **not read as a gate** — Gate 2 is retired), treat-the-low-first (checked *before*
+      `recommend_bolus`, so no partially-computed dose is ever in scope), and the suggestion.
+      `data/repositories.py::active_profile` (latest `effective_from`, tie-broken on
+      `profile_id`). `at` is **reported**, not `now()` (ADR-8) — IOB is computed at the time
+      she says she will inject.
+      Tests `tests/safety/test_bolus_ui.py` (22) + `tests/a11y/test_bolus.py` (4):
+      ★ **no IOB `<input>` exists** (every `<input>` parsed, not grepped) — IOB is
+      *subtracted*, so an underestimate raises the dose, and unlike carbs or BG there is
+      nothing to check it against; ★ **BG 79 refuses / 80 computes** — the INV-4 boundary on
+      the screen, pinned to `BOLUS_BG_FLOOR` so the dose path cannot drift from the warning
+      band (DL-043); ★ **`carbs_g=900` renders a VISIBLE flag**, asserted with `<code>`
+      blocks stripped and as its own risk-cue element; ★ **five golden doses to 2 dp**,
+      hand-verified before being committed as spec; ★ **`api/bolus.py` imports nothing from
+      `models/`** (AST) and never catches a safety exception; ★ **no form carries the dose
+      into a log** — `bolus_log` is the source of truth for IOB (`04 §2`), so a suggestion
+      recorded as an injection corrupts every later calculation; axe clean; numeric keypad;
+      no horizontal overflow at 200% zoom; the flag is not colour-only.
+      ⚠️ **A real hole found by planting, in the guard that mattered most:** deleting the
+      visible warning block left **all 21 tests passing**, because `recommend_bolus` embeds
+      "…implausible, please re-check" inside its `arithmetic` string and the assertion was
+      satisfied by the working — the line she is least likely to read. Fixed; the plant now
+      fails twice. **This is the argument for planting violations rather than trusting a
+      green suite.**
+      ⚠️ **Recorded limitation:** the AST guard checks *direct* imports. `api/bolus.py` →
+      `data.repositories` → `models.isf` (module-level, unrelated to dosing). No model output
+      enters the dose path (`prescribe.bolus` + `features.iob`, both pure), but the transitive
+      closure is not clean. Follow-up: split `data/repositories.py`.
+      ⚠️ Also fixed a **real layout defect** measured from the DOM rather than guessed: the
+      shared `.risk` flex child's `min-width: auto` pushed the page 2px sideways at 200% zoom.
     - **REQ-059 → S-1008 (live per-meal prediction wiring) — ✅ DONE 2026-07-18.**
       `prescribe/serving.py::serve_meal_prediction` — pure orchestration, no model logic:
       features → promoted model → guardrails → **persist (INV-9)** → serve. Baseline when no
