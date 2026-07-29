@@ -189,3 +189,25 @@ def test_the_operator_page_links_to_the_report_card(client: TestClient) -> None:
 def test_the_patient_facing_pages_do_not_link_to_it(client: TestClient) -> None:
     """★ Operator-only (05b §7). The meal-log page is hers; the evidence screen is not."""
     assert "/operator/shadow" not in client.get("/").text
+
+
+# --- S-1001b: the promotion control on the page ------------------------------
+
+
+def test_the_promotion_button_is_disabled_with_the_reason_visible(
+    client: TestClient,
+) -> None:
+    """★ 05b §7.3 — the button is disabled while any condition is unmet **and the reason is
+    always visible**. A dead control with no explanation invites hunting for a way round
+    it; a disabled control with its reason beside it reads as a description of reality."""
+    body = client.get("/operator/shadow").text.lower()
+    assert "disabled" in body, "the promotion control must be disabled before the gate is ready"
+    assert "not permission" in body or "on purpose" in body, (
+        "the copy must say that good numbers are not permission (05b §7.3)"
+    )
+
+
+def test_the_control_sits_below_the_evidence_not_above_it(client: TestClient) -> None:
+    """The decision follows the reading, not the other way round."""
+    body = client.get("/operator/shadow").text.lower()
+    assert body.index("how is it doing") < body.index("turn it on")
