@@ -504,6 +504,34 @@ missing or `<= 0` ICR. The config re-implements no invariant.
       message claimed it while it existed only on a local command line). Record: **DL-044**
       (the S-1001 split, plus two AC corrections: Gate 2 must not be shown, and the
       calibration *verdict* is a first-class row).
+    - **REQ-058 → S-1001b [SAFETY] (the promotion control) — ✅ DONE 2026-07-18.**
+      **Gate 1 now has a door.** `data/promotion.py` had existed since S-1006 with no
+      reachable caller, so the gate could not open at all and manual promotion had never
+      been exercised as a workflow — an unfinished feature that looked like safety.
+      ★ **`Gate1Status.automatic_conditions_met`** — the four machine-checkable conditions,
+      **excluding promotion**. `is_promoted` is itself one of the five, so `is_open` is false
+      *by definition* at the moment of promotion; an endpoint gating on it refuses every
+      promotion forever, and **a gate that can never open reads as caution, not as a bug**.
+      `.failed_conditions` is one shared list so the 409 body and the screen cannot drift.
+      `POST /api/operator/promote` **re-evaluates the gate from live data** (the UI disabling
+      the button is a courtesy, not a control); **409** names *every* unmet condition; **400**
+      without an explicit `confirmed`; **404** on an unknown version, creating nothing; audited
+      via `data/promotion.py`. `POST /api/operator/revoke` has **no preconditions, ever**.
+      Tests `tests/safety/test_promotion_api.py` (17) + `tests/integration/test_operator_shadow.py`:
+      ★ **promotion succeeds when the four automatic conditions hold** (the test the story
+      exists for — nothing else catches the `is_open` substitution); ★ Gate 1 actually reads
+      OPEN afterwards; ★ each condition unmet **alone** ⇒ 409 naming itself (parametrised);
+      ★ several unmet ⇒ **all** named; ★ **revoke works when the conditions no longer hold**;
+      ★ **the client cannot assert its own readiness** — `preconditions_met`/`gate1_open`/
+      `valid_meals=999` in the payload still gets 409, so the claim is provably *inert*;
+      ★ **no `cli/` module calls `promote_model`** (AST) — the "refit then promote" cron job
+      `07 §Retraining` forbids; confirmation required; both actions audited old→new; revoke
+      effective on the next read (ADR-7); no env var or query param promotes.
+      Four guards **seen to fire** before revert — `is_open` substituted (**7** fail, every
+      one reading as "promotion refused"), preconditions added to revoke, the 409 truncated to
+      the first condition, and a planted `_refit_and_ship()` in `cli/`.
+      Records: **DL-044**. **Deferred:** whether a tripped kill switch blocks promotion
+      (`03 §4` silent — inventing the rule would be unsanctioned tightening).
     - **REQ-059 → S-1008 (live per-meal prediction wiring) — ✅ DONE 2026-07-18.**
       `prescribe/serving.py::serve_meal_prediction` — pure orchestration, no model logic:
       features → promoted model → guardrails → **persist (INV-9)** → serve. Baseline when no

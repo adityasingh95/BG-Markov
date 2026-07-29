@@ -289,7 +289,7 @@ alarm, not a silent pass. **No row shows a verdict it cannot justify** (no basel
 `NOT_COMPARED`). `axe` passes; usable at 200% zoom. **Renders with no model and no data
 (pre-data) without error** — that is today's real state.
 
-#### S-1001b [SAFETY] — The promotion control — REQ-058, INV-2
+#### S-1001b [SAFETY] — The promotion control — REQ-058, INV-2 — **DONE 2026-07-18**
 See DL-044. The **only place Gate 1 can be opened**: the five-condition live checklist
 (`05b §7.3`), a button **disabled while any condition is unmet with the reason always
 visible**, `POST /api/operator/promote` returning **409 PRECONDITIONS_NOT_MET** naming the
