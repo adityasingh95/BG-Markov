@@ -390,7 +390,25 @@ missing or `<= 0` ICR. The config re-implements no invariant.
     **Placement deviates from the story text** (top-level `synthetic/`, not `tests/`) —
     **DL-039**, for SDET/Dev role separation. `synthetic/` joins `mypy --strict`; deliberately
     **not** added to the coverage gate (fixture code).
-  - **REQ-057 → S-1005 [SAFETY] (end-to-end cycle test) — Backlog.** Drives synthetic data
+  - **REQ-057 → S-1005 [SAFETY] (end-to-end cycle test) — ✅ DONE 2026-07-18.**
+    **The only artefact that checks the invariants across the seams.** The unit suite proves
+    each holds *given its inputs*; nothing else proves those inputs are what the previous
+    stage produced. `tests/integration/test_end_to_end_cycle.py` (12), one assertion per
+    seam and named after it, over one seeded 120-day synthetic cycle written **through
+    `annotate_validity`** rather than straight into the DB.
+    ★ **Every seam seen to fail under a planted cross-stage violation** — rescued meals no
+    longer excluded ⇒ the INV-7 assertion (and 4 more, the corruption propagating);
+    `serve_prediction` returning before persisting ⇒ the INV-9 assertion; folds sharing one
+    calendar date ⇒ the leakage assertion; the ICR check raising `GateNotPassed` ⇒ the
+    "not a gate by another name" assertion (S-1011); the dashboard 403ing when the gate is
+    shut ⇒ the INV-2 assertion, whose *other* half is that the readout refuses.
+    ★ **New finding, asserted on real pipeline output:** the full cycle produces **188 valid
+    meals**, clearing the 150 floor — and **Gate 1 is still shut** on the other four
+    conditions. Volume is necessary and never sufficient (`03 §3`).
+    ⚠️ **Process note (S-1005 outcome):** two plants were initially **no-ops**, and the
+    suite's "all passed" nearly read as "the most important seam has no guard". A plant that
+    does not change behaviour proves the reverse of what it looks like; plants are now
+    marked and grepped for before the result is believed. Drives synthetic data
     through logging → INV-7 → features → fit → temporal CV → metrics → gates → readout →
     shadow dashboard → bolus, asserting INV-1/2/7/9 and gate refusals **across** the chain.
   - **★ Review addendum (2026-07-18, DL-034) — operational-spine stories added.** Holding

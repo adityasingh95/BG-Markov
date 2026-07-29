@@ -334,7 +334,7 @@ forbidden-import guard runs in `tests/forbidden/` and asserts `core/`,`models/`,
 comes from the system clock. The forbidden-import guard fires if a production module imports
 it.
 
-### S-1005 [SAFETY] — End-to-end cycle test — REQ-057
+### S-1005 [SAFETY] — End-to-end cycle test — REQ-057 — **DONE 2026-07-18**
 **The "prove it all works through the full cycle" story.**
 **AC:** One test (or suite) drives synthetic data (S-1004) through the **whole chain**:
 logging/validity + INV-7 → features → model fit → temporal CV → metric suite → gates →
