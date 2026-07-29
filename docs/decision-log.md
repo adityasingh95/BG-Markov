@@ -1134,3 +1134,35 @@ no error and no warning. Cheap to decide before there is history; expensive afte
 `tests/unit/test_state.py` already pins it exactly, including the 79/80 edge. **What closed is
 the caveat, not the value** — the boundary had been carrying an "unconfirmed" marker since S-501
 and the docs asserted something the project had not actually decided.
+
+## DL-044 — S-1001 split into S-1001a (report card) and S-1001b (promotion control)
+**Story:** S-1001 (EPIC 10) · **Type:** scope split · **Date:** 2026-07-18 · **Owner:** BA
+
+`10-backlog.md` S-1001 is one story covering the whole operator dashboard, and the EPIC 10
+build order additionally folds in *"the promotion control"*. That is two different kinds of
+screen sharing a URL:
+
+- **S-1001a — the shadow report card.** Read-only. Renders evidence. Nothing it does can
+  change system state.
+- **S-1001b [SAFETY] — the promotion control.** The **only place Gate 1 can be opened**, plus
+  `POST /api/operator/promote` / `/revoke`. Every click has a consequence for a person who
+  cannot feel a low.
+
+**Why split.** A `[SAFETY]` story owes a written invariant argument and an adversarial test
+pass. Folding it into a rendering story dilutes both — the safety work ends up as a section in
+a UI story's test file rather than a suite anyone will defend in a year. The split is also the
+honest read of the TDD loop: a large story produces a large RED, and a large RED is easy to
+write vaguely.
+
+**Two AC corrections while splitting** (recorded, not silently fixed):
+1. S-1001's AC says *"Live Gate 1 / Gate 2 status shown."* **Gate 2 was retired** (S-1011,
+   DL-035). The dashboard shows Gate 1 only. Showing a retired gate would imply a dose control
+   exists that does not.
+2. It says the dashboard renders *"a reliability/calibration diagram"*. Since S-1012 there is
+   also a **calibration verdict** (`hypo_calibration`, DL-042) — a pass/fail on an
+   operator-approved rule, not just a curve. The verdict is a first-class row; the curve stays
+   behind the detailed-charts disclosure (`05b §7.2`).
+
+**Ordering:** S-1001a first. S-1001b renders the five-condition checklist, so it wants the
+report card's presentation layer to exist. Neither is blocked by the other's absence in the
+sense that matters — Gate 1 is closed regardless.

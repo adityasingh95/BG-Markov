@@ -264,15 +264,36 @@ Calibration, hypo recall, Clarke grid, predictions vs actuals, `β_insulin < 0` 
 > (S-1005) are **not gated** and are buildable now. S-1002/S-1003 render gated states now;
 > their patient-visible model/dose output still waits on Gate 1 / clinical go-live.
 
-### S-1001 — Operator shadow dashboard UI — REQ-055
+### S-1001 — Operator shadow dashboard UI — REQ-055 — **SPLIT (DL-044)**
+Split into **S-1001a** (read-only report card) and **S-1001b [SAFETY]** (the promotion
+control — the only place Gate 1 opens). A `[SAFETY]` story owes a written invariant argument
+and an adversarial pass; folding it into a rendering story dilutes both.
+
+#### S-1001a — Operator shadow report card (read-only) — REQ-055
 **AC:** A rendered operator page for `build_shadow_report`: hypo recall @ FAR (**headline
-metric**), Brier, a reliability/calibration diagram, Clarke grid, predictions-vs-actuals
-matrix, off-by-one/severe rates, and the **`β_insulin < 0` confounding alarm** on the same
-screen. Live Gate 1 / Gate 2 status shown. Operator-only, in the operator nav, **not** the
-patient nav. **No plain-accuracy figure anywhere.** No dose on this screen.
-**TDD:** Grep — `accuracy` absent from the template. The `β_insulin < 0` case renders a
-visible alarm, not a silent pass. `axe` passes; usable at 200% zoom. Renders with an empty
-report (pre-data) without error.
+metric**), the **calibration verdict** (S-1012 — pass/fail on the DL-042 rule), Brier, MAE,
+off-by-one/severe rates, the Clarke danger count, and the **`β_insulin < 0` confounding
+alarm** on the same screen. Live **Gate 1** status (Gate 2 is retired — S-1011/DL-035; it must
+not appear). Operator-only, in the operator nav, **not** the patient nav. **No plain-accuracy
+figure anywhere.** No dose on this screen.
+Every row is shown **three ways together** (`05b §7.2`): value, plain-language
+interpretation, technical term. Verdict badges are **Better / About the same / Worse against
+the clinical baseline** — never an invented absolute standard (**DL-042**). Rows with no
+baseline figure show **no verdict**, not a flattering one. The two sanctioned absolute
+verdicts: the calibration rule (operator-approved) and Clarke **D/E**, which is dangerous by
+the measure's own construction.
+Full charts (reliability curve, Clarke grid, confusion matrix) sit behind a **detailed
+charts** disclosure.
+**TDD:** Grep — `accuracy` absent from the template. `β_insulin < 0` renders a **visible**
+alarm, not a silent pass. **No row shows a verdict it cannot justify** (no baseline ⇒
+`NOT_COMPARED`). `axe` passes; usable at 200% zoom. **Renders with no model and no data
+(pre-data) without error** — that is today's real state.
+
+#### S-1001b [SAFETY] — The promotion control — REQ-058, INV-2
+See DL-044. The **only place Gate 1 can be opened**: the five-condition live checklist
+(`05b §7.3`), a button **disabled while any condition is unmet with the reason always
+visible**, `POST /api/operator/promote` returning **409 PRECONDITIONS_NOT_MET** naming the
+failed condition, and `POST /api/operator/revoke`.
 
 ### S-1002 [SAFETY] — Patient readout UI — REQ-040, INV-2
 **Discharges the S-804 deferred presentation note.**
