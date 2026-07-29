@@ -1206,3 +1206,84 @@ to her screen.
 
 **Not blocked on the answer.** The conservative reading is safe under either intent: it
 shows her less, never more. If it is wrong, nothing has to be undone — only added.
+
+## DL-046 — REQ-007 has no capture surface; `basal_log` is unwritable (correction + new story)
+**Found:** while planning S-1009 · **Type:** ⚠️ **correction of a traceability claim** ·
+**Date:** 2026-07-18 · **Owner:** BA
+
+**The finding.** `basal_log` exists as a table, `features/basal.py` computes `effective_basal`
+(EWMA, halflife 25 h, S-402) and is tested — and **nothing in the system can write a basal
+dose.** No form, no endpoint, no recording function, no CLI, no import. A grep for `BasalLog`
+across the tree returns exactly one hit: its own definition.
+
+**The traceability claim was wrong.** The REQ-007 row read *"✅ Schema done (form:
+S-302/EPIC 3)"*. S-302 delivered the **bolus-timing** block, and EPIC 3 closed without a basal
+form. The requirement was recorded as covered by a story that did not cover it — the same
+class of error as DL-041, and found the same way: by reading a claim against the code while
+planning the next piece of work.
+
+**Why it matters now.** `effective_basal` is a model feature (REQ-021). Without a way to
+record the daily Tresiba, **the model cannot be fitted on real data at all** — S-1009 would
+have hit this halfway through, with the assembler already written. It is a hard blocker, not
+a nice-to-have.
+
+**Why it went unnoticed.** Everything that needed `effective_basal` so far either tested the
+EWMA in isolation (S-402, pure) or fabricated the value in memory (`scripts/demo_end_to_end.py`,
+the E2E cycle). Nothing had yet asked the database for it. **A feature nobody has sourced
+end-to-end is a feature nobody has checked exists.**
+
+**Action.** New story **S-1013 — basal capture** (REQ-007), a hard prerequisite for S-1009.
+The REQ-007 traceability row is corrected to ⚠️ **Schema only — no capture surface** rather
+than being quietly upgraded when the story lands.
+
+## DL-047 — S-1009: older meals are down-weighted with a 90-day half-life
+**Story:** S-1009 · **Type:** modelling constant — **escalated and answered** · **Date:**
+2026-07-18 · **Approved by:** the operator, on a written proposal (path per DL-042)
+
+`07 §Retraining` says *"Monthly refit, trailing 6 months, older data down-weighted"* and gives
+**no rate**. Choosing one is a modelling decision with clinical consequences, so it was put to
+the operator rather than picked.
+
+**Answer: exponential decay, half-life 90 days**, applied over the trailing 6-month window. A
+meal from three months ago counts half as much as one from this week; the oldest in the window
+counts about a quarter.
+
+**Reasoning.** Insulin resistance is present (TDD 60 U) so sensitivity drifts, which is why the
+spec asks for down-weighting at all. But the binding constraint here is **data scarcity**: at
+~150 meals, weighting too sharply shrinks the effective sample and makes the model jumpy month
+to month. Ninety days adapts to a real physiological shift within a couple of refits while
+still letting six-month-old meals carry real information.
+
+**It multiplies into the existing weights, it does not replace them.** `hypo_confidence_weights`
+(S-601) already up-weights hypo states ×4 and scales by macro confidence. Recency is a third
+factor. **A rescued low from five months ago is still a low** — recency reduces its weight; it
+must never zero it (INV-7 in spirit).
+
+**Reviewable, like DL-042.** Trigger: the same ≥150-real-meals point as OQ-8/R-1. If refits
+turn out to swing month to month, the half-life is too short; if the model lags a known change
+in her management, it is too long. Both are observable on the shadow dashboard.
+
+## DL-048 — S-1010: the profile screen refuses nonsense and flags the unusual
+**Story:** S-1010 · **Type:** input-validation policy with clinical flavour — **escalated and
+answered** · **Date:** 2026-07-18 · **Approved by:** the operator
+
+**Refuse** `icr <= 0` outright: the calculator divides by it, so there is no meaningful
+behaviour to fall back on. Same for `isf <= 0`.
+
+**Flag, do not block, values outside the expected range** (`04 §1`: ICR expected 7–10). The
+screen shows the previous value alongside the new one and says plainly that the entry is
+unusual.
+
+**Why not hard limits.** A genuine clinical change outside the usual range must remain
+enterable. If the screen refuses it, the workaround is editing the database by hand — which is
+audited nowhere and versioned by nobody, so the safer-looking option produces the less safe
+outcome.
+
+**Why not silent acceptance.** A mistyped ICR of `90` instead of `9` would be accepted and
+would under-dose every meal afterwards, with nothing on screen to notice.
+
+**Precedent.** This is the same shape as INV-3 on the calculator: **cap-and-flag, never
+silently accept and never silently refuse.** The consistency is deliberate — one rule for
+implausible input across the system is one rule to remember.
+
+**Every change is appended and audited** (REQ-054, `audit_log`), like promotion.

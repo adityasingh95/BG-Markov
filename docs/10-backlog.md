@@ -451,21 +451,54 @@ shipped modules.
 served, INV-9). With no promoted model, the patient path yields the baseline, never a raw
 model output. Guardrail refusals propagate as rendered states.
 
-### S-1009 — Monthly refit cadence — REQ-060
+### S-1013 — Basal capture (daily Tresiba) — REQ-007 — **BLOCKS S-1009**
+**Found 2026-07-18 while planning S-1009 (DL-046). `basal_log` exists as a table and
+`features/basal.py` computes `effective_basal` from it — and NOTHING CAN WRITE TO IT. No
+form, no endpoint, no recording function. The REQ-007 traceability row claimed the form was
+delivered by S-302/EPIC 3; S-302 delivered bolus timing and EPIC 3 closed without it.**
+**Why it blocks:** `effective_basal` is a model feature (REQ-021). Until a basal dose can be
+recorded, **the model cannot be fitted on real data at all**.
+**AC:** An operator/patient action records the daily dose: `units` and the **REPORTED**
+`time_taken` (ADR-8 — never the system clock; `logged_at` is separate). One row per date;
+re-recording the same date is an audited correction, not a duplicate. `effective_basal` is
+computed from these rows, never entered.
+**TDD:** `time_taken` is reported and differs from `logged_at`; a second entry for the same
+date corrects rather than duplicates and is audited; `effective_basal` over recorded rows
+matches the S-402 EWMA; the daily-dose field is never used directly as a model feature (the
+"today's basal dose" forbidden pattern).
+
+### S-1009 — Monthly refit cadence — REQ-060 — **BLOCKED on S-1013**
 **Closes G4. `07 §Retraining`: "Monthly refit, trailing 6 months, older data down-weighted."
 Currently no schedule exists.**
 **AC:** A monthly refit over a trailing 6-month window with older data down-weighted, writing
 a **new** `ModelArtifact` (never overwriting) that stays **unpromoted** until the operator
 promotes it (S-1006). A refit never auto-promotes.
+**Down-weighting (DL-047, operator-approved):** exponential decay, **half-life 90 days** over
+the trailing 6-month window — a meal from 3 months ago counts half as much as one from this
+week, the oldest about a quarter. It **multiplies into** the existing hypo × macro-confidence
+weights (S-601); it does not replace them. **A rescued low from five months ago is still a
+low** — recency reduces its weight and must never zero it.
+**Also in scope:** the DB→features assembler (nothing assembles features from `meal_event`
+rows today — the demo fabricates IOB/effective-basal in memory), `python -m cli refit`, and
+wiring `api/app.py::load_shadow_evidence` so the operator dashboard shows real numbers instead
+of its deliberate "no model fitted yet" stub.
 **TDD:** a refit produces a new artifact row with `is_promoted = False`. The trailing window
-and down-weighting are applied (not a full-history equal-weight fit).
+and down-weighting are applied (not a full-history equal-weight fit). ★ A refit **never
+promotes** — the AST guard from S-1001b already asserts `cli/` cannot call `promote_model`.
 
 ### S-1010 — Patient-profile update surface — REQ-061
 **Closes G5. Clinical constants are versioned (REQ-054) but there is no operator action to
 append a new version — the "keep ICR/ISF updatable later" ask has no surface.**
 **AC:** An operator-only action appends a **new** `patient_profile` version (e.g. a revised
-ICR/ISF/target); the prior version is retained (append-only, never mutated). Gate 2 and the
-bolus calculator read the latest version live. No clinical value is hardcoded.
+ICR/ISF/target); the prior version is retained (append-only, never mutated). ~~Gate 2 and~~
+**the bolus calculator reads** the latest version live (Gate 2 is retired — S-1011/DL-035;
+corrected 2026-07-18). No clinical value is hardcoded.
+**Validation (DL-048, operator-approved):** **refuse** `icr <= 0` / `isf <= 0` outright — the
+calculator divides by them. **Flag but do not block** values outside the expected range
+(`04 §1`: ICR 7–10), showing the previous value alongside. Hard limits would push a genuine
+out-of-range clinical change into a hand-edit of the database, which is audited nowhere — the
+safer-looking option produces the less safe outcome. Same shape as INV-3 on the calculator:
+**cap-and-flag, never silently accept and never silently refuse.** Every change audited.
 **TDD:** appending a version creates a new row and leaves the old intact; `recommend_bolus`
 reflects the new value on the next call (live, not cached).
 
