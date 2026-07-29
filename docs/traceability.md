@@ -472,6 +472,38 @@ missing or `<= 0` ICR. The config re-implements no invariant.
       `0.10000000000000003`, so a bare `<=` failed DL-042 **at its own stated boundary** —
       the approved rule was unimplementable as written. Fixed with a documented
       `_FP_SLACK = 1e-9` (representation error only; the 0.101 case still fails).
+    - **REQ-055 → S-1001a (operator shadow report card) — ✅ DONE 2026-07-18.**
+      Discharges the S-805 deferred presentation note. `api/presenters.py` (pure view-model
+      construction) + `GET /operator/shadow` + `operator_shadow.html`. **Badges are relative
+      to the clinical baseline, never an invented absolute** (DL-042): `NOT_COMPARED` maps to
+      an **empty label**, so a row with nothing to compare against shows no badge at all.
+      Two sanctioned absolutes only: the calibration verdict (operator-approved) and Clarke
+      **D/E**, dangerous by the measure's own construction.
+      Tests `tests/unit/test_presenters.py` + `tests/integration/test_operator_shadow.py` +
+      `tests/a11y/test_operator_shadow.py` (26 + 3):
+      ★ **no baseline figure ⇒ no verdict and an empty label** — the row keeps its number and
+      its meaning, and the absence is what is shown; a row never borrows a neighbour's
+      comparison; ★ **direction asserted both ways** (recall higher-is-better, MAE
+      lower-is-better) — one inverted comparison would flip a badge while the page rendered
+      perfectly; comparison is **exact, no invented tolerance** (0.7100 vs 0.7099 is BETTER,
+      not "about the same" — a looser notion of "beats the baseline" beside the gate's strict
+      one would be the one the operator reads); ★ `β_insulin < 0` ⇒ ALARM **and the row is
+      present when healthy**, so its absence cannot be read as clearance; ★ any Clarke **D/E**
+      ⇒ ALARM regardless of baseline; ★ **"accuracy" in no field of any row**, and absent from
+      the rendered page **and** the template source; ★ **`report=None` ⇒ no rows** (zeroed
+      rows would read as "a model catching 0% of her lows" — a claim about a model that does
+      not exist); ★ **renders with an empty database** (today's actual state, and the most
+      likely thing to crash); ★ **all five Gate-1 conditions named**; ★ **Gate 2 appears
+      nowhere** (retired, S-1011); no dose token in the template; axe clean; no horizontal
+      overflow at 200% zoom; ★ checklist rows read met/unmet **in words**, not by icon and
+      colour.
+      Five guards **seen to fire** before revert — `NOT_COMPARED` labelled "Looks fine", a
+      direction inverted, the empty-state early return removed, an "Overall accuracy" figure
+      added, and the calibration row dropped to restore the pre-S-1012 four.
+      `api.presenters` added to the **CI** coverage gate (self-corrected — the first commit
+      message claimed it while it existed only on a local command line). Record: **DL-044**
+      (the S-1001 split, plus two AC corrections: Gate 2 must not be shown, and the
+      calibration *verdict* is a first-class row).
     - **REQ-059 → S-1008 (live per-meal prediction wiring) — ✅ DONE 2026-07-18.**
       `prescribe/serving.py::serve_meal_prediction` — pure orchestration, no model logic:
       features → promoted model → guardrails → **persist (INV-9)** → serve. Baseline when no

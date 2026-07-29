@@ -269,7 +269,7 @@ Split into **S-1001a** (read-only report card) and **S-1001b [SAFETY]** (the pro
 control — the only place Gate 1 opens). A `[SAFETY]` story owes a written invariant argument
 and an adversarial pass; folding it into a rendering story dilutes both.
 
-#### S-1001a — Operator shadow report card (read-only) — REQ-055
+#### S-1001a — Operator shadow report card (read-only) — REQ-055 — **DONE 2026-07-18**
 **AC:** A rendered operator page for `build_shadow_report`: hypo recall @ FAR (**headline
 metric**), the **calibration verdict** (S-1012 — pass/fail on the DL-042 rule), Brier, MAE,
 off-by-one/severe rates, the Clarke danger count, and the **`β_insulin < 0` confounding
