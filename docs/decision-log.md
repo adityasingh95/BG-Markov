@@ -1286,4 +1286,21 @@ would under-dose every meal afterwards, with nothing on screen to notice.
 silently accept and never silently refuse.** The consistency is deliberate — one rule for
 implausible input across the system is one rule to remember.
 
+### Extended at implementation (2026-07-29) — `target_bg` and *where* the refusal lives
+Two clarifications recorded at close, neither a change of policy:
+
+1. **`target_bg <= 0` is refused too.** The rule above named the two divisors. `target_bg` is
+   not divided by, but every correction is measured *from* it —
+   `(current_bg - target_bg) / isf` — so at a target of `0` every correction is sized as
+   though her whole blood glucose were excess. INV-3 caps the result at 15 U and flags it, so
+   this was bounded; a capped wrong dose is still a wrong dose. Same argument, third number.
+   **No range is checked or flagged beyond positivity:** `04 §1` documents an expected band
+   for ICR only, and inventing one for the target would be an unsanctioned clinical choice.
+2. **The refusal lives in `data.profile`, not only in the request schema.** It was originally
+   in `ProfileVersionCreate` alone, which shut the HTTP door and left open the one every
+   other caller uses — a CLI, a migration, a fixture, the next screen. Validation that lives
+   only in the request schema **guards the transport, not the operation**: it looks complete
+   from the endpoint and is absent everywhere else. Both layers now hold it, and the function
+   is the authoritative one.
+
 **Every change is appended and audited** (REQ-054, `audit_log`), like promotion.

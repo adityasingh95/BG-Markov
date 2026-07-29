@@ -486,7 +486,7 @@ of its deliberate "no model fitted yet" stub.
 and down-weighting are applied (not a full-history equal-weight fit). ★ A refit **never
 promotes** — the AST guard from S-1001b already asserts `cli/` cannot call `promote_model`.
 
-### S-1010 — Patient-profile update surface — REQ-061
+### S-1010 — Patient-profile update surface — REQ-061 — **DONE 2026-07-29**
 **Closes G5. Clinical constants are versioned (REQ-054) but there is no operator action to
 append a new version — the "keep ICR/ISF updatable later" ask has no surface.**
 **AC:** An operator-only action appends a **new** `patient_profile` version (e.g. a revised
@@ -501,6 +501,14 @@ safer-looking option produces the less safe outcome. Same shape as INV-3 on the 
 **cap-and-flag, never silently accept and never silently refuse.** Every change audited.
 **TDD:** appending a version creates a new row and leaves the old intact; `recommend_bolus`
 reflects the new value on the next call (live, not cached).
+
+> **Done 2026-07-29.** `data/profile.py`, `POST /api/operator/profile` + `GET /operator/profile`,
+> `api/templates/profile.html`. 21 tests. **G5 closed** — the calculator's *"setting missing"*
+> now has a screen that can fix it. Three plants seen to fire on a clean tree (`UPDATE` not
+> `INSERT`; blocking instead of flagging; flags computed but never returned).
+> ★ The plants also surfaced a real defect: `target_bg <= 0` was refused by the request schema
+> and by nothing else, leaving every non-HTTP caller past the guard — and `target_bg` is what
+> every correction is measured *from*. Fixed RED-first. Story: `docs/stories/S-1010.md`.
 
 ### S-1011 [SAFETY] — Retire Gate 2 / INV-1 (ICR de-gated) — REQ-041 — **DONE 2026-07-18**
 > **Operator go given 2026-07-18; executed the same day (DL-035).** Removed a named safety

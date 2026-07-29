@@ -53,7 +53,8 @@ a visible gap. INV-n coverage is tracked in the second table.*
 | **REQ-041/042/043 [SAFETY]** (prescriptive bolus calculator — clinical formula only, **no ML in the dose path**; INV-1/3/4; full arithmetic shown; suggestion for review) | **S-901** | `tests/safety/test_bolus.py` (★ INV-4 BG 79 refuses / 80 computes; ★ INV-3 carbs=900 typo ⇒ capped 15 U **AND** `implausible_input` flagged; negative ⇒ 0.0; ★ INV-1 icr=null ⇒ `GateNotPassed`, no bypass param/env; ★ **5 golden hand-computed doses** to 2 dp; property — non-decreasing in carbs, non-increasing in IOB; **no `models` import** in the dose path; arithmetic shown + framed as review) | ✅ Done — **closes EPIC 9 (final story)**; `prescribe/bolus.py::recommend_bolus`; ICR 9 / ISF 30 / target 135 clinician-confirmed (DL-032), read from the versioned profile — no hardcoded constant; human gate + code gate both cleared |
 | **REQ-006** (every bolus → `bolus_log`) | S-201 | `test_bolus_log_roundtrips` | ✅ Schema done |
 | **REQ-007** (daily Tresiba → `basal_log`) | S-201 (schema) · **S-1013 (capture)** | `tests/integration/test_basal_capture.py` (15) — ★ `time_taken` reported vs `logged_at` from an injectable clock fixed months away (ADR-8); ★ a repeat date **corrects**, audited old→new, never duplicates (two rows would double-count in the EWMA and show a titration that never happened); a first entry is **not** audited as a change; ★ `basal_doses` → `effective_basal` matches the S-402 EWMA with the timestamp built from the **reported** date + time (asserted not midnight, not the clock); ★ a 24→30 U step is **smoothed, not stepped**; ordered by reported date; non-positive refused; the endpoint **requires** `time_taken`. Plus `tests/forbidden/` `detect_raw_basal_dose_as_feature` | ✅ **Done 2026-07-18 — the gap DL-046 found is closed.** Previously ⚠️ schema-only: the row claimed *"form: S-302/EPIC 3"* and no such form existed, so **the model could not be fitted on real data at all**. **Unblocks S-1009.** Four guards seen to fire on a clean tree. |
-| **REQ-054** (constants versioned, never overwritten) | S-201 | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place` | ✅ Done |
+| **REQ-054** (constants versioned, never overwritten) | S-201 (schema) · **S-1010 (the writer)** | `test_patient_profile_change_creates_a_new_row`, `test_patient_profile_is_immutable_in_place`; **S-1010** `test_appending_leaves_the_previous_version_completely_intact` | ✅ **Done.** Previously the schema *permitted* versioning with nothing exercising it — S-1010 adds the only code path that appends one. |
+| **REQ-061** (operator updates ICR/ISF/target) | **S-1010** | `tests/integration/test_profile_update.py` (21) — ★ appending leaves the previous row intact **field-for-field** (an `UPDATE` would pass every "the calculator sees the new value" test and destroy the record of what it was actually using); ★ the calculator reflects a new version **on the next call**, not a cached one (ADR-7 in spirit); ★ out-of-range is **flagged and still written** (ICR 20 lands) — blocking would send the change to a hand-edit nobody audits; ★ a 10× typo flags on **relative** change, catching a misplaced decimal point without inventing an ISF band `04 §1` does not give; an ordinary 9 → 8.5 flags **nothing** (a screen that warns about everything warns about nothing); the first-ever version is not a "large change"; `icr`/`isf`/`target_bg` non-positive **refused with nothing written**; only **changed** fields audited old→new | ✅ **Done 2026-07-29 (DL-048).** Three plants seen to fire on a clean tree. |
 
 > No `REQ-nnn` is claimed by S-101; it is an infrastructure story.
 > **S-102** also maps to no numbered REQ — the backlog cites its requirement
@@ -633,8 +634,12 @@ missing or `<= 0` ICR. The config re-implements no invariant.
       evidence Gate 1 needs, and the deadlock would look like caution.
     - **REQ-060 → S-1009 (monthly refit cadence) — Backlog.** New unpromoted artifact per
       `07 §Retraining`.
-    - **REQ-061 → S-1010 (patient-profile update surface) — Backlog.** Append-only new
-      profile version; updatable ICR/ISF/target read live.
+    - **REQ-061 → S-1010 (patient-profile update surface) — ✅ Done 2026-07-29.** Append-only
+      new profile version; updatable ICR/ISF/target read live. Refuses nonsense, flags the
+      unusual, blocks neither (DL-048). ★ The refusal now lives in `data.profile` **as well
+      as** `ProfileVersionCreate`: `target_bg <= 0` was refused only at the HTTP door, and
+      every other caller — a CLI, a migration, a fixture — came in past it. A guard that
+      depends on which door you used is not a guard.
     - **REQ-056 → S-1004 reclassified `[SAFETY]`** — forbidden-import guard moved into
       `tests/forbidden/`.
     - **REQ-041 / INV-1 → S-1011 [SAFETY] (retire Gate 2 / ICR gate) — PLANNED, not started
