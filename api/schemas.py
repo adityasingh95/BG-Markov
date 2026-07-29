@@ -137,3 +137,26 @@ class BasalCreate(BaseModel):
 class BasalRecorded(BaseModel):
     date: dt.date
     units: float
+
+
+class ProfileVersionCreate(BaseModel):
+    """`POST /api/operator/profile` (S-1010, REQ-061, `05 §6`).
+
+    ``gt=0`` on both divisors mirrors `data.profile` (DL-048): the calculator divides by
+    them, so a non-positive value is refused at the door. Values that are merely *unusual*
+    pass validation and come back **flagged** — blocking them would push a genuine clinical
+    change into a hand-edit of the database, audited nowhere.
+    """
+
+    effective_from: dt.date
+    icr: float = Field(gt=0)
+    isf: float = Field(gt=0)
+    target_bg: int = Field(gt=0)
+
+
+class ProfileVersionCreated(BaseModel):
+    effective_from: dt.date
+    icr: float
+    isf: float
+    target_bg: int
+    flags: list[str]

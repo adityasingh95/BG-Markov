@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Operator · Profile · BG-Markov{% endblock %}
+{% block content %}
+{#
+  S-1010 — the clinical constants. Operator-only.
+  Every change APPENDS a version; nothing here overwrites. The history below is shown
+  rather than merely kept, because a previous value on the page is what makes
+  "never overwrite" visible instead of a claim in a docstring (REQ-054).
+#}
+<h1>Clinical settings</h1>
+<p class="muted">Operator view. Changes are recorded as new versions — nothing is overwritten.</p>
+
+<section aria-labelledby="current-heading">
+  <h2 id="current-heading">In force now</h2>
+  {% if current %}
+  <dl class="metrics">
+    <dt>ICR — grams of carbohydrate per unit</dt><dd>{{ current.icr }}</dd>
+    <dt>ISF — mg/dL per unit</dt><dd>{{ current.isf }}</dd>
+    <dt>Target</dt><dd>{{ current.target_bg }} mg/dL</dd>
+    <dt>In force from</dt><dd>{{ current.effective_from }}</dd>
+  </dl>
+  {% else %}
+  <p class="empty-state">
+    <strong>No profile is set.</strong> The ICR is <strong>not set</strong>, so the
+    calculator has nothing to work with and will say so. Setting one below is the first step.
+  </p>
+  {% endif %}
+</section>
+
+<section aria-labelledby="new-heading">
+  <h2 id="new-heading">Record a change</h2>
+  <form method="post" action="/api/operator/profile">
+    <label for="effective_from">In force from
+      <input type="date" id="effective_from" name="effective_from" required />
+    </label>
+    <label for="icr">ICR — grams of carbohydrate per unit
+      <input type="text" inputmode="numeric" id="icr" name="icr"
+             data-field-kind="carb-ratio" required />
+      <small class="muted">Usually between 7 and 10. Anything else is allowed, and flagged.</small>
+    </label>
+    <label for="isf">ISF — mg/dL per unit
+      <input type="text" inputmode="numeric" id="isf" name="isf"
+             data-field-kind="sensitivity" required />
+    </label>
+    <label for="target_bg">Target (mg/dL)
+      <input type="text" inputmode="numeric" id="target_bg" name="target_bg"
+             data-field-kind="bg" required />
+    </label>
+    <button type="submit">Record this change</button>
+  </form>
+  <p class="muted">
+    A value well outside the usual range, or a big jump from the current one, is accepted
+    and flagged rather than refused — a genuine clinical change must always be enterable
+    here rather than by editing the database.
+  </p>
+</section>
+
+<section aria-labelledby="history-heading">
+  <h2 id="history-heading">History</h2>
+  {% if history %}
+  <table>
+    <caption>Every version, newest first. Nothing here is ever overwritten.</caption>
+    <thead>
+      <tr>
+        <th scope="col">In force from</th><th scope="col">ICR</th>
+        <th scope="col">ISF</th><th scope="col">Target</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in history %}
+      <tr>
+        <td>{{ v.effective_from }}</td><td>{{ v.icr }}</td>
+        <td>{{ v.isf }}</td><td>{{ v.target_bg }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Nothing recorded yet.</p>
+  {% endif %}
+</section>
+
+<p><a href="/operator">← Back to adherence</a></p>
+{% endblock %}

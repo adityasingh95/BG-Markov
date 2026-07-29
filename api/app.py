@@ -33,12 +33,15 @@ from api.schemas import (
     MealCreated,
     PostBgResult,
     PostBgUpdate,
+    ProfileVersionCreate,
+    ProfileVersionCreated,
     PromotionRequest,
     PromotionResult,
 )
 from core.clock import SystemClock
 from data.adherence import GATE1_VALID_MEALS, adherence_metrics
 from data.basal import record_basal
+from data.profile import append_profile_version, profile_history
 from data.promotion import promote_model, revoke_promotion
 from data.recording import (
     record_correction_event,
@@ -48,6 +51,7 @@ from data.recording import (
     record_post_bg,
 )
 from data.repositories import (
+    active_profile,
     annotate_validity,
     get_promoted_artifact,
     iob_at_start_at,
@@ -544,3 +548,44 @@ def create_basal(
     )
     session.commit()
     return BasalRecorded(date=row.date, units=row.units)
+
+
+@app.get("/operator/profile", response_class=HTMLResponse)
+def operator_profile(
+    request: Request, session: Session = Depends(get_session)
+) -> HTMLResponse:
+    """The clinical constants and their history (S-1010, REQ-054/REQ-061).
+
+    The history is **shown, not merely kept**: versioning is the whole point of this screen,
+    and a previous value on the page is what makes "never overwrite" visible rather than a
+    claim in a docstring.
+    """
+    return templates.TemplateResponse(
+        request,
+        "profile.html",
+        {"current": active_profile(session), "history": profile_history(session)},
+    )
+
+
+@app.post("/api/operator/profile", response_model=ProfileVersionCreated)
+def create_profile_version(
+    payload: ProfileVersionCreate, session: Session = Depends(get_session)
+) -> ProfileVersionCreated:
+    """Append a new profile version (S-1010, REQ-061, `05 §6`).
+
+    **Appends, never updates.** Returns any flags rather than refusing on them — a
+    validation result nobody can see is not a warning (DL-048).
+    """
+    result = append_profile_version(
+        session,
+        effective_from=payload.effective_from,
+        icr=payload.icr,
+        isf=payload.isf,
+        target_bg=payload.target_bg,
+        changed_by=LoggedBy.operator,
+    )
+    session.commit()
+    return ProfileVersionCreated(
+        effective_from=payload.effective_from, icr=payload.icr, isf=payload.isf,
+        target_bg=payload.target_bg, flags=[f.value for f in result.flags],
+    )
