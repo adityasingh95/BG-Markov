@@ -147,24 +147,54 @@ def test_a_very_low_reading_still_refuses(client: TestClient, db: Session) -> No
 # --- ★ state 3: the implausible input is FLAGGED, not silently capped --------
 
 
+def _outside_the_working(body: str) -> str:
+    """The page with every `<code>` block removed.
+
+    ★ `recommend_bolus` puts "(CAPPED — input looks implausible, please re-check)" inside
+    its `arithmetic` string, which the page renders in a `<code>` block. So asserting the
+    warning words appear *somewhere* in the body passes even when no visible flag is
+    rendered at all — the words ride in on the working. This strips that, so the assertion
+    is about what she would actually see above the number.
+    """
+    return re.sub(r"<code[^>]*>.*?</code>", " ", body, flags=re.DOTALL)
+
+
 def test_a_carbs_typo_shows_the_flag_not_a_confident_fifteen_units(
     client: TestClient, db: Session
 ) -> None:
-    """★ INV-3. Capping alone hands back a plausible-looking 15 U for a 900 g typo — a
-    number that reads as a decision rather than an error. The words are the safety margin.
+    """★ INV-3, AND THE MOST IMPORTANT ASSERTION ON THIS SCREEN.
+
+    Capping alone hands back a plausible-looking 15 U for a 900 g typo — a number that
+    reads as a decision rather than an error. The words are the safety margin, and they
+    have to be **visible**, not buried in the arithmetic line.
     """
     _profile(db)
     body = _page(client, carbs_g="900")
     assert f"{MAX_BOLUS_U:.2f}" in body or "15" in body
-    assert "implausible" in body or "looks wrong" in body or "re-check" in body, (
-        "the cap was rendered without the flag — a typo wearing an answer"
+
+    visible = _outside_the_working(body)
+    assert "looks wrong" in visible or "implausible" in visible, (
+        "the cap was rendered without a visible flag — a typo wearing an answer"
     )
+    assert "re-check" in visible
+
+
+def test_the_flag_is_its_own_element_not_a_phrase_in_the_working(
+    client: TestClient, db: Session
+) -> None:
+    """★ It must be a rendered cue she cannot read past, not a clause inside the
+    `<code>` line she is least likely to read."""
+    _profile(db)
+    body = _page(client, carbs_g="900")
+    cues = re.findall(r"<section[^>]*data-risk-cue[^>]*>.*?</section>", body, re.DOTALL)
+    assert cues, "no risk cue element was rendered for an implausible input"
+    assert any("looks wrong" in c or "implausible" in c for c in cues)
 
 
 def test_a_normal_meal_is_not_flagged(client: TestClient, db: Session) -> None:
     _profile(db)
-    body = _page(client, carbs_g="40")
-    assert "implausible" not in body and "looks wrong" not in body
+    visible = _outside_the_working(_page(client, carbs_g="40"))
+    assert "implausible" not in visible and "looks wrong" not in visible
 
 
 # --- ★ the arithmetic is shown, and it is the arithmetic the tests compute ----
