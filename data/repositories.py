@@ -22,6 +22,7 @@ from data.tables import (
     HypoRescueLog,
     MealEvent,
     ModelArtifact,
+    PatientProfile,
     PredictionLog,
 )
 from features.iob import iob_at
@@ -195,6 +196,21 @@ def get_promoted_artifact(session: Session) -> ModelArtifact | None:
     """
     return session.scalars(
         select(ModelArtifact).where(ModelArtifact.is_promoted.is_(True))
+    ).first()
+
+
+def active_profile(session: Session) -> PatientProfile | None:
+    """The profile version in force (REQ-054 — versioned, never overwritten).
+
+    The latest ``effective_from``, tie-broken on ``profile_id`` so two rows dated the same
+    day resolve to the one written later rather than to whichever the DB returns first.
+    ``None`` when there is no profile at all, which the calculator treats exactly as a
+    missing ICR — there is nothing to calculate with either way.
+    """
+    return session.scalars(
+        select(PatientProfile).order_by(
+            PatientProfile.effective_from.desc(), PatientProfile.profile_id.desc()
+        )
     ).first()
 
 

@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from api.bolus import router as bolus_router
 from api.deps import get_session
 from api.presenters import BaselineComparison, gate1_conditions, shadow_rows
 from api.schemas import (
@@ -62,6 +63,7 @@ _BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_BASE_DIR / "templates"))
 
 app = FastAPI(title="BG-Markov", docs_url=None, redoc_url=None)
+app.include_router(bolus_router)
 app.mount("/static", StaticFiles(directory=str(_BASE_DIR / "static")), name="static")
 
 # Seeded favourite meals — the adherence mechanism (05b §3). Tapping one

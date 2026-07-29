@@ -214,3 +214,28 @@ details table {
   overflow-x: auto;
   max-width: 100%;
 }
+
+/* --- S-1003: the calculator ---------------------------------------------- */
+/* The arithmetic line is long and unbroken by design — it is the working, and
+   breaking it into pieces would make it harder to check. So it wraps rather than
+   pushing the page sideways at 200% zoom, where she is most likely to be reading
+   it (05b §2). */
+.metric-technical code {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+/* A flex item defaults to `min-width: auto`, so it refuses to shrink below its
+   content and pushes the page sideways — invisible at 100%, a 2px horizontal
+   scroll at 200% zoom. The risk box is shared by the readout and the calculator,
+   so it is fixed here rather than per-screen. */
+.risk {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+.risk > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Calculator · BG-Markov{% endblock %}
+{% block content %}
+{#
+  S-1003 [SAFETY] — the bolus calculator (05b §6).
+  The form is a GET: this page computes and shows, it never writes. There is no control
+  here that carries the number into a log or an action, because `bolus_log` is the source
+  of truth for insulin-on-board (04 §2) and a suggestion recorded as an injection would
+  corrupt every later calculation with no error and no way to tell.
+#}
+<h1>Calculator</h1>
+
+<form method="get" action="/bolus">
+  <label for="at">When will you inject?
+    <input type="datetime-local" id="at" name="at" value="{{ request.query_params.get('at', '') }}" required />
+  </label>
+  <label for="carbs_g">Carbohydrate (g)
+    <input type="text" inputmode="numeric" id="carbs_g" name="carbs_g"
+           data-field-kind="carbs" value="{{ request.query_params.get('carbs_g', '') }}" required />
+  </label>
+  <label for="current_bg">Your reading now (mg/dL)
+    <input type="text" inputmode="numeric" id="current_bg" name="current_bg"
+           data-field-kind="bg" value="{{ request.query_params.get('current_bg', '') }}" required />
+  </label>
+  <button type="submit">Work it out</button>
+</form>
+
+{% if view %}
+{% if view.state.value == "profile_incomplete" %}
+<section class="risk" data-risk-cue aria-label="Profile incomplete">
+  <span class="risk-icon" aria-hidden="true">⚙</span>
+  <div><p><strong>Setting missing.</strong></p><p>{{ view.message }}</p></div>
+</section>
+
+{% elif view.state.value == "treat_the_low_first" %}
+<section class="risk" data-risk-cue aria-label="Treat the low first">
+  <span class="risk-icon" aria-hidden="true">⚠</span>
+  <div><p><strong>Treat the low first.</strong></p><p>{{ view.message }}</p></div>
+</section>
+
+{% else %}
+<section aria-label="Insulin on board">
+  <h2>Insulin on board</h2>
+  <p class="metric-big">{{ "%.2f" | format(view.iob.units) }} U</p>
+  <p class="muted">
+    {{ view.iob.source }} ({{ view.iob.n_recent_boluses }} earlier injection(s) counted).
+    You cannot type this in, and you should not need to.
+  </p>
+</section>
+
+<section aria-label="Suggestion">
+  <h2>Suggestion</h2>
+  {% if view.recommendation.implausible_input %}
+  <section class="risk" data-risk-cue aria-label="Input looks wrong">
+    <span class="risk-icon" aria-hidden="true">⚠</span>
+    <div>
+      <p><strong>That input looks wrong — please re-check it.</strong></p>
+      <p>
+        The arithmetic came out above the safe maximum, which usually means a typo in the
+        carbohydrate figure rather than a genuinely large meal. The figure below is the
+        capped maximum, and it is <strong>implausible</strong> as an answer to what you
+        entered. Do not act on it without checking what you typed.
+      </p>
+    </div>
+  </section>
+  {% endif %}
+  <p class="metric-big">{{ "%.2f" | format(view.recommendation.total_units) }} U</p>
+  <h3>The working</h3>
+  <p class="metric-technical"><code>{{ view.recommendation.arithmetic }}</code></p>
+  <p><strong>{{ view.recommendation.framing }}</strong></p>
+</section>
+{% endif %}
+{% endif %}
+
+<p><a href="/">← Back</a></p>
+{% endblock %}
