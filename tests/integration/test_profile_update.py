@@ -173,6 +173,33 @@ def test_a_non_positive_isf_is_refused(session: Session, isf: float) -> None:
     assert session.query(PatientProfile).count() == 0
 
 
+@pytest.mark.parametrize("target_bg", [0, -90])
+def test_a_non_positive_target_bg_is_refused_by_the_function_not_only_the_schema(
+    session: Session, target_bg: int
+) -> None:
+    """★ ADVERSARIAL (SDET, added after the plants).
+
+    `ProfileVersionCreate` already refuses this with `Field(gt=0)` — so the HTTP door is
+    shut and the test below passes. The **function** door is not, and it is the one every
+    other caller uses: a CLI, a migration, a fixture, the next screen.
+
+    It matters because ``target_bg`` is the number every correction is measured *from*:
+    `prescribe/bolus.py` computes ``(current_bg - target_bg) / isf``. At a target of 0,
+    every correction is sized as though her whole blood glucose were excess. INV-3 caps the
+    result at 15 U and flags it, so this is bounded rather than unbounded — but a capped
+    wrong dose is still a wrong dose, and it arrives with no explanation of why.
+
+    ``icr`` and ``isf`` are refused in both layers. The third clinical number should not be
+    the one where the guard depends on which door you came in through.
+    """
+    with pytest.raises(ValueError):
+        append_profile_version(
+            session, effective_from=_JAN, icr=9.0, isf=30.0, target_bg=target_bg,
+            changed_by=LoggedBy.operator,
+        )
+    assert session.query(PatientProfile).count() == 0
+
+
 # --- ★ flag, but do not block (DL-048) ---------------------------------------
 
 
