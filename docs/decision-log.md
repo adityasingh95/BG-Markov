@@ -1304,3 +1304,41 @@ Two clarifications recorded at close, neither a change of policy:
    is the authoritative one.
 
 **Every change is appended and audited** (REQ-054, `audit_log`), like promotion.
+
+---
+
+## DL-049 — `prediction_log.actual_state` is never backfilled; Gate 1 cannot open without it
+**Story:** found while scoping S-1009 · **Type:** gap found, fixed in the story that found it
+· **Date:** 2026-07-29 · **Raised by:** BA
+
+**The gap.** `prediction_log.actual_state` has existed since S-201, is commented
+`# backfilled`, and **nothing backfills it.** A grep across the tree returns its schema
+definition and its Alembic migration — no writer.
+
+**Why it matters more than it looks.** `actual_state` is the outcome half of every
+shadow-mode comparison. Without it there is no hypo recall, no Brier score and no calibration
+curve — so `load_shadow_evidence` can never return a report, the operator dashboard can never
+show evidence, and **Gate 1 can never open.** The model would be fitted, correct, and
+permanently unreviewable. That failure mode is silent: every test passes, the dashboard
+renders its (honest) empty state, and nothing anywhere says *this can never fill in.*
+
+**Why it went unnoticed — the third instance of one pattern.** Every shadow-mode test to date
+passes `pred_states` and `actual_states` **as arrays, directly**, and
+`scripts/demo_end_to_end.py` builds both in memory. Nothing had asked the database for an
+outcome. The same shape as DL-046 (`basal_log` had no writer, and every consumer either tested
+the EWMA in isolation or fabricated the value) and DL-046's own predecessor.
+
+> **The rule this keeps re-teaching: a column nobody has sourced end-to-end is a column nobody
+> has checked is written.** Testing a pure function over a hand-built list proves the function;
+> it proves nothing about whether anything fills its input.
+
+**Decision.** Fixed inside S-1009 rather than deferred, because S-1009's stated scope already
+includes wiring `load_shadow_evidence`, and that wiring is not possible without it. The
+backfill derives `actual_state = bg_to_state(post_bg)` for predictions whose meal has since
+been read — **derivation, not entry**, the same rule as IOB — and is idempotent, the same
+shape as `backfill_correction_iob` (S-306b, DL-020).
+
+**Not decided here.** Whether the backfill should also run automatically when a `post_bg` is
+recorded, rather than only on demand. Raised for the operator; the on-demand path is
+sufficient for the refit and the dashboard, and adding a write to the post-BG path is a change
+to a capture surface she uses daily.
