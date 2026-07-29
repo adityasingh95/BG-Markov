@@ -75,7 +75,7 @@ def _valid_meals(session: Session, n: int) -> None:
             pre_bg=120, pre_bg_time=when, post_bg=140,
             post_bg_time=when + dt.timedelta(minutes=120), elapsed_min=120,
             meal_bolus_units=4.0, correction_bolus_units=0.0, bolus_offset_min=-10,
-            carbs_g=40.0, protein_g=10.0, fat_g=8.0, fiber_g=5.0, net_carbs_g=35.0,
+            carbs_g=40.0, protein_g=10.0, fat_g=8.0, fiber_g=5.0,
             macro_confidence=95, ex_duration_min=0, pre_ex_duration_min=0,
             hypo_treatment=False, snack_during_window=False, is_valid=True,
         ))
