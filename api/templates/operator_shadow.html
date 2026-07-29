@@ -110,5 +110,38 @@
   {% endif %}
 </section>
 
+<section aria-labelledby="promote-heading">
+  {# S-1001b [SAFETY] — the ONLY place Gate 1 can be opened (05b §7.3). It sits BELOW
+     the evidence on purpose: the decision follows the reading. #}
+  <h2 id="promote-heading">Turn it on for her</h2>
+  {% if gate1.is_open %}
+  <p>
+    She is seeing model output from <strong>{{ promoted_version }}</strong>.
+    You can stop that at any time — it takes effect on the next prediction.
+  </p>
+  <form method="post" action="/api/operator/revoke">
+    <input type="hidden" name="model_version" value="{{ promoted_version }}" />
+    <input type="hidden" name="confirmed" value="true" />
+    <button type="submit" class="secondary">Stop showing it to her</button>
+  </form>
+  {% else %}
+  <p>
+    <button type="button" disabled aria-describedby="promote-why">Turn it on for her</button>
+  </p>
+  <p id="promote-why" class="muted">
+    {% if not gate1.automatic_conditions_met %}
+    Not yet — {{ gate1.failed_conditions | reject("equalto", "promotion") | join(", ") }}
+    {%- if not rows %} (nothing has been scored yet){% endif %}.
+    {% else %}
+    Everything else is met. This is now a decision, not a calculation.
+    {% endif %}
+  </p>
+  {% endif %}
+  <p class="muted">
+    Good numbers are <strong>not permission</strong>. Turning this on means she will act on
+    what it says, and she cannot feel a low to check it against.
+  </p>
+</section>
+
 <p><a href="/operator">← Back to adherence</a></p>
 {% endblock %}

@@ -52,6 +52,47 @@ class Gate1Status:
     model_hypo_recall: float
     baseline_hypo_recall: float
 
+    @property
+    def automatic_conditions_met(self) -> bool:
+        """The four conditions a machine can check — **excluding promotion** (S-1001b).
+
+        ★ This exists because ``is_promoted`` is itself one of Gate 1's five conditions, so
+        ``is_open`` is false *by definition* at the moment of promotion. An endpoint that
+        gated promotion on ``is_open`` would refuse every promotion forever, including the
+        correct one — and a gate that can never open reads as caution rather than as a bug.
+        The promotion endpoint checks **this** instead. Do not substitute ``is_open``.
+
+        A property, not a stored field, so it cannot drift from the four it summarises.
+        """
+        return (
+            self.meets_volume
+            and self.beats_baseline
+            and self.meets_shadow_period
+            and self.calibration_ok
+        )
+
+    @property
+    def failed_conditions(self) -> tuple[str, ...]:
+        """Machine-readable names of every unmet condition, in checklist order.
+
+        One list, so the 409 body and the operator's screen say the same thing instead of
+        being two hand-maintained lists that drift. **Every** failure is reported, never
+        just the first: a refusal that reveals one blocker at a time teaches the operator to
+        treat the gate as an obstacle course.
+        """
+        unmet: list[str] = []
+        if not self.meets_volume:
+            unmet.append("volume")
+        if not self.beats_baseline:
+            unmet.append("beats_baseline")
+        if not self.calibration_ok:
+            unmet.append("calibration")
+        if not self.meets_shadow_period:
+            unmet.append("shadow_period")
+        if not self.is_promoted:
+            unmet.append("promotion")
+        return tuple(unmet)
+
 
 def gate1_status(
     *,

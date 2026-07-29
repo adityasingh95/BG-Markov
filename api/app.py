@@ -30,9 +30,12 @@ from api.schemas import (
     MealCreated,
     PostBgResult,
     PostBgUpdate,
+    PromotionRequest,
+    PromotionResult,
 )
 from core.clock import SystemClock
 from data.adherence import GATE1_VALID_MEALS, adherence_metrics
+from data.promotion import promote_model, revoke_promotion
 from data.recording import (
     record_correction_event,
     record_correction_followup,
@@ -46,10 +49,10 @@ from data.repositories import (
     iob_at_start_at,
     shadow_days,
 )
-from data.tables import BolusLog, BolusType, CorrectionEvent, MealEvent
+from data.tables import BolusLog, BolusType, CorrectionEvent, LoggedBy, MealEvent
 from models.metrics import CalibrationVerdict
 from models.shadow import ShadowReport
-from prescribe.gates import gate1_status
+from prescribe.gates import Gate1Status, gate1_status
 
 _TEST_DELAY_MIN = 120  # 05b §3.1 — "test your BG" prompt is reported mealtime + 120
 _CORRECTION_FOLLOWUP_MIN = 240  # F-3.2 — correction +4 h follow-up BG
@@ -357,15 +360,8 @@ def operator_shadow(
     complete when it is not.
     """
     report, baseline, calibration = load_shadow_evidence(session)
-    metrics = adherence_metrics(session, now=SystemClock().now())
-    status = gate1_status(
-        valid_meals=metrics.valid_meals,
-        model_hypo_recall=report.hypo_recall.recall if report else 0.0,
-        baseline_hypo_recall=baseline.hypo_recall or 0.0,
-        is_promoted=get_promoted_artifact(session) is not None,
-        shadow_days=shadow_days(session, now=SystemClock().now()),
-        calibration_ok=bool(calibration and calibration.is_acceptable),
-    )
+    status = _live_gate1(session)
+    promoted = get_promoted_artifact(session)
     return templates.TemplateResponse(
         request,
         "operator_shadow.html",
@@ -375,5 +371,99 @@ def operator_shadow(
             "gate1": status,
             "conditions": gate1_conditions(status, has_model=report is not None),
             "states": (1, 2, 3, 4, 5),
+            "promoted_version": promoted.version if promoted else None,
         },
     )
+
+
+def _live_gate1(session: Session) -> Gate1Status:
+    """Evaluate Gate 1 from live data (ADR-7). One place, so the page and the endpoint can
+    never disagree about what is true right now."""
+    report, baseline, calibration = load_shadow_evidence(session)
+    metrics = adherence_metrics(session, now=SystemClock().now())
+    return gate1_status(
+        valid_meals=metrics.valid_meals,
+        model_hypo_recall=report.hypo_recall.recall if report else 0.0,
+        baseline_hypo_recall=baseline.hypo_recall or 0.0,
+        is_promoted=get_promoted_artifact(session) is not None,
+        shadow_days=shadow_days(session, now=SystemClock().now()),
+        calibration_ok=bool(calibration and calibration.is_acceptable),
+    )
+
+
+@app.post("/api/operator/promote", response_model=PromotionResult)
+def operator_promote(
+    payload: PromotionRequest, session: Session = Depends(get_session)
+) -> PromotionResult:
+    """**[SAFETY]** Open Gate 1 (S-1001b, REQ-058, `05 §6`). The only door it has.
+
+    **The gate is re-evaluated here, from live data.** The UI disables the button when the
+    conditions are unmet; that is a courtesy, not a control. Anything reaching this URL — a
+    stale tab, a half-finished script, a future bug — meets the same bar, because the check
+    lives at the point of effect.
+
+    ★ **The precondition is ``automatic_conditions_met``, NOT ``is_open``.** ``is_promoted``
+    is itself one of Gate 1's five conditions, so ``is_open`` is false *by definition* at
+    the moment of promotion; gating on it would refuse every promotion forever, including
+    the correct one, and a gate that can never open reads as caution rather than as a bug.
+
+    Refuses with **409** naming *every* unmet condition — a refusal that reveals one blocker
+    at a time teaches the operator to treat the gate as an obstacle course, when the honest
+    reading is a description of what is not yet true.
+    """
+    if not payload.confirmed:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "CONFIRMATION_REQUIRED",
+                "message": (
+                    "Promotion needs an explicit yes. This puts her in front of the model."
+                ),
+            },
+        )
+
+    status = _live_gate1(session)
+    if not status.automatic_conditions_met:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "PRECONDITIONS_NOT_MET",
+                "failed": [c for c in status.failed_conditions if c != "promotion"],
+                "message": "Good numbers are not permission, and these are not good yet.",
+            },
+        )
+
+    try:
+        promote_model(session, payload.model_version, confirmed_by=LoggedBy.operator)
+    except ValueError as exc:  # unknown version — refuse, create nothing
+        raise HTTPException(
+            status_code=404, detail={"error": "UNKNOWN_MODEL_VERSION", "message": str(exc)}
+        ) from exc
+    return PromotionResult(model_version=payload.model_version, is_promoted=True)
+
+
+@app.post("/api/operator/revoke", response_model=PromotionResult)
+def operator_revoke(
+    payload: PromotionRequest, session: Session = Depends(get_session)
+) -> PromotionResult:
+    """**[SAFETY]** Shut Gate 1 (S-1001b, `05 §6`).
+
+    ★ **No preconditions. Ever.** A gate you cannot shut is not a gate. The failure this
+    system is built around is a model that looks good, gets trusted, and is quietly wrong
+    about a low — so the response to that suspicion must never be blocked by a precondition
+    check, least of all the check that the model still looks fine.
+
+    Takes effect on the next call (gates are live, ADR-7). Audited like promotion.
+    """
+    if not payload.confirmed:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "CONFIRMATION_REQUIRED", "message": "Revocation needs a yes."},
+        )
+    try:
+        revoke_promotion(session, payload.model_version, confirmed_by=LoggedBy.operator)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404, detail={"error": "UNKNOWN_MODEL_VERSION", "message": str(exc)}
+        ) from exc
+    return PromotionResult(model_version=payload.model_version, is_promoted=False)

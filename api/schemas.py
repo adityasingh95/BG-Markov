@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from data.tables import LoggedBy, MealType
 
@@ -88,3 +88,33 @@ class AdherenceResponse(BaseModel):
     exclusions_by_reason: dict[str, int]
     days_since_last_log: int | None
     median_lag_min: float | None
+
+
+class PromotionRequest(BaseModel):
+    """`POST /api/operator/promote` / `/revoke` (S-1001b, `05 §6`).
+
+    ``confirmed`` must be **explicitly true**. Reaching the URL is not a decision; saying
+    yes is, and the difference matters when the action is putting someone who cannot feel
+    a low in front of a model.
+
+    Extra fields are **ignored, not rejected**. A client that sends
+    ``{"preconditions_met": true}`` gets the same answer as one that does not: the server
+    re-derives readiness from live data and refuses if it is not there. Rejecting the
+    payload would only prove the field was unwelcome; ignoring it proves the claim has **no
+    effect**, which is the property that matters.
+    """
+
+    # `model_version` collides with pydantic's protected `model_` namespace; the field name
+    # comes from `05 §6` and the DB column, so the namespace is released rather than the
+    # contract renamed.
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_version: str
+    confirmed: bool
+
+
+class PromotionResult(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_version: str
+    is_promoted: bool
