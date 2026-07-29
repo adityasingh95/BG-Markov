@@ -227,6 +227,46 @@ def detect_synthetic_import(tree: ast.AST) -> list[str]:
     return hits
 
 
+def detect_raw_basal_dose_as_feature(tree: ast.AST) -> list[str]:
+    """S-1013 — **today's basal dose must never be used as a model feature.**
+
+    Tresiba has ~42 h duration and a 3–4 day steady state, so *today's dose is not today's
+    effect*. The feature is ``effective_basal`` (EWMA, halflife 25 h — S-402); the raw daily
+    figure is an input to that and nothing else.
+
+    This guard exists because S-1013 creates the **first real source** of
+    ``basal_log.units``, which is precisely the value a future contributor would reach for.
+    Using it directly is one line, reads sensibly, and is wrong — and the model would fit
+    happily on it and be quietly worse.
+
+    Fires on a feature-dict key or assignment fed from ``BasalLog.units`` / a name like
+    ``basal_units`` / ``daily_basal``, **outside** the one module allowed to touch it.
+    """
+    banned = {"basal_units", "daily_basal", "basal_dose", "todays_basal"}
+    hits: list[str] = []
+    for node in ast.walk(tree):
+        # `features["effective_basal"] = basal_units` and friends
+        if isinstance(node, ast.Assign):
+            for tgt in node.targets:
+                name = getattr(tgt, "id", None) or getattr(tgt, "attr", None)
+                if name in banned:
+                    hits.append(f"raw daily basal bound to {name!r}")
+        # a feature dict literal keyed on the raw dose
+        if isinstance(node, ast.Dict):
+            for key in node.keys:
+                if isinstance(key, ast.Constant) and key.value in banned:
+                    hits.append(f"raw daily basal used as a feature key: {key.value!r}")
+        # `BasalLog.units` read anywhere a feature is being built
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr == "units"
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "BasalLog"
+        ):
+            hits.append("BasalLog.units read directly")
+    return hits
+
+
 # Registry: (id, detector, violating snippet, filename-context).
 _PATTERNS: list[tuple[str, object, str]] = [
     ("multi_class", detect_multi_class, "m = LogisticRegression(multi_class='multinomial')\n"),
@@ -245,6 +285,11 @@ _PATTERNS: list[tuple[str, object, str]] = [
         "meal.datetime = datetime.now()\n",
     ),
     ("pre_bg_to_binner", detect_pre_bg_to_binner, "state = bin_state(pre_bg)\n"),
+    (
+        "raw_basal_dose_as_feature",
+        detect_raw_basal_dose_as_feature,
+        "features = {'basal_units': row.units}\n",
+    ),
     (
         "synthetic_import",
         detect_synthetic_import,
