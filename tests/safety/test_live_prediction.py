@@ -217,6 +217,11 @@ def test_but_a_SAFETY_VIOLATION_still_propagates(
     `try/except Exception` around the handler protects her capture surface and disarms INV-9
     and INV-6 together, in one line, invisibly. A breached invariant must stay loud — that is
     the entire point of raising `SafetyViolation` rather than returning a flag.
+
+    ⚠ **Scope, after the DL-053 amendment (operator-approved 2026-07-30):** this covers a
+    `SafetyViolation` from *anywhere except the baseline computation* — notably the INV-9
+    write path. An out-of-range **baseline** is handled separately below: caught, recorded,
+    and her meal kept, because the baseline is an internal diagnostic she never sees.
     """
     import prescribe.live as live
 
@@ -356,3 +361,95 @@ def test_the_stored_model_is_the_one_that_predicts(session: Session) -> None:
     # guardrail layer actually publishes rather than reaching past it.
     expected_state = int(np.asarray(loaded.states)[int(np.argmax(expected))])
     assert outcome.served.guarded.model_state == expected_state
+
+
+# --- ★ DL-053 AMENDED: an out-of-range baseline must not cost her the meal ----
+
+
+def _implausible_meal() -> dict[str, Any]:
+    """A meal whose `07 §4` baseline lands outside INV-6's [20, 600].
+
+    Not contrived: a large correction on top of a meal bolus is a real thing to log.
+    """
+    payload = dict(_meal_payload())
+    payload.update(
+        idempotency_key="s1015-implausible",
+        pre_bg=110, carbs_g=10.0, meal_bolus_units=2.0, correction_bolus_units=14.0,
+    )
+    return payload
+
+
+def test_an_out_of_range_baseline_does_not_cost_her_the_meal(
+    client: TestClient, session: Session
+) -> None:
+    """★ THE OPERATOR'S DECISION, 2026-07-30, reversing part of DL-053.
+
+    INV-6 fires on the baseline while she is logging. Before the amendment this returned
+    HTTP 500 and **the meal was lost**. Her primary capture surface must not depend on the
+    arithmetic of a number nobody reads.
+
+    INV-6 is not weakened: it still raises inside `predict_baseline_bg`, and no out-of-range
+    value is used, stored as a prediction, or shown.
+    """
+    _seed_and_promote(session)
+    before = session.scalar(select(func.count()).select_from(MealEvent)) or 0
+
+    r = client.post("/api/meals", json=_implausible_meal())
+    assert r.status_code == 200, r.text
+    assert session.scalar(select(func.count()).select_from(MealEvent)) == before + 1
+
+
+def test_the_refusal_is_RECORDED_not_swallowed(
+    client: TestClient, session: Session
+) -> None:
+    """★ Caught is not the same as silent. A refusal is persisted like any other refusal
+    (S-801/S-802), so "the model stopped predicting" can never look identical to "no model is
+    promoted"."""
+    _seed_and_promote(session)
+    client.post("/api/meals", json=_implausible_meal())
+
+    row = session.scalars(
+        select(PredictionLog).where(PredictionLog.guardrail_fired.is_not(None))
+    ).one()
+    assert row.guardrail_fired == "baseline_out_of_range"
+    assert row.predicted_distribution == {}, "a refusal must carry no distribution"
+
+
+def test_a_refusal_is_NOT_scored_as_a_prediction(session: Session) -> None:
+    """★ A refusal carries no distribution, so scoring it reads as **"the model predicted no
+    low"** — a different statement from "the model declined", and one the model's own record
+    gets blamed for. Brier and calibration are polluted the same way."""
+    from data.scoring import scored_predictions
+    from data.tables import MealType
+
+    session.add(
+        ModelArtifact(
+            version="v-score", fit_date=_NOW, data_hash="h", n_rows=10,
+            feature_list=[], metrics={},
+        )
+    )
+    for i in range(14):
+        when = _NOW - dt.timedelta(days=2 + i)
+        meal = MealEvent(
+            datetime=when, logged_at=when, logged_by=LoggedBy.patient,
+            meal_type=MealType.lunch, pre_bg=140, pre_bg_time=when,
+            post_bg=(70, 150)[i % 2], post_bg_time=when + dt.timedelta(minutes=120),
+            elapsed_min=120, meal_bolus_units=5.0, bolus_offset_min=-10,
+            carbs_g=45.0, fiber_g=5.0,
+        )
+        session.add(meal)
+        session.flush()
+        session.add(
+            PredictionLog(
+                meal_id=meal.meal_id, model_version="v-score", gate_state="shadow",
+                input_features={}, baseline_state=3,
+                predicted_distribution={} if i < 4 else {"3": 0.9},
+                guardrail_fired="refused" if i < 4 else None,
+                actual_state=2 if i % 2 == 0 else 3,
+            )
+        )
+    session.flush()
+
+    scored = scored_predictions(session, model_version="v-score")
+    assert scored is not None
+    assert len(scored) == 10, "refusals were scored as predictions"

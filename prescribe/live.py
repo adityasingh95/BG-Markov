@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from core.safety import SafetyViolation
 from data.model_store import load_fitted_model
+from data.predictions import record_prediction
 from data.repositories import (
     active_profile,
     get_promoted_artifact,
@@ -37,6 +38,8 @@ from models.baseline import predict_baseline_bg
 from models.state import bg_to_state
 from prescribe.gates import gate1_status
 from prescribe.serving import MealPrediction, serve_meal_prediction
+
+_BASELINE_OUT_OF_RANGE = "baseline_out_of_range"
 
 
 def _n_training_rows(session: Session, now: dt.datetime) -> int:
@@ -53,10 +56,12 @@ class LiveOutcome:
     feature mismatch. It never means "a model ran and we dropped the result".
     """
 
-    baseline_bg: float
-    baseline_state: int
+    baseline_bg: float | None
+    baseline_state: int | None
     input_features: dict[str, float]
     served: Any = None
+    #: Set when nothing could be predicted, for a stated reason. `None` means no refusal.
+    refused: str | None = None
 
     @property
     def prediction(self) -> MealPrediction | None:  # pragma: no cover - convenience
@@ -87,24 +92,56 @@ def predict_for_meal(
     # derivation and training-set membership are different questions.
     features = {k: float(v) for k, v in derive_meal_features(session, meal).items()}
 
-    baseline_bg = predict_baseline_bg(
-        pre_bg=float(meal.pre_bg),
-        carbs_g=float(meal.carbs_g),
-        meal_bolus_units=float(meal.meal_bolus_units),
-        correction_bolus_units=float(meal.correction_bolus_units),
-        # ★ PRIOR insulin only — not `features['iob_at_meal']`, which counts this meal's
-        # own pre-bolus because a pre-bolus is timestamped before the meal. `07 §4`
-        # subtracts meal_bolus and iob as separate terms, so using the feature here
-        # subtracts the same insulin twice (DL-054).
-        iob_at_meal=iob_from_prior_boluses(
-            session, at=meal.datetime, meal_id=meal.meal_id
-        ),
-        icr=float(profile.icr),
-        isf=float(profile.isf),
-    )
+    artifact = get_promoted_artifact(session)
+
+    try:
+        baseline_bg = predict_baseline_bg(
+            pre_bg=float(meal.pre_bg),
+            carbs_g=float(meal.carbs_g),
+            meal_bolus_units=float(meal.meal_bolus_units),
+            correction_bolus_units=float(meal.correction_bolus_units),
+            # ★ PRIOR insulin only — not `features['iob_at_meal']`, which counts this meal's
+            # own pre-bolus because a pre-bolus is timestamped before the meal. `07 §4`
+            # subtracts meal_bolus and iob as separate terms, so using the feature here
+            # subtracts the same insulin twice (DL-054).
+            iob_at_meal=iob_from_prior_boluses(
+                session, at=meal.datetime, meal_id=meal.meal_id
+            ),
+            icr=float(profile.icr),
+            isf=float(profile.isf),
+        )
+    except SafetyViolation as exc:
+        # ★ DL-053 AMENDED, operator-approved 2026-07-30. INV-6 fired on the BASELINE — an
+        # internal diagnostic she never sees — while she was logging a meal. Before the
+        # amendment this returned HTTP 500 and HER MEAL WAS LOST, not merely unpredicted.
+        #
+        # INV-6 is NOT weakened: it still raises inside `predict_baseline_bg`, and no
+        # out-of-range value is used, stored as a prediction, or shown anywhere. What changed
+        # is what the LOGGING path does with the raise. Her primary capture surface must not
+        # depend on the arithmetic of a number nobody reads.
+        #
+        # ★ Caught is not the same as SILENT. The refusal is persisted like any other
+        # refusal (S-801/S-802) — auditable, never a blank — so "the model stopped
+        # predicting" can never look identical to "no model is promoted".
+        if artifact is not None:
+            record_prediction(
+                session,
+                model_version=artifact.version,
+                gate_state="shadow",
+                input_features=features,
+                predicted_distribution={},
+                baseline_state=0,
+                meal_id=meal.meal_id,
+                guardrail_fired=_BASELINE_OUT_OF_RANGE,
+            )
+        return LiveOutcome(
+            baseline_bg=None,
+            baseline_state=None,
+            input_features=features,
+            refused=f"{_BASELINE_OUT_OF_RANGE}: {exc}",
+        )
     baseline_state = bg_to_state(baseline_bg)
 
-    artifact = get_promoted_artifact(session)
     model = load_fitted_model(session, artifact) if artifact is not None else None
     if model is None:
         # No promoted model, or one written before S-1014 with nothing stored. The baseline
