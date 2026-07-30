@@ -12,11 +12,11 @@ protocol and none of them tested the other half.
 from __future__ import annotations
 
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, Route
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from tests.e2e.conftest import assert_saved
+from tests.e2e.conftest import FAILURE_TOASTS, assert_saved
 
 pytestmark = pytest.mark.e2e
 
@@ -90,28 +90,85 @@ def test_two_separate_entries_still_create_two_meals(
     assert after_meals - before_meals == 2, "two genuine meals were collapsed into one"
 
 
+def test_a_lost_response_is_safe_to_retry(
+    page: Page, live_server: str, db_session: Session
+) -> None:
+    """★ The case the KEY protects, isolated from the disabled button.
+
+    The first request reaches the server and is recorded; the response is then dropped, so
+    the browser reports a failure and the draft is kept. She presses Log again. The second
+    request must carry the SAME key and the server must return the meal it already has.
+
+    Written this way deliberately. The double-tap test above is also satisfied by disabling
+    the button, so on its own it cannot tell whether the key works — an adversarial plant
+    that restored per-submit minting left it green. This one cannot pass without the key.
+    """
+    dropped = {"once": False}
+
+    def _drop_the_first_response(route: Route) -> None:
+        if not dropped["once"]:
+            dropped["once"] = True
+            route.fetch()   # the server DOES record it...
+            route.abort()   # ...and the browser never learns
+            return
+        route.continue_()
+
+    page.route("**/api/meals", _drop_the_first_response)
+    before_meals, before_boluses = _counts(db_session)
+
+    _fill(page, when="2026-07-22T19:00", bg="150", units="6")
+    button = page.locator("button.primary")
+
+    button.click()
+    page.wait_for_selector("#toast:not([hidden])", timeout=10_000)
+    assert (page.locator("#toast").text_content() or "").strip() in FAILURE_TOASTS, (
+        "a dropped response must be reported as a failure she can retry"
+    )
+
+    button.click()          # she presses Log again
+    assert_saved(page)
+    page.wait_for_timeout(500)
+
+    after_meals, after_boluses = _counts(db_session)
+    assert after_meals - before_meals == 1, (
+        "the retry created a SECOND meal — the key did not survive the failed attempt"
+    )
+    assert after_boluses - before_boluses == 1, "the retry created a second bolus"
+
+
 def test_the_key_survives_a_reload_mid_entry(
     page: Page, live_server: str, db_session: Session
 ) -> None:
-    """A restored draft is the SAME submission, so submitting it twice is still one meal.
+    """A restored draft is the SAME submission.
 
     The draft already survives a killed browser (S-301). If the key did not survive with it,
     the crash-and-retry case — the one the draft exists for — would double-log.
     """
+    dropped = {"once": False}
+
+    def _drop_the_first_response(route: Route) -> None:
+        if not dropped["once"]:
+            dropped["once"] = True
+            route.fetch()
+            route.abort()
+            return
+        route.continue_()
+
+    page.route("**/api/meals", _drop_the_first_response)
     before_meals, before_boluses = _counts(db_session)
 
-    _fill(page, when="2026-07-22T19:00", bg="150", units="6")
-    page.reload(wait_until="networkidle")  # killed browser, draft restored
+    _fill(page, when="2026-07-23T19:00", bg="144", units="5")
+    page.locator("button.primary").click()
+    page.wait_for_selector("#toast:not([hidden])", timeout=10_000)
 
-    button = page.locator("button.primary")
-    button.click()
+    page.reload(wait_until="networkidle")   # killed browser; the draft comes back
+    assert page.input_value("#f-pre_bg") == "144", "the draft did not survive"
+    page.locator("button.primary").click()
     assert_saved(page)
-    page.reload(wait_until="networkidle")
-    page.locator("button.primary").click()  # she presses Log again on the restored draft
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(500)
 
     after_meals, after_boluses = _counts(db_session)
-    assert after_meals - before_meals == 1, "a restored draft submitted twice double-logged"
+    assert after_meals - before_meals == 1, "a restored draft submitted again double-logged"
     assert after_boluses - before_boluses == 1
 
 
