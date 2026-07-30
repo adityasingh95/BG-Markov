@@ -1433,3 +1433,50 @@ consecutively with identical results and creates no file in the repo.
 > **The lesson, stated once:** the unit and integration suites were green throughout. Both
 > defects needed the system **run as a system, on data that looks like hers**. That is a
 > different activity from testing, and it is not optional.
+
+---
+
+## DL-052 — The fitted model is stored as parameters, never as a pickle
+**Story:** S-1014 · **Type:** storage-format decision with a safety argument ·
+**Date:** 2026-07-30
+
+**Decision.** `model_artifact.fitted_model` holds the fitted model as **plain JSON** — the
+parameter vector, the state labels, the feature names, and the scaler's `mean_`/`scale_`.
+Never a pickle, and never `joblib`/`dill`/`marshal`. An AST guard in
+`tests/integration/test_model_store.py` enforces it across `models/`, `data/`, `prescribe/`
+and `api/`.
+
+**Why.**
+1. **Unpickling executes code**, on the machine holding her clinical record.
+2. **A pickle couples behaviour to library versions.** A statsmodels or numpy upgrade can
+   change what it deserialises to — or refuse it — and the failure surfaces as a *changed
+   prediction*, silently, for a model the operator promoted months earlier on evidence
+   gathered from different behaviour.
+3. **A blob is unreadable.** Nobody can answer *"what does this model actually do?"* from
+   one. A coefficient vector beside its feature names is inspectable, diffable, greppable.
+
+**Round-tripping lives in `models/ordinal.py`**, not the data layer: statsmodels stores the
+first cutpoint raw and the rest as log-increments, and a serialiser in `data/` would reach
+into that and break quietly the next time it changed.
+
+### The scaling correction recorded with it
+`temporal_cv` scales each fold (train-rows-only, S-404 — correct and unchanged) while the
+final full-window fit was on **raw** features, so the persisted coefficients and the
+`hypo_recall` beside them on the same row came from different representations. The final fit
+is now scaled and **the scaler is stored with the model**. Two scalers, two jobs: fitting the
+CV one on the full set would be the leakage S-404 exists to prevent.
+
+### ★ Assert on what is consumed, not on what is stored
+The adversarial pass measured this rather than asserting it. With the scaler applied twice:
+
+```
+parameters identical? True    ← a parameter-comparison test PASSES
+probabilities equal?  False   ← the probability test FAILS
+```
+
+Every stored number byte-identical; every served probability wrong. A test comparing
+parameter vectors would have been green, would have looked rigorous, and would have shipped a
+model predicting differently from the one that was scored — undetectably, because well-formed
+probabilities summing to 1 are what a *correct* model produces too.
+
+> **Storage is an implementation detail. The prediction is the product. Test the product.**
