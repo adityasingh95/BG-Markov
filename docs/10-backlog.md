@@ -467,7 +467,7 @@ date corrects rather than duplicates and is audited; `effective_basal` over reco
 matches the S-402 EWMA; the daily-dose field is never used directly as a model feature (the
 "today's basal dose" forbidden pattern).
 
-### S-1009 — Monthly refit cadence — REQ-060 — **UNBLOCKED (S-1013 done 2026-07-18)**
+### S-1009 — Monthly refit cadence — REQ-060 — **DONE 2026-07-30**
 **Closes G4. `07 §Retraining`: "Monthly refit, trailing 6 months, older data down-weighted."
 Currently no schedule exists.**
 **AC:** A monthly refit over a trailing 6-month window with older data down-weighted, writing
@@ -485,6 +485,18 @@ of its deliberate "no model fitted yet" stub.
 **TDD:** a refit produces a new artifact row with `is_promoted = False`. The trailing window
 and down-weighting are applied (not a full-history equal-weight fit). ★ A refit **never
 promotes** — the AST guard from S-1001b already asserts `cli/` cannot call `promote_model`.
+
+> **Done 2026-07-30.** `data/training.py` (the DB→features assembler that had never existed),
+> `models/recency.py`, `models/refit.py`, `data/scoring.py`, `backfill_actual_states`
+> (DL-049), `cli refit`, and `load_shadow_evidence` wired. 36 tests. **G4 closed. EPIC 10
+> closed.**
+> ★ **A plant survived the adversarial pass** — dropping rows below a recency-weight
+> threshold, the exact failure CLAUDE.md names, because the positivity guard tested the pure
+> function rather than the composition production calls. Guard added; re-planting now fails.
+> ★ **Not armed:** a refit does not record `unconstrained_beta_insulin`, so the shadow
+> dashboard's β_insulin < 0 confounding alarm reads "no alarm" rather than a measured value.
+> A dark alarm looks identical to a quiet one. Follow-up, flagged not fixed.
+> Story: `docs/stories/S-1009.md`.
 
 ### S-1010 — Patient-profile update surface — REQ-061 — **DONE 2026-07-29**
 **Closes G5. Clinical constants are versioned (REQ-054) but there is no operator action to

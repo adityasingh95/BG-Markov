@@ -1342,3 +1342,45 @@ shape as `backfill_correction_iob` (S-306b, DL-020).
 recorded, rather than only on demand. Raised for the operator; the on-demand path is
 sufficient for the refit and the dashboard, and adding a write to the post-BG path is a change
 to a capture surface she uses daily.
+
+---
+
+## DL-050 — A refit must survive a rank-deficient design matrix
+**Story:** S-1009 · **Type:** implementation constraint, found in GREEN · **Date:** 2026-07-30
+
+**The problem.** `statsmodels`' `OrderedModel` refuses a design matrix whose **column span
+contains a constant** — *"There should not be a constant in the model"* — because the model
+supplies its own thresholds. A real six-month window trips this two ways, neither exotic:
+
+1. **A constant column.** If she does no intense exercise in the window, `ex_intense`,
+   `ex_intense_x_duration` and `pre_ex_intense` are zero throughout.
+2. **A constant *combination*.** `net_carbs_g` is `carbs_g − fiber_g`; across any stretch
+   where fibre does not move, those two columns differ by a fixed amount and their span
+   contains a constant even though neither column is constant on its own.
+
+A naive "is this column constant?" check catches only the first. Left unhandled, the monthly
+refit would die with a statsmodels error that says nothing about her data — **on the day it
+was first run against a real six months**, which is precisely when nobody is expecting a
+library exception.
+
+**Decision.** A **rank-based** filter: keep a column iff it raises the rank of
+`[1 | kept-so-far]` — iff it explains something the intercept and the already-kept columns do
+not. Both cases fall out of the one rule. Re-applied **per CV fold**, because a column can
+carry rank across the whole window and be redundant inside an early expanding-window fold.
+
+**Not silent.** The dropped names are recorded on the artifact as
+`dropped_constant_features`, and `feature_list` records **what was actually fitted**. The
+manifest exists so an operator months later can answer *"what did this model see?"*, and
+*"it saw all 23"* would be false whenever a column carried no rank. **"This model never saw
+an intense-exercise meal"** is exactly what someone needs to know before trusting it about
+one.
+
+**Why this is not information loss.** A column that adds no rank cannot explain anything that
+varies. Dropping it changes no fitted relationship; keeping it only prevents the fit.
+
+**Related, decided the same way.** `hypo_recall` is recorded as **`null`, never `0.0`**, when
+the window contains no lows (or no non-lows). A recall of zero reads as *"it missed every
+low"*. A window with no lows means **the model has never seen the event it exists to
+predict**, and Gate 1's beats-baseline condition has nothing to compare. Two opposite
+statements must not share a number. `data.scoring` fails closed on the same condition, so the
+dashboard shows its empty state rather than a headline metric with a denominator of zero.
