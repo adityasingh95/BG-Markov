@@ -236,9 +236,188 @@ def scenario_8_shadow(session: Session, client: TestClient) -> None:
     print(f"  shadow report      : {report}")
     print(f"  GET /operator/shadow → HTTP {r.status_code}, "
           f"empty state shown: {'nothing to show' in r.text.lower()}")
-    print("\n  ★ This is CORRECT and it is also the gap. The dashboard is empty because")
-    print("    prediction_log is empty, and prediction_log is empty because NOTHING IN")
-    print("    THE RUNNING APP SERVES A PREDICTION. See the blockers section.")
+    print("\n  ★ Empty here because nothing is promoted YET — not because nothing can")
+    print("    predict. That gap closed in S-1015; scenario 9 promotes and shows the loop.")
+    print("    An empty dashboard is a true statement about the evidence, and the page")
+    print("    says so rather than filling itself in.")
+
+
+def scenario_9_the_full_loop(session: Session, client: TestClient) -> None:
+    h("SCENARIO 9 — The full loop: refit → promote → serve → score → Gate 1")
+    from sqlalchemy import func as _f
+
+    from data.model_store import load_fitted_model
+    from data.predictions import backfill_actual_states
+    from data.tables import ModelArtifact as _MA
+
+    artifact = session.scalars(
+        select(_MA).order_by(_MA.fit_date.desc())
+    ).first()
+    if artifact is None:
+        print("  no artifact — run scenario 6 first")
+        return
+    artifact.is_promoted = True
+    session.flush()
+    loaded = load_fitted_model(session, artifact)
+    print(f"  promoted        : {artifact.version}")
+    print(f"  model reloadable: {loaded is not None}   ← S-1014 (parameters as JSON)")
+
+    sub("she logs 14 meals through the real API")
+    before_pred = session.scalar(select(_f.count()).select_from(PredictionLog)) or 0
+    # 14, not 5: the dashboard needs >= 10 scored predictions before it will
+    # report anything, so a smaller run would only ever show the empty state.
+    for i in range(14):
+        when = NOW - dt.timedelta(hours=26 * i + 2)
+        r = client.post("/api/meals", json={
+            "idempotency_key": f"loop-{i}", "datetime": when.isoformat(),
+            "meal_type": "lunch", "pre_bg": 118 + 9 * i,
+            "pre_bg_time": (when - dt.timedelta(minutes=5)).isoformat(),
+            "meal_bolus_units": 4.0 + 0.3 * i, "correction_bolus_units": 0.0,
+            "bolus_offset_min": -10, "carbs_g": 36.0 + 5 * i, "protein_g": 18.0,
+            "fat_g": 12.0, "fiber_g": 5.0, "macro_confidence": 90,
+            "logged_by": "patient",
+        })
+        assert r.status_code == 200, r.text
+        if i < 3 or i == 13:
+            print(f"    meal {r.json()['meal_id']:>4}  HTTP 200  keys={sorted(r.json())}")
+        elif i == 3:
+            print("    ...")
+
+    after = session.scalar(select(_f.count()).select_from(PredictionLog)) or 0
+    print(f"\n  predictions logged: {after - before_pred}   ← S-1015; INV-9 write-before-return")
+    print(f"  shadow clock      : {shadow_days(session, now=NOW + dt.timedelta(days=3))} days"
+          "   ← the 90-day clock is RUNNING")
+
+    sub("outcomes arrive; the backfill scores them (DL-049)")
+    # A realistic mix INCLUDING lows — a window with no lows is correctly unscoreable,
+    # which would make this scenario "pass" for the wrong reason.
+    outcomes = (72, 155, 148, 61, 190, 150, 88, 165)
+    for i, meal in enumerate(session.scalars(
+        select(MealEvent).where(MealEvent.post_bg.is_(None))
+    ).all()):
+        meal.post_bg = outcomes[i % len(outcomes)]
+        meal.post_bg_time = meal.datetime + dt.timedelta(minutes=120)
+        meal.elapsed_min = 120
+    session.flush()
+    print(f"  actual_state backfilled for {backfill_actual_states(session)} predictions")
+
+    report, _b, _c = load_shadow_evidence(session)
+    if report is None:
+        n = session.scalar(
+            select(_f.count()).select_from(PredictionLog)
+            .where(PredictionLog.actual_state.is_not(None))
+        ) or 0
+        print(f"  shadow report     : None  (only {n} scored; needs >= 10, and BOTH lows")
+        print("                      and non-lows). Fails closed rather than headlining a")
+        print("                      hypo recall it cannot support.")
+    else:
+        logged = session.scalar(select(_f.count()).select_from(PredictionLog)) or 0
+        refused = session.scalar(
+            select(_f.count()).select_from(PredictionLog)
+            .where(PredictionLog.guardrail_fired.is_not(None))
+        ) or 0
+        print(f"  shadow report     : n_predictions={report.n_predictions} "
+              f"(of {logged} logged; {refused} were REFUSALS, excluded)")
+        print("    ★ a refusal carries no distribution, so scoring it would read as")
+        print("      'the model predicted no low' — a different statement entirely")
+        print(f"    hypo recall     : {report.hypo_recall.recall:.3f}")
+        print(f"    Brier           : {report.brier:.4f}")
+        print(f"    off-by-one      : {report.off_by_one:.3f}")
+        print(f"    severe error    : {report.severe_error:.3f}")
+        print("  → the operator's Gate-1 evidence, from real logged predictions")
+
+    sub("Gate 1, re-read LIVE after all of that")
+    st = gate1_status(
+        valid_meals=len(get_training_set(session)),
+        model_hypo_recall=report.hypo_recall.recall if report else 0.0,
+        baseline_hypo_recall=0.0, is_promoted=True,
+        shadow_days=shadow_days(session, now=NOW + dt.timedelta(days=3)),
+        calibration_ok=False,
+    )
+    print(f"  GATE 1 OPEN: {st.is_open}   blocking: {', '.join(st.failed_conditions)}")
+    print("  → promotion alone does not open it. The 90-day clock has 2 of 90 days.")
+
+
+def scenario_10_idempotency(session: Session, client: TestClient) -> None:
+    h("SCENARIO 10 — ★ The double-tap (S-1016)")
+    from sqlalchemy import func as _f
+
+    from data.repositories import iob_at_start_at
+
+    when = NOW - dt.timedelta(hours=3)
+    payload = {
+        "idempotency_key": "double-tap-demo", "datetime": when.isoformat(),
+        "meal_type": "dinner", "pre_bg": 150,
+        "pre_bg_time": (when - dt.timedelta(minutes=5)).isoformat(),
+        "meal_bolus_units": 6.0, "correction_bolus_units": 1.0,
+        "bolus_offset_min": -10, "carbs_g": 55.0, "protein_g": 20.0,
+        "fat_g": 12.0, "fiber_g": 5.0, "macro_confidence": 90, "logged_by": "patient",
+    }
+    at = when + dt.timedelta(minutes=30)
+
+    def counts() -> tuple[int, int, float]:
+        session.expire_all()
+        return (
+            session.scalar(select(_f.count()).select_from(MealEvent)) or 0,
+            session.scalar(select(_f.count()).select_from(BolusLog)) or 0,
+            iob_at_start_at(session, at),
+        )
+
+    r1 = client.post("/api/meals", json=payload)
+    m1, b1, iob1 = counts()
+    r2 = client.post("/api/meals", json=payload)      # she taps again
+    m2, b2, iob2 = counts()
+
+    print(f"  first  submit → HTTP {r1.status_code}, meal_id {r1.json()['meal_id']}")
+    print(f"  SECOND submit → HTTP {r2.status_code}, meal_id {r2.json()['meal_id']}"
+          "   ← same id, not 409")
+    print(f"\n    meals     {m1} → {m2}")
+    print(f"    boluses   {b1} → {b2}   ← the one that matters")
+    print(f"    IOB       {iob1:.3f} → {iob2:.3f} U")
+
+    def dose(iob: float) -> float:
+        # A large meal at a high reading, so the suggestion is well clear of zero and the
+        # comparison below is about IOB rather than about the INV-3 floor.
+        return recommend_bolus(icr=9.0, isf=30.0, carbs_g=90.0, current_bg=260.0,
+                               target_bg=135.0, iob=iob).total_units
+
+    print(f"    dose      {dose(iob1):.2f} U → {dose(iob2):.2f} U   (90 g at BG 260)")
+    print("\n  ★ What the duplicate WOULD have cost, had it been recorded:")
+    print(f"      IOB  {iob1:.2f} U → {iob1 + 7.0:.2f} U")
+    print(f"      dose {dose(iob1):.2f} U → {dose(iob1 + 7.0):.2f} U"
+          f"   ({dose(iob1) - dose(iob1 + 7.0):.2f} U LESS than she needs)")
+    print("    Silently, plausibly, for the ~5 h Fiasp is active — with no screen on which")
+    print("    a doubled bolus looks any different from a real one.")
+
+
+def scenario_11_capture_survives(session: Session, client: TestClient) -> None:
+    h("SCENARIO 11 — ★ Her meal logging survives a model that cannot cope (DL-053)")
+
+    when = NOW - dt.timedelta(hours=5)
+    # A big correction on top of a meal bolus drives the 07 §4 baseline out of INV-6's range.
+    r = client.post("/api/meals", json={
+        "idempotency_key": "implausible-demo", "datetime": when.isoformat(),
+        "meal_type": "dinner", "pre_bg": 110,
+        "pre_bg_time": (when - dt.timedelta(minutes=5)).isoformat(),
+        "meal_bolus_units": 2.0, "correction_bolus_units": 14.0,
+        "bolus_offset_min": -10, "carbs_g": 10.0, "protein_g": 5.0,
+        "fat_g": 3.0, "fiber_g": 1.0, "macro_confidence": 90, "logged_by": "patient",
+    })
+    print("  a meal whose baseline lands outside INV-6's [20, 600]:")
+    print(f"    POST /api/meals → HTTP {r.status_code}   ← her meal is RECORDED")
+
+    refusals = session.scalars(
+        select(PredictionLog).where(PredictionLog.guardrail_fired.is_not(None))
+    ).all()
+    print(f"    refusals recorded: {len(refusals)}")
+    for row in refusals[-1:]:
+        print(f"      guardrail_fired = {row.guardrail_fired!r}, distribution = "
+              f"{row.predicted_distribution}")
+    print("\n  → INV-6 still RAISES inside predict_baseline_bg; no out-of-range value is")
+    print("    used or shown. What changed (operator, DL-053 amended) is that her primary")
+    print("    capture surface no longer depends on a number nobody reads.")
+    print("  → Caught is not silent: the refusal is a ROW, and it is EXCLUDED from scoring")
+    print("    so it can never read as 'the model predicted no low'.")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -262,6 +441,9 @@ def main(argv: list[str] | None = None) -> int:
         scenario_6_refit(session)
         scenario_7_patient_view(client)
         scenario_8_shadow(session, client)
+        scenario_9_the_full_loop(session, client)
+        scenario_10_idempotency(session, client)
+        scenario_11_capture_survives(session, client)
 
         app.dependency_overrides.clear()
     print()
