@@ -25,6 +25,7 @@ that must accompany a missing hypo class belong to the gate/risk stories (S-703/
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -85,6 +86,24 @@ class OrdinalFit:
         proba = self._model.predict(self._params, exog=np.asarray(x, dtype=float))
         return np.asarray(proba, dtype=float)
 
+    def to_params(self) -> dict[str, Any]:
+        """The fitted model as plain, inspectable numbers (S-1014).
+
+        Round-tripping lives **next to the model** because the threshold parameterisation is
+        an internal detail of this module: statsmodels stores the first cutpoint raw and the
+        rest as log-increments. A serialiser in `data/` would have to reach in here, and
+        would break quietly the next time statsmodels changed.
+
+        Never a pickle (DL-052) — unpickling executes code, and a blob cannot answer *"what
+        does this model do?"*.
+        """
+        return {
+            "kind": "ordinal_po",
+            "states": [int(v) for v in self.states],
+            "params": [float(v) for v in self._params],
+            "n_features": int(self._model.k_vars),
+        }
+
     def prob_at_least(self, x: npt.ArrayLike, state: int) -> _FloatArray:
         """``P(state ≥ ``state``)`` — the monotone ordinal quantity (sum of the
         columns whose observed state is ``≥ state``)."""
@@ -140,4 +159,33 @@ def fit_ordinal(
     feature_coefs = params[: int(model.k_vars)].copy()
     return OrdinalFit(
         states=states, feature_coefs=feature_coefs, _model=model, _params=params
+    )
+
+
+def ordinal_from_params(stored: dict[str, Any]) -> OrdinalFit:
+    """Rebuild an :class:`OrdinalFit` from :meth:`OrdinalFit.to_params` (S-1014).
+
+    A model shell of the right shape is reconstructed and the saved ``params`` are supplied
+    to ``predict``; nothing is re-fitted, so the reloaded model is the fitted one rather than
+    an approximation of it.
+    """
+    if stored.get("kind") != "ordinal_po":
+        raise ValueError(f"unknown stored model kind: {stored.get('kind')!r}")
+    states = tuple(int(s) for s in stored["states"])
+    params = np.asarray(stored["params"], dtype=float)
+    n_features = int(stored["n_features"])
+
+    # A shell with the right shape: `predict` needs the model's threshold bookkeeping, which
+    # is derived from the number of levels and features, not from the training rows.
+    n_rows = max(len(states), 2)
+    endog = np.array([states[i % len(states)] for i in range(n_rows)], dtype=int)
+    exog = np.zeros((n_rows, n_features), dtype=float)
+    shell = _WeightedL2OrderedModel(
+        endog, exog, weights=np.ones(n_rows), l2_alpha=0.0, distr="logit"
+    )
+    return OrdinalFit(
+        states=states,
+        feature_coefs=params[:n_features].copy(),
+        _model=shell,
+        _params=params,
     )

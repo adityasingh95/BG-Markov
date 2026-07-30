@@ -216,9 +216,12 @@ def test_no_serialisation_module_is_imported_in_models_or_data() -> None:
                         for a in node.names
                         if a.name.split(".")[0] in banned
                     ]
-                elif isinstance(node, ast.ImportFrom) and node.module:
-                    if node.module.split(".")[0] in banned:
-                        offenders.append(f"{path.name}: from {node.module}")
+                elif (
+                    isinstance(node, ast.ImportFrom)
+                    and node.module
+                    and node.module.split(".")[0] in banned
+                ):
+                    offenders.append(f"{path.name}: from {node.module}")
     assert not offenders, f"serialisation-by-code-execution reached production: {offenders}"
 
 

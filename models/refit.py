@@ -28,9 +28,11 @@ import numpy as np
 import numpy.typing as npt
 from sqlalchemy.orm import Session
 
+from data.model_store import save_fitted_model
 from data.tables import ModelArtifact
 from data.training import MIN_TRAINING_ROWS, TRAILING_WINDOW_DAYS, TrainingData
 from data.training import assemble_training_data as assemble_training_data
+from features.pipeline import make_scaler
 from models.metrics import hypo_recall_at_far, off_by_one_rate, severe_state_error_rate
 from models.ordinal import (
     DEFAULT_HYPO_WEIGHT,
@@ -248,8 +250,20 @@ def run_refit(
     fitted_features = [data.feature_names[i] for i in keep]
 
     weights = composite_weights(data, as_of=as_of)
-    # Fit on the full window so the artifact reflects everything; score out-of-sample.
-    fit_ordinal(x, data.y_state, confidence_weights=weights)
+
+    # ★ The final fit is SCALED, matching what `temporal_cv` scored (S-1014).
+    # Until this story it was fitted on raw features while every fold was scaled, so the
+    # coefficients and the `hypo_recall` beside them on the same artifact row came from
+    # different representations. Harmless only while nothing loaded the model; the moment it
+    # is served, the number the operator reads describes a model that was never served.
+    #
+    # This scaler is fit on the FULL window on purpose, and is a different object from the
+    # per-fold scaler inside CV. Fitting the CV one on the full set would be the leakage
+    # S-404 exists to prevent; not fitting this one on the full set would leave the served
+    # model without the transform it was fitted under. Two scalers, two jobs.
+    scaler = make_scaler().fit(x)
+    x_scaled = np.asarray(scaler.transform(x), dtype=float)
+    fit = fit_ordinal(x_scaled, data.y_state, confidence_weights=weights)
     metrics = _score(x, data, weights)
 
     artifact = ModelArtifact(
@@ -269,5 +283,11 @@ def run_refit(
         # module *cannot* mint a promoted artifact, rather than choosing not to.
     )
     session.add(artifact)
+    session.flush()
+    # ★ The model itself, not just a record of it (S-1014). Stored with the scaler it was
+    # fitted under and the features it was fitted on, so what is served is what was scored.
+    save_fitted_model(
+        session, artifact, fit=fit, feature_names=fitted_features, scaler=scaler
+    )
     session.flush()
     return artifact

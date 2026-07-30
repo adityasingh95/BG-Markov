@@ -263,6 +263,11 @@ class ModelArtifact(Base):
     metrics: Mapped[dict[str, Any]] = mapped_column(JSON)
     is_promoted: Mapped[bool] = mapped_column(default=False)  # manual only
     kill_switch_tripped: Mapped[bool] = mapped_column(default=False)  # manual re-arm only
+    # The fitted model itself, as plain inspectable JSON (S-1014). NULL on every artifact
+    # written before that story — real history, and the loader returns None rather than
+    # raising. Never a pickle: unpickling executes code, and a blob cannot answer "what does
+    # this model do?" (DL-052).
+    fitted_model: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
 
 
 class AuditLog(Base):
