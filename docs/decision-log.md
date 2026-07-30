@@ -1595,3 +1595,184 @@ with identity, not with a threshold.
 post-BG, correction, basal and profile do not accept one. The meal path is where the harm
 concentrates (it is the only one writing `bolus_log`), so it is fixed first. Extending the
 contract to the other four is raised, not scheduled.
+
+---
+
+## DL-056 — A browser test asserts on the row, not on the toast
+**Story:** S-1021 · **Type:** Test-strategy decision · **Date:** 2026-07-30
+
+**What happened.** `tests/e2e/test_post_bg_flow.py::test_post_bg_form_asks_reported_time_and_saves`
+had been green since S-303. It drove real Chromium against a live server, it covered the
+exact form that was broken, and its assertion was:
+
+```python
+assert (toast.text_content() or "").strip(), "expected a save confirmation"
+```
+
+The toast it was passing on read **"Could not save — please try again."** The form 500s from
+a real browser and the test could not tell, because *any* non-empty toast satisfied it — and
+the failure path writes a toast, which is what a good error state does.
+
+The test name says `_and_saves`. Nothing in it looked at whether anything saved.
+
+### Decisions
+1. **Every e2e flow that submits asserts a success outcome through one shared helper**,
+   `tests/e2e/conftest.py::assert_saved`. Three assertions, each ruling out a different way
+   of being wrong: the toast is not empty (she was told something), it is not one of the
+   known failure strings, and it carries the success marker so a validation prompt cannot
+   read as a save.
+2. **The helper is proven to fire.** `test_assert_saved.py` feeds it every toast the app can
+   produce, including the empty one — which the obvious weakening, `"could not" not in text`,
+   would let through. A guard nobody has watched fail is not a guard.
+3. **A flow test also reads the database.** The e2e fixtures expose `db_session` on the same
+   SQLite file the server writes to, created by a fixture both depend on so a test cannot
+   assert against a different database than the one it just wrote to (the S-102 fixture bug).
+4. **Success copy is a contract.** Every success toast begins `"✓ "`. `corrections.js` was
+   rendering the server's message with no marker; it now matches the others, and a drift
+   guard checks both directions — the failure strings the helper rejects must still exist in
+   the page, and every success assignment must still begin with the marker.
+
+**The generalisable form.** A UI test that asserts on the *existence* of feedback is testing
+that the page has a `#toast` element. It is worth roughly that much. The assertion has to
+reach the thing the user actually wanted.
+
+---
+
+## DL-057 — A reported clinical time is a naive local wall-clock time; an offset is refused
+**Story:** S-1018 [SAFETY] · **Type:** Clinical-data-contract decision · **Date:** 2026-07-30
+
+**The defect.** `app.js`, `post_bg.js` and `corrections.js` all converted a `datetime-local`
+value with `new Date(iso).toISOString()`. That produces a UTC **instant**; Pydantic parsed it
+as timezone-**aware**; everything downstream is naive local. Two symptoms, one cause:
+
+1. **The post-BG path raised.** `elapsed_min(meal.datetime, post_bg_time)` subtracted an aware
+   datetime from a naive one → `TypeError` → HTTP 500 → **nothing saved**, and the toast said
+   *"Could not save — please try again."* `/api/correction-events` failed identically.
+2. **The meal path did not raise. It stored the wrong number.** On a phone set to
+   `Asia/Kolkata`, a breakfast typed as 08:00 was persisted as **02:30**.
+
+**Why this is an ADR-8 matter, not a bug fix.** ADR-8 forbids *fabricating* a clinical
+timestamp. This is worse in one specific way: it **relabels the one she reported** —
+consistently, silently, and with the right shape. There is no anomaly left behind. A 02:30
+breakfast is a plausible row. And the corruption was **self-inconsistent inside a single
+row**: `meal_type` is decided in the browser from her *local* time, so the row said
+`breakfast` at 02:30. Two fields derived from one input disagreed, and nothing checked.
+
+**What survived a uniform shift, and what did not.** `bolus_offset_min` is sent separately
+and `elapsed_min` is a difference, so both are shift-invariant — which is precisely why this
+was never noticed. What is **not** shift-invariant: time of day, alignment against
+`basal_log` reported times, `iob_at_start_at` against `bolus_log`, and any join against a
+profile's `effective_from`. A shift that crosses midnight moves a meal to the wrong **day**,
+and basal is constant within a day — the leakage boundary the temporal-CV design rests on.
+
+### Decisions
+1. **The wire format for a reported clinical time is a naive local wall-clock string.**
+2. **An offset is refused with a 422 that names the field** — never converted. The three
+   conversions were considered and rejected: `.replace(tzinfo=None)` keeps the shifted
+   numbers and type-checks perfectly; `.astimezone()` converts to *the server's* timezone,
+   which is not where she is, and is wrong by a different amount depending on where the
+   container runs; `.astimezone(UTC)` is the same mistake with a fixed sign. All three are
+   silent.
+3. **`require_naive` raises `ValueError`, not `SafetyViolation`.** A malformed request is not
+   a breached invariant — the DL-035 reasoning. Conflating them makes the invariant
+   vocabulary mean nothing.
+4. **Instants and timezones are not introduced.** Storing an instant plus a zone is the right
+   answer for a system with many users in many places. This system has **one** user, who
+   reports wall-clock times off a glucometer and a phone. An instant/zone distinction adds a
+   conversion at every read, and every conversion is a place to be silently wrong.
+5. **`logged_at` is untouched.** It is a system timestamp bound to the injected clock (S-202),
+   never client-supplied, and an instant is the right idea there. Applying the validator to it
+   by analogy would be a different, unrequested change to ADR-8's other half.
+6. **A forbidden-pattern guard** blocks `new Date(x).toISOString()` in client JS, is proven to
+   bite on the exact line that caused this and on the split-across-two-lines evasion, and is
+   proven **not** to fire on the correct form — a guard that rejects the right answer teaches
+   people to disable it.
+
+---
+
+## DL-058 — The idempotency key belongs to the form fill, not to the submit
+**Story:** S-1019 · **Type:** Client-contract decision · **Date:** 2026-07-30
+
+**The gap.** S-1016 made the server refuse a duplicate submission. It is correct, tested nine
+ways, and **had never once been reached from the UI**: `app.js` minted a fresh
+`crypto.randomUUID()` inside `payload()`, which runs once per submit. Two taps ⇒ two keys ⇒
+two meals ⇒ two boluses, and DL-055's whole harm intact.
+
+**★ The generalisable shape.** *A guard whose input is supplied by the caller is only as good
+as the caller.* Every S-1016 test supplied the key itself, so all of them exercised the
+server's half of a two-party protocol and none of them exercised the other half.
+
+### Decisions
+1. **One key per form fill**, held in `localStorage` beside the draft. A restored draft is
+   the *same* submission, so the key must survive a reload with it — otherwise the
+   crash-and-retry case, which is what the draft exists for, double-logs.
+2. **★ The fill boundary is the draft, not a flag and not the response.** Two earlier
+   attempts were wrong in opposite directions:
+   - *Rotate when the save returns.* On a local server the response lands in a few
+     milliseconds, so a second tap arriving just after it carries a fresh key and logs a
+     second meal — the exact double-tap, in a window too narrow to reproduce by hand and wide
+     enough to happen to her. The e2e test caught it, intermittently.
+   - *Rotate on the next edit, tracked in memory.* The flag does not survive a reload, so a
+     reload between two genuine meals reused the key and **the second meal vanished** with a
+     ✓ on screen. That is the worse failure: a duplicate is visible in the data, an absence
+     is not.
+
+   The draft is durable and is cleared only by a confirmed save, so *"no draft and she is
+   typing"* is exactly *"a new submission starts here"*.
+3. **The key is not rotated on failure.** A failed submit must stay safe to retry.
+4. **The submit button is disabled in flight**, re-enabled in a trailing `.then` so a failure
+   re-enables it too. It is belt as well as braces, and the only part of this she can see —
+   pressing a button that appears to do nothing is why people press it again.
+5. **`correction_event` gains a key** (UNIQUE, nullable, migration `c7e1a09b4d22`), because a
+   correction writes a `bolus_log` row and that is what makes a duplicate harmful.
+6. **The key is optional on `CorrectionCreate`.** Required-and-unread was the S-1016 mistake;
+   required-and-enforced with no client sending it would simply lock her out.
+
+**Scope, stated rather than skipped.** `PATCH …/post-bg` updates a *named* meal and is
+naturally idempotent; `POST /api/basal` treats a repeat date as a **correction** by design
+(S-1013); `POST /api/operator/profile` appends versions and is operator-driven. None writes to
+`bolus_log`. A test asserts none of the three has acquired a key, so *"it does not need one"*
+and *"we did not get to it"* stop looking identical.
+
+---
+
+## DL-059 — No form posts natively to a JSON endpoint
+**Story:** S-1020 · **Type:** UI-contract decision · **Date:** 2026-07-30
+
+**The defect.** `basal.html` and `profile.html` were plain HTML forms with
+`method="post" action="/api/…"` and **no script**. A native submit sends
+`application/x-www-form-urlencoded`; the endpoints take a JSON body; FastAPI returns 422 and
+**the browser navigates to it**. She leaves the app and lands on a raw JSON blob. Both
+endpoints are covered by integration tests posting JSON directly. Both pass. Neither had ever
+been reached from a browser.
+
+**★ The class-level guard found a third, which nobody had reported:** the **revoke** form on
+`/operator/shadow` — the kill switch — was wired the same way. It renders only once Gate 1 is
+open, which is exactly why it had never been pressed, and it is the one control you want to
+work in a hurry.
+
+### Decisions
+1. **One shared submitter** (`api/static/json-form.js`) for forms that do nothing special.
+   The three bespoke handlers stay bespoke: they do real work — draft persistence, timing
+   validation, hypo fields — that a generic serialiser should not absorb.
+2. **Field types are declared, never guessed** (`data-type="number"` / `"bool"`). Guessing
+   from the value means `"26"` becomes a number and `"26 "` does not, and a silently-wrong
+   type at a clinical endpoint is the class of failure this project keeps finding.
+3. **The endpoints are not taught to accept form-encoded bodies.** That would work and would
+   leave her on a JSON success blob; *not navigating away* is the other half of the defect.
+4. **The profile toast shows the endpoint's `flags`**, closing DL-048's other half. The
+   endpoint has returned them since S-1010 and the page discarded them — *"a validation
+   result nobody can see is not a warning"*, and until now nobody could see them.
+5. **A guard for the class, not the instance:** any `<form action="/api/…">` without a script
+   **in its own template** fails. `base.html`'s shared helpers deliberately do not count —
+   they submit nothing, so a template that inherits them and forgets its handler is precisely
+   the broken case. The three bespoke templates are exempted **by name**, and a companion test
+   asserts each still loads its named handler, so "has a bespoke handler" cannot become an
+   unfalsifiable exemption satisfied by any script tag at all.
+
+**Raised, not fixed.** `/operator/shadow` has **no promote control at all** — the button is
+rendered `disabled` in every state, because Gate 1 counts `is_promoted` among its conditions,
+so `gate1.is_open` is only true *after* a promotion that no UI can perform. `POST
+/api/operator/promote` exists (S-1001b) and nothing reaches it; the demo promoted by calling
+Python directly. Adding a promotion control is a **safety-design decision**, not a wiring fix,
+and is not taken here.

@@ -577,6 +577,51 @@ will compute on the configured ICR.
 
 ---
 
+## EPIC 11 — What the browser found
+
+The API-level suite drives FastAPI's `TestClient`. Everything between the button and the
+request body is invisible to it: the form, the JavaScript that builds the payload, the
+content type it posts, and whether the page tells her anything afterwards. **Her only way
+into this system is a phone browser.** `scripts/demo_ui.py` walked the real screens in
+Chromium for the first time and found four defects in one run.
+
+### S-1018 [SAFETY] — Reported clinical times are naive local — REQ-004/005, ADR-8 — **DONE 2026-07-30**
+She typed 08:00; the database stored 02:30. And the post-meal reading did not save at all
+(HTTP 500). One cause: the client converted a `datetime-local` value through
+`new Date(...).toISOString()`. An offset is now refused at the schema boundary — never
+converted, because every conversion is silent. **DL-057.**
+
+### S-1019 — The idempotency key survives a double tap — REQ-001/002/006/013 — **DONE 2026-07-30**
+S-1016's server-side guard was correct and had never been reached, because the client minted
+a fresh key per submit. One key per **form fill**, with the draft as the fill boundary; the
+key extended to corrections, which also write a bolus. **DL-058.**
+
+### S-1020 — Every form that posts to `/api/` actually submits — REQ-007/054/061 — **DONE 2026-07-30**
+`basal.html` and `profile.html` posted natively to JSON endpoints: 422, and the browser
+navigated to the JSON body. The class-level guard then found a third — the **kill switch**.
+**DL-059.**
+
+### S-1021 — The browser suite grades outcomes — REQ-001/010/011 — **DONE 2026-07-30**
+`test_post_bg_form_asks_reported_time_and_saves` had been green since S-303 on the toast
+*"Could not save — please try again."* Every flow now asserts through `assert_saved` **and**
+reads the row. **DL-056.**
+
+### Still open after EPIC 11
+- **S-1017 — arm the confounding alarm.** A refit does not record
+  `unconstrained_beta_insulin`, so the INV-8 alarm reads "no alarm" because nothing measured
+  it. **A dark alarm looks identical to a quiet one.**
+- **There is no promote control in the UI at all.** `POST /api/operator/promote` exists
+  (S-1001b) and nothing reaches it; the button is rendered `disabled` in every state because
+  Gate 1 counts `is_promoted` among its own conditions. Adding one is a safety-design
+  decision, not a wiring fix (DL-059).
+- **No operator surface for prediction refusals.** They leave a durable trace (DL-053);
+  nothing displays it.
+- **Historical rows are not audited for the S-1018 shift.** Nothing is known to be affected —
+  no real capture has happened — but that is a statement about this project's stage, not a
+  guarantee. Check before first real use.
+
+---
+
 ## ★ REVISIT LATER — parked, not forgotten
 
 *Deliberately deferred items with a trigger condition. **Do not act on these before the trigger.**
