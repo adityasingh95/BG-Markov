@@ -23,7 +23,7 @@
     }
     var body = {
       post_bg: parseInt(form.querySelector('[name="post_bg"]').value, 10),
-      post_bg_time: new Date(iso).toISOString(),
+      post_bg_time: window.BGTime.localIso(iso),  // ★ S-1018: local, never UTC
       hypo_treatment: !!form.querySelector("[data-hypo]").checked,
       snack_during_window: false
     };

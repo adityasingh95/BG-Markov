@@ -6,6 +6,11 @@
     <title>{% block title %}BG-Markov{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='pico.min.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}" />
+    {# S-1018: the shared reported-time helper. In <head> so it is defined before any
+       page script runs — a clinical timestamp has exactly one route onto the wire
+       (ADR-8), and a page that loaded its own script first would quietly get `undefined`
+       and fall back to whatever the catch block does. #}
+    <script src="{{ url_for('static', path='reported-time.js') }}"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>

@@ -23,7 +23,7 @@
       return;
     }
     var body = {
-      datetime: new Date(iso).toISOString(),
+      datetime: window.BGTime.localIso(iso),  // ★ S-1018: local, never UTC
       bg_before: parseInt(form.querySelector('[name="bg_before"]').value, 10),
       units: parseFloat(form.querySelector('[name="units"]').value),
       food_in_window: food.value === "yes"
@@ -38,7 +38,7 @@
       return r.json();
     }).then(function (res) {
       toast.hidden = false;
-      toast.textContent = res.message || "✓ Saved.";
+      toast.textContent = "✓ " + (res.message || "Saved.");
       toast.scrollIntoView({ block: "nearest" });
     }).catch(function () {
       toast.hidden = false;

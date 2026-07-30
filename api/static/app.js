@@ -25,11 +25,11 @@
   }
 
   // Pre-fill the time with now(), local, as an EDITABLE default (05b §3).
-  function localNowIso() {
-    var d = new Date();
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().slice(0, 16);
-  }
+  // ★ S-1018: both live in reported-time.js now. `d.toISOString()` returns UTC, and the
+  // popular fix — shifting the date by getTimezoneOffset() first — is the same bug in a
+  // disguise and breaks across a DST boundary.
+  var localIso = window.BGTime.localIso;
+  var localNowIso = window.BGTime.localNowIso;
 
   // --- Draft persistence --------------------------------------------------
   function saveDraft() {
@@ -120,7 +120,11 @@
   // --- Submit -------------------------------------------------------------
   function payload() {
     var iso = timeInput.value || localNowIso();
-    var reported = new Date(iso).toISOString();
+    // ★ S-1018 / ADR-8: sent as the LOCAL wall-clock time she typed. Converting it to a UTC
+    // instant shifted every clinical timestamp by the browser's offset — 08:00 IST was
+    // stored as 02:30 — while `meal_type`, decided below from the same local string, still
+    // said "breakfast". The server now refuses anything carrying an offset.
+    var reported = localIso(iso);
     return {
       idempotency_key: (window.crypto && crypto.randomUUID)
         ? crypto.randomUUID() : String(Date.now()),

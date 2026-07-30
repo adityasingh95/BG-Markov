@@ -65,16 +65,19 @@ def test_the_meal_type_and_the_hour_agree(
 ) -> None:
     """★ The corruption was self-inconsistent inside a single row, and nothing checked.
 
-    `meal_type` is decided in the browser from her LOCAL time, while `datetime` was being
-    shifted to UTC — so the row said `breakfast` at 02:30. Two fields derived from one input
-    disagreeing is the strongest available signal that the input was mangled, and it was
-    being written to disk without comment.
+    `meal_type` is decided in the browser from her LOCAL time (or from the favourite she
+    tapped), while `datetime` was being shifted to UTC — so the row said `breakfast` at
+    02:30. Two fields derived from one input disagreeing is the strongest available signal
+    that the input was mangled, and it was being written to disk without comment.
+
+    The **breakfast** favourite is chosen deliberately: tapping a lunch dish at 08:30 is a
+    perfectly ordinary thing to do and says nothing about timestamps.
     """
     context: BrowserContext = browser_at("Asia/Kolkata")  # type: ignore[operator]
     page = context.new_page()
     page.goto(live_server + "/", wait_until="networkidle")
 
-    page.locator(".chip.favourite").first.click()
+    page.locator('.chip.favourite[data-meal-type="breakfast"]').first.click()
     page.fill("#meal-time", "2026-07-27T08:30")
     page.fill("#f-pre_bg", "133")
     page.fill("#f-meal_bolus_units", "5")

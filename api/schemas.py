@@ -9,9 +9,27 @@ from __future__ import annotations
 
 import datetime as dt
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from core.timestamps import require_naive
 from data.tables import LoggedBy, MealType
+
+
+def _naive(field: str) -> classmethod:  # type: ignore[type-arg]
+    """A validator that refuses a timezone offset on a **reported** clinical time (S-1018).
+
+    ★ One factory, applied by name, so a new reported-time field is one line and the rule
+    cannot be re-implemented slightly differently in a second schema. The rule itself lives
+    in `core.timestamps.require_naive` — this only points at it.
+
+    Deliberately **not** applied to ``logged_at`` (never client-supplied), to
+    ``BasalCreate.time_taken`` (a ``time``, which carries no date and no offset here) or to
+    any ``date`` field.
+    """
+    def _check(_cls: object, value: dt.datetime) -> dt.datetime:
+        return require_naive(value, field=field)
+
+    return field_validator(field)(classmethod(_check))
 
 
 class MealCreate(BaseModel):
@@ -31,6 +49,9 @@ class MealCreate(BaseModel):
     logged_by: LoggedBy = LoggedBy.patient
     notes: str | None = None
 
+    _naive_datetime = _naive("datetime")
+    _naive_pre_bg_time = _naive("pre_bg_time")
+
 
 class MealCreated(BaseModel):
     meal_id: int
@@ -44,6 +65,8 @@ class PostBgUpdate(BaseModel):
     hypo_treatment: bool = False
     hypo_treatment_g: float | None = None
     snack_during_window: bool = False
+
+    _naive_post_bg_time = _naive("post_bg_time")
 
 
 class PostBgResult(BaseModel):
@@ -60,6 +83,8 @@ class CorrectionCreate(BaseModel):
     food_in_window: bool  # "will you be eating in the next 4 hours?"
     logged_by: LoggedBy = LoggedBy.patient
 
+    _naive_datetime = _naive("datetime")
+
 
 class CorrectionCreated(BaseModel):
     event_id: int
@@ -72,6 +97,8 @@ class CorrectionFollowup(BaseModel):
     bg_after: int
     bg_after_time: dt.datetime  # REPORTED — the +4 h reading time
     food_in_window: bool  # confirmed at follow-up
+
+    _naive_bg_after_time = _naive("bg_after_time")
 
 
 class CorrectionFollowupResult(BaseModel):
