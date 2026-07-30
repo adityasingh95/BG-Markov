@@ -1480,3 +1480,38 @@ model predicting differently from the one that was scored — undetectably, beca
 probabilities summing to 1 are what a *correct* model produces too.
 
 > **Storage is an implementation detail. The prediction is the product. Test the product.**
+
+---
+
+## DL-053 — A model failure must never stop her logging a meal; a breached invariant must never be quiet
+**Story:** S-1015 · **Type:** error-handling policy at a safety boundary · **Date:** 2026-07-30
+
+**The tension.** S-1015 makes `POST /api/meals` serve a prediction. Meal logging is her
+primary capture surface: if a model error takes that route down, she cannot log, which is
+worse for her than having no prediction at all. But swallowing errors on this path would make
+**INV-9** ("every prediction is written before it is returned") unenforceable, and would hide
+**INV-6** ("a predicted BG outside [20, 600] is a hard error") exactly where it fires.
+
+**Decision — an asymmetric split, in two transactions.**
+1. The **meal is committed first**, on its own. Capture completes before the model is
+   consulted at all.
+2. The prediction is attempted **afterwards**, and:
+   - a `SafetyViolation` **propagates** — an invariant was breached and must be loud;
+   - **any other exception is caught and the request still returns 200.**
+
+**Why this is safe rather than a compromise.** A prediction that never happened cannot escape
+unlogged, so catching a *failure to predict* does not weaken INV-9 — INV-9 constrains the
+order of write-then-return, and there is no return. What would weaken it is catching an
+exception raised *by the write*, and that path raises `SafetyViolation`, which is not caught.
+
+**Why not the obvious alternative.** Wrapping the whole handler in `try/except Exception`
+protects capture and disarms INV-9 and INV-6 together, in one line, invisibly. It is the
+version that will be proposed, so it is refused here by name and has a test that fails on it.
+
+> **Her data capture never depends on the model working.**
+> **Her safety invariants never depend on the model failing quietly.**
+
+**Not decided here.** Whether a caught model failure should surface anywhere for the operator
+— a counter, a log line on the shadow dashboard. Today it is silent, which means a model that
+stops predicting looks identical to a model that is merely unpromoted. Raised for the
+operator; it needs a surface, and inventing one is not this story's call.
