@@ -1515,3 +1515,46 @@ version that will be proposed, so it is refused here by name and has a test that
 — a counter, a log line on the shadow dashboard. Today it is silent, which means a model that
 stops predicting looks identical to a model that is merely unpromoted. Raised for the
 operator; it needs a surface, and inventing one is not this story's call.
+
+---
+
+## DL-055 — A retried meal submission returns the first record, unchanged
+**Story:** S-1016 · **Type:** API-contract decision with a safety argument · **Date:** 2026-07-30
+
+**The gap.** `05 §` specifies *"All write endpoints are **idempotent** — the client generates
+a UUID per record."* `MealCreate.idempotency_key` has been a **required** field since S-301
+and is read by **nothing**. The fourth declared-and-unconnected gap (DL-046, DL-049, S-1014).
+
+**Why it is a safety story.** A duplicate meal is annoying. A **duplicate bolus** is
+dangerous: `POST /api/meals` writes `BolusLog` rows, and `bolus_log` is REQ-006's *"sole
+source of truth for IOB"*. One double-tap therefore inflates `iob_at(t)` for ~5 hours, and:
+the bolus calculator subtracts the inflated IOB and **under-doses her**; the `07 §4` baseline
+over-subtracts and manufactures phantom hypos; and `iob_at_meal` is a model feature, so the
+corruption is *learned* rather than noticed. Every step is silent — there is no screen on
+which a doubled bolus looks different from a real one.
+
+**Why not an invariant.** No safe universal rule says "two boluses close together is wrong" —
+she really does take a correction shortly after a meal bolus. The defect is not *"two boluses
+exist"* but *"**one submission produced two records**"*. That is an identity problem, fixed
+with identity, not with a threshold.
+
+### Decisions
+1. **`meal_event.idempotency_key` is UNIQUE at the database**, not checked in Python. A
+   read-then-insert races. On a single-user laptop that race is unlikely — but "unlikely" is
+   exactly what the double-tap already was, and a constraint costs nothing.
+2. **Nullable**, and **several NULLs must coexist**. Every meal recorded before this story
+   has no key; backfilling invented ones would fabricate provenance.
+3. **A repeat returns `200` with the same `meal_id`, not `409`.** A retry is not an error:
+   she pressed the button twice and there is one meal, which is what she meant. A 409 on a
+   flaky connection would tell her the log failed when it succeeded — and she would enter it
+   a third time, which is the harm this story exists to prevent.
+4. **★ Same key, different data ⇒ the first record wins, unchanged.** A key identifies *a
+   submission*, not *a slot to overwrite*. Silently updating a clinical record because a
+   retry carried different numbers is an unaudited edit, which `04 §10` forbids — and a
+   retry is far likelier to be a stale form than a considered correction. Corrections have
+   their own audited path.
+
+**Not decided here.** `05 §` says *"all write endpoints"*. Only `MealCreate` declares a key;
+post-BG, correction, basal and profile do not accept one. The meal path is where the harm
+concentrates (it is the only one writing `bolus_log`), so it is fixed first. Extending the
+contract to the other four is raised, not scheduled.
