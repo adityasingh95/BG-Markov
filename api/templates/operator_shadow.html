@@ -119,9 +119,13 @@
     She is seeing model output from <strong>{{ promoted_version }}</strong>.
     You can stop that at any time — it takes effect on the next prediction.
   </p>
-  <form method="post" action="/api/operator/revoke">
+  {# ★ S-1020: the KILL SWITCH. It was a native form posting to a JSON endpoint, so
+     pressing it produced a 422 and a raw JSON page — and it only renders once Gate 1 is
+     open, which is why nobody ever pressed it. It is the one control you need in a hurry. #}
+  <form method="post" action="/api/operator/revoke" data-json-form
+        data-saved-message="Stopped. She will see nothing on the next prediction.">
     <input type="hidden" name="model_version" value="{{ promoted_version }}" />
-    <input type="hidden" name="confirmed" value="true" />
+    <input type="hidden" name="confirmed" value="true" data-type="bool" />
     <button type="submit" class="secondary">Stop showing it to her</button>
   </form>
   {% else %}
@@ -144,4 +148,8 @@
 </section>
 
 <p><a href="/operator">← Back to adherence</a></p>
+<p class="toast" id="toast" role="status" hidden></p>
+
+<script src="{{ url_for('static', path='json-form.js') }}"></script>
+
 {% endblock %}

@@ -29,21 +29,22 @@
 
 <section aria-labelledby="new-heading">
   <h2 id="new-heading">Record a change</h2>
-  <form method="post" action="/api/operator/profile">
+  <form method="post" action="/api/operator/profile" data-json-form
+        data-saved-message="Recorded as a new version.">
     <label for="effective_from">In force from
       <input type="date" id="effective_from" name="effective_from" required />
     </label>
     <label for="icr">ICR — grams of carbohydrate per unit
-      <input type="text" inputmode="numeric" id="icr" name="icr"
+      <input type="text" inputmode="numeric" id="icr" name="icr" data-type="number"
              data-field-kind="carb-ratio" required />
       <small class="muted">Usually between 7 and 10. Anything else is allowed, and flagged.</small>
     </label>
     <label for="isf">ISF — mg/dL per unit
-      <input type="text" inputmode="numeric" id="isf" name="isf"
+      <input type="text" inputmode="numeric" id="isf" name="isf" data-type="number"
              data-field-kind="sensitivity" required />
     </label>
     <label for="target_bg">Target (mg/dL)
-      <input type="text" inputmode="numeric" id="target_bg" name="target_bg"
+      <input type="text" inputmode="numeric" id="target_bg" name="target_bg" data-type="number"
              data-field-kind="bg" required />
     </label>
     <button type="submit">Record this change</button>
@@ -81,4 +82,8 @@
 </section>
 
 <p><a href="/operator">← Back to adherence</a></p>
+<p class="toast" id="toast" role="status" hidden></p>
+
+<script src="{{ url_for('static', path='json-form.js') }}"></script>
+
 {% endblock %}
