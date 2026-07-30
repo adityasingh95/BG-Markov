@@ -39,10 +39,23 @@ def _client_scripts() -> list[Path]:
     return sorted(_STATIC.glob("*.js"))
 
 
+def _strip_line_comment(line: str) -> str:
+    """Drop a trailing ``//`` comment.
+
+    ★ Without this the guard fires on the **explanation of itself** — the comment in
+    `reported-time.js` that says why `toISOString()` is wrong. A guard that flags prose is a
+    guard people switch off, and the next real violation goes with it. Naive on strings
+    containing ``//`` (a URL); there are none in these files, and a false *positive* here is
+    loud rather than silent.
+    """
+    return line.split("//", 1)[0]
+
+
 def _violations(source: str) -> list[str]:
     return [
         line.strip()
-        for line in source.splitlines()
+        for raw in source.splitlines()
+        for line in [_strip_line_comment(raw)]
         if _UTC_ROUNDTRIP.search(line) or _BARE_TO_ISO.search(line)
     ]
 
