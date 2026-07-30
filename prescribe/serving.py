@@ -35,7 +35,12 @@ class _ProbabilityModel(Protocol):
     """The slice of a fitted model this module needs. Structural, so the orchestration
     depends on a shape rather than on `models.ordinal` — and cannot grow model logic."""
 
-    states: tuple[int, ...]
+    # Read-only on purpose: this module only ever READS the state labels, and declaring
+    # the attribute settable would exclude any frozen model wrapper — which is what
+    # `data.model_store.LoadedModel` is, deliberately, so a loaded model cannot be mutated
+    # between being promoted and being served.
+    @property
+    def states(self) -> tuple[int, ...]: ...
 
     def predict_proba(self, x: Any) -> Any: ...
 

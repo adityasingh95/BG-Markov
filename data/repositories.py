@@ -172,6 +172,29 @@ def iob_at_start_at(session: Session, at: dt.datetime) -> float:
     return iob_at(at, boluses_before(session, at))
 
 
+def iob_from_prior_boluses(session: Session, *, at: dt.datetime, meal_id: int) -> float:
+    """IOB at ``at`` from boluses that are **not this meal's own** (S-1015).
+
+    ★ `07 §4` subtracts ``meal_bolus_units`` and ``iob_at_meal`` as **separate terms**, so
+    ``iob_at_meal`` there must mean insulin from *earlier* doses. A **pre-bolus is
+    timestamped before the meal** (``bolus_offset_min`` is negative by design — she is
+    encouraged to pre-bolus), so the plain strictly-before rule counts the meal's own
+    injection as prior IOB and the baseline subtracts it **twice**.
+
+    The effect is not small and it is in the dangerous direction: a 5 U pre-bolus at ISF 30
+    pulls the predicted BG down by an extra 150 mg/dL, so the baseline reads a hypo that the
+    physiology does not predict. It surfaced the first time the live path ran (INV-6 fired at
+    a predicted BG of 7.6 mg/dL) — see DL-054.
+    """
+    rows = session.execute(
+        select(BolusLog.datetime, BolusLog.units).where(
+            BolusLog.datetime < at,
+            (BolusLog.meal_id.is_(None)) | (BolusLog.meal_id != meal_id),
+        )
+    ).all()
+    return iob_at(at, [(when, units) for when, units in rows])
+
+
 def backfill_correction_iob(session: Session) -> int:
     """Fill ``iob_at_start`` for correction events left NULL before the IOB engine
     existed (DL-020). Returns the number filled; idempotent."""

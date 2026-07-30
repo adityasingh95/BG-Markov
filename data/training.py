@@ -34,7 +34,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data.repositories import basal_doses, get_training_set, iob_at_start_at
-from data.tables import BolusLog
+from data.tables import BolusLog, MealEvent
 from features.basal import effective_basal
 from features.pipeline import FEATURE_NAMES, feature_vector, sample_weight
 from models.state import bg_to_state
@@ -93,6 +93,28 @@ def _minutes_since_last_bolus(session: Session, at: dt.datetime) -> float:
     return (at - last).total_seconds() / 60.0
 
 
+def derive_meal_features(session: Session, meal: MealEvent) -> dict[str, float]:
+    """The feature vector for **one** meal, derived from the database (S-1009, S-1015).
+
+    ★ **The single derivation, used by both the training assembler and the live prediction
+    path.** A parallel implementation for serving would drift from the one used for fitting,
+    and the drift shows up as a model that scores well and predicts badly — the single most
+    dangerous failure this system has.
+
+    It is deliberately independent of whether the meal has an outcome yet: a meal being
+    predicted has no ``post_bg``, and needs exactly the same inputs as one being trained on.
+    Filtering by outcome belongs to the *training set*, not to feature derivation.
+    """
+    doses = basal_doses(session)
+    smoothed = list(zip([when for when, _ in doses], effective_basal(doses), strict=True))
+    return feature_vector(
+        meal,
+        iob_at_meal=iob_at_start_at(session, meal.datetime),
+        effective_basal=_basal_at(smoothed, meal.datetime),
+        minutes_since_last_bolus=_minutes_since_last_bolus(session, meal.datetime),
+    )
+
+
 def assemble_training_data(
     session: Session,
     *,
@@ -117,18 +139,10 @@ def assemble_training_data(
         if m.post_bg is not None and cutoff <= m.datetime <= as_of
     ]
 
-    doses = basal_doses(session)
-    smoothed = list(zip([when for when, _ in doses], effective_basal(doses), strict=True))
-
-    rows: list[list[float]] = []
-    for meal in meals:
-        vector = feature_vector(
-            meal,
-            iob_at_meal=iob_at_start_at(session, meal.datetime),
-            effective_basal=_basal_at(smoothed, meal.datetime),
-            minutes_since_last_bolus=_minutes_since_last_bolus(session, meal.datetime),
-        )
-        rows.append([vector[name] for name in FEATURE_NAMES])
+    rows = [
+        [v[name] for name in FEATURE_NAMES]
+        for v in (derive_meal_features(session, m) for m in meals)
+    ]
 
     return TrainingData(
         feature_names=list(FEATURE_NAMES),

@@ -96,6 +96,8 @@ def _meal_payload() -> dict[str, Any]:
         "fiber_g": 6.0,
         "macro_confidence": 90,
         "logged_by": "patient",
+        # `MealCreate` requires it (S-301): a retried submit must not double-log a meal.
+        "idempotency_key": "s1015-demo-key",
     }
 
 
@@ -196,9 +198,12 @@ def test_a_broken_model_does_not_stop_her_logging_a_meal(
 
     monkeypatch.setattr(live, "predict_for_meal", _boom, raising=True)
 
+    before = session.scalar(select(func.count()).select_from(MealEvent)) or 0
     r = client.post("/api/meals", json=_meal_payload())
     assert r.status_code == 200, r.text
-    assert session.scalar(select(func.count()).select_from(MealEvent)) == 1, (
+    # The fixture seeds 40 training meals, so count the DELTA — an absolute count would be
+    # asserting about the fixture rather than about her meal surviving.
+    assert session.scalar(select(func.count()).select_from(MealEvent)) == before + 1, (
         "her meal was lost because the model failed"
     )
     assert session.scalar(select(func.count()).select_from(PredictionLog)) == 0
@@ -239,9 +244,10 @@ def test_the_meal_is_committed_before_the_model_is_consulted(
         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("late failure")),
         raising=True,
     )
+    before = session.scalar(select(func.count()).select_from(MealEvent)) or 0
     client.post("/api/meals", json=_meal_payload())
     session.expire_all()
-    assert session.scalar(select(func.count()).select_from(MealEvent)) == 1
+    assert session.scalar(select(func.count()).select_from(MealEvent)) == before + 1
 
 
 # --- ★ fails closed -----------------------------------------------------------

@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import prescribe.live as live
 from api.bolus import router as bolus_router
 from api.deps import get_session
 from api.presenters import BaselineComparison, gate1_conditions, shadow_rows
@@ -167,6 +168,16 @@ def create_meal(payload: MealCreate, session: Session = Depends(get_session)) ->
                     logged_by=payload.logged_by,
                 )
             )
+    session.commit()
+
+    # ★ DL-053. The meal is committed ABOVE, on its own, so her capture surface never
+    # depends on the model working. The error policy lives in ONE NAMED PLACE
+    # (`predict_for_meal_safely`) rather than as a `try/except` here: a broad except in a
+    # request handler is indistinguishable — to a reader and to the S-1002 AST guard — from
+    # the one-line version that disarms INV-9 and INV-6 together. A `SafetyViolation` still
+    # propagates from there and fails this request, loudly.
+    # Nothing this returns reaches the response (INV-2): the value is deliberately dropped.
+    live.predict_for_meal_safely(session, meal, now=SystemClock().now())
     session.commit()
 
     test_at = payload.datetime + dt.timedelta(minutes=_TEST_DELAY_MIN)
