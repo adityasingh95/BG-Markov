@@ -141,9 +141,13 @@ def db_session(live_server: str, e2e_db_path: Path) -> Iterator[Session]:
     per test, because SQLAlchemy caches identity per session and a stale one would report
     the row as it was before the click.
     """
-    from data.db import make_engine, session_factory
+    from data.db import create_all, make_engine, session_factory
 
     engine = make_engine(f"sqlite:///{e2e_db_path}")
+    # The app creates the schema lazily, on the first request that opens a session. A test
+    # that reads the database BEFORE its first write would otherwise fail on a missing
+    # table — a fixture problem masquerading as a product one, and only when run alone.
+    create_all(engine)
     with session_factory(engine)() as session:
         yield session
 
