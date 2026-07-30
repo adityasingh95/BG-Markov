@@ -171,6 +171,14 @@ class MealEvent(Base):
     notes: Mapped[str | None] = mapped_column(default=None)
     is_valid: Mapped[bool] = mapped_column(default=False)  # computed — S-203
     exclusion_reasons: Mapped[str | None] = mapped_column(default=None)  # all, not first
+    # ★ The client's per-submission UUID (`05 §`, S-1016). UNIQUE **at the database**: a
+    # read-then-insert races, and one submission producing two rows also produces two
+    # BOLUS rows — which corrupts IOB, and the calculator subtracts IOB. Nullable, and
+    # several NULLs coexist: every meal recorded before S-1016 has no key, and inventing
+    # one would fabricate provenance (DL-055).
+    idempotency_key: Mapped[str | None] = mapped_column(
+        unique=True, index=True, default=None
+    )
 
 
 class CorrectionEvent(Base):

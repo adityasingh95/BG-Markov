@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import prescribe.live as live
@@ -121,6 +122,17 @@ def components(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "components.html")
 
 
+def _meal_created(meal: MealEvent) -> MealCreated:
+    """The meal response. One builder, so a retry and a first submit are byte-identical."""
+    test_at = meal.datetime + dt.timedelta(minutes=_TEST_DELAY_MIN)
+    alarm = test_at.strftime("%I:%M %p").lstrip("0")
+    return MealCreated(
+        meal_id=meal.meal_id,
+        test_at=test_at,
+        message=f"Logged. Set a phone alarm for {alarm} to test.",
+    )
+
+
 @app.post("/api/meals", response_model=MealCreated)
 def create_meal(payload: MealCreate, session: Session = Depends(get_session)) -> MealCreated:
     """Log a meal (05 §1).
@@ -130,6 +142,19 @@ def create_meal(payload: MealCreate, session: Session = Depends(get_session)) ->
     ``now()``. ``bolus_offset_min`` being required is enforced by ``MealCreate``
     (422 if absent). Returns ``test_at`` = reported ``datetime`` + 120 min.
     """
+    # ★ S-1016 / DL-055. A retry returns the meal already recorded and creates NOTHING —
+    # not a second meal, and crucially not a second BOLUS. `bolus_log` is REQ-006's sole
+    # source of truth for IOB, and the calculator subtracts IOB, so a doubled row makes it
+    # under-dose her for hours. 200 with the same id, never 409: telling her a successful
+    # log failed invites a third attempt.
+    existing = session.scalars(
+        select(MealEvent).where(MealEvent.idempotency_key == payload.idempotency_key)
+    ).first()
+    if existing is not None:
+        # The stored record is returned AS-IS. A key identifies a submission, not a slot to
+        # overwrite; updating it from a retry would be an unaudited edit (04 §10).
+        return _meal_created(existing)
+
     # The bolus injection time is the reported mealtime shifted by the reported
     # offset (negative = pre-bolus). No system clock enters a clinical timestamp.
     bolus_datetime = payload.datetime + dt.timedelta(minutes=payload.bolus_offset_min)
@@ -150,6 +175,7 @@ def create_meal(payload: MealCreate, session: Session = Depends(get_session)) ->
     meal.macro_confidence = payload.macro_confidence
     meal.correction_bolus_units = payload.correction_bolus_units
     meal.notes = payload.notes
+    meal.idempotency_key = payload.idempotency_key
     session.add(meal)
     session.flush()  # assign meal_id
 
@@ -168,7 +194,19 @@ def create_meal(payload: MealCreate, session: Session = Depends(get_session)) ->
                     logged_by=payload.logged_by,
                 )
             )
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # ★ Two submissions raced past the lookup above and both tried to insert. The DB is
+        # the arbiter; re-read and return the winner. This branch is what makes the endpoint
+        # correct under a race rather than merely usually correct.
+        session.rollback()
+        winner = session.scalars(
+            select(MealEvent).where(MealEvent.idempotency_key == payload.idempotency_key)
+        ).first()
+        if winner is not None:
+            return _meal_created(winner)
+        raise
 
     # ★ DL-053. The meal is committed ABOVE, on its own, so her capture surface never
     # depends on the model working. The error policy lives in ONE NAMED PLACE
@@ -180,13 +218,7 @@ def create_meal(payload: MealCreate, session: Session = Depends(get_session)) ->
     live.predict_for_meal_safely(session, meal, now=SystemClock().now())
     session.commit()
 
-    test_at = payload.datetime + dt.timedelta(minutes=_TEST_DELAY_MIN)
-    alarm = test_at.strftime("%I:%M %p").lstrip("0")
-    return MealCreated(
-        meal_id=meal.meal_id,
-        test_at=test_at,
-        message=f"Logged. Set a phone alarm for {alarm} to test.",
-    )
+    return _meal_created(meal)
 
 
 @app.patch("/api/meals/{meal_id}/post-bg", response_model=PostBgResult)
