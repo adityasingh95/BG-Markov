@@ -1515,3 +1515,40 @@ version that will be proposed, so it is refused here by name and has a test that
 — a counter, a log line on the shadow dashboard. Today it is silent, which means a model that
 stops predicting looks identical to a model that is merely unpromoted. Raised for the
 operator; it needs a surface, and inventing one is not this story's call.
+
+---
+
+### ★ AMENDED 2026-07-30, operator-approved — an out-of-range **baseline** must not cost her the meal
+
+**What the first version got wrong.** DL-053 said *"a `SafetyViolation` propagates"*, full
+stop. Running the wired path found the case that makes that too broad: **INV-6 fired on the
+`07 §4` baseline while she was logging a meal**, and the request returned HTTP 500. She could
+not log, and the meal was lost — not merely unpredicted.
+
+The baseline is an **internal diagnostic she never sees**. Blocking her primary capture
+surface because a number nobody reads came out implausible is the wrong trade, and it is the
+exact harm DL-053 was written to prevent.
+
+**Amended decision.** A `SafetyViolation` raised **by the baseline computation** during meal
+logging is caught. The meal is kept, no prediction is made, and **the refusal is recorded**
+as a `prediction_log` row with `guardrail_fired = "baseline_out_of_range"` — auditable, the
+same treatment S-801/S-802 already give every other refusal. A `SafetyViolation` from
+anywhere else — notably the INV-9 write path — still propagates.
+
+**INV-6 is not weakened.** It still raises inside `predict_baseline_bg`; no out-of-range
+value is used, stored as a prediction, or shown anywhere. What changed is what the *logging*
+path does with the raise.
+
+> **Caught is not the same as silent.** The refusal is a row, not an absence — so "the model
+> stopped predicting" can never look identical to "no model is promoted".
+
+### A third defect this exposed: refusals were being scored as predictions
+`data.scoring.scored_predictions` did not exclude rows with `guardrail_fired` set. A refusal
+carries no distribution, so scoring it reads as **"the model predicted no low"** — which is a
+different statement from *"the model declined to predict"*, and the model's own record takes
+the blame for it. Brier and calibration were polluted the same way. Refusals are now excluded
+from scoring; they remain auditable and separately countable.
+
+**Still not decided** (unchanged): whether a caught failure or a run of refusals should
+surface on the operator dashboard. It now leaves a durable trace, which is a precondition for
+any such surface, but no surface has been invented here.
