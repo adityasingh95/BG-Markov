@@ -272,6 +272,25 @@ def corrections_form(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "corrections.html")
 
 
+def _correction_created(event: CorrectionEvent, food_in_window: bool) -> CorrectionCreated:
+    """The correction response. One builder, so a retry and a first submit are identical."""
+    if food_in_window:
+        return CorrectionCreated(
+            event_id=event.event_id,
+            prompt_followup=False,
+            followup_at=None,
+            message="Logged. Eating soon, so this is not a clean ISF reading.",
+        )
+    followup_at = event.datetime + dt.timedelta(minutes=_CORRECTION_FOLLOWUP_MIN)
+    alarm = followup_at.strftime("%I:%M %p").lstrip("0")
+    return CorrectionCreated(
+        event_id=event.event_id,
+        prompt_followup=True,
+        followup_at=followup_at,
+        message=f"Not eating in the next 4 hours? Log a follow-up BG at {alarm}.",
+    )
+
+
 @app.post("/api/correction-events", response_model=CorrectionCreated)
 def create_correction_event(
     payload: CorrectionCreate, session: Session = Depends(get_session)
@@ -283,6 +302,18 @@ def create_correction_event(
     can see it. When no food is expected in the window, prompt a +4 h follow-up so
     the drop can be measured — the alarm time is the **reported** datetime + 4 h.
     """
+    # ★ S-1019. A retry returns the event already recorded and creates NOTHING — above all
+    # not a second `bolus_log` row. Same rule, same shape and same reasoning as the meal
+    # endpoint (S-1016 / DL-055); a correction is a bolus like any other.
+    if payload.idempotency_key is not None:
+        existing = session.scalars(
+            select(CorrectionEvent).where(
+                CorrectionEvent.idempotency_key == payload.idempotency_key
+            )
+        ).first()
+        if existing is not None:
+            return _correction_created(existing, payload.food_in_window)
+
     event = record_correction_event(
         reported_datetime=payload.datetime,
         bg_before=payload.bg_before,
@@ -296,6 +327,7 @@ def create_correction_event(
     # derived-IOB discipline; `detect_manual_iob` stays clean).
     at = payload.datetime
     event.iob_at_start = iob_at_start_at(session, at)
+    event.idempotency_key = payload.idempotency_key
     session.add(event)
     session.add(
         BolusLog(
@@ -307,23 +339,22 @@ def create_correction_event(
             logged_by=payload.logged_by,
         )
     )
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # Two submissions raced past the lookup and both tried to insert. The database is
+        # the arbiter; re-read and return the winner.
+        session.rollback()
+        winner = session.scalars(
+            select(CorrectionEvent).where(
+                CorrectionEvent.idempotency_key == payload.idempotency_key
+            )
+        ).first()
+        if winner is None:
+            raise
+        return _correction_created(winner, payload.food_in_window)
 
-    if payload.food_in_window:
-        return CorrectionCreated(
-            event_id=event.event_id,
-            prompt_followup=False,
-            followup_at=None,
-            message="Logged. Eating soon, so this is not a clean ISF reading.",
-        )
-    followup_at = payload.datetime + dt.timedelta(minutes=_CORRECTION_FOLLOWUP_MIN)
-    alarm = followup_at.strftime("%I:%M %p").lstrip("0")
-    return CorrectionCreated(
-        event_id=event.event_id,
-        prompt_followup=True,
-        followup_at=followup_at,
-        message=f"Not eating in the next 4 hours? Log a follow-up BG at {alarm}.",
-    )
+    return _correction_created(event, payload.food_in_window)
 
 
 @app.patch(

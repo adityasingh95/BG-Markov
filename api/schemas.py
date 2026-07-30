@@ -77,6 +77,10 @@ class PostBgResult(BaseModel):
 
 
 class CorrectionCreate(BaseModel):
+    #: S-1019. Optional so an existing client (and every pre-S-1019 test) still works, but
+    #: when present it is enforced. Required-and-unread was the S-1016 mistake; the mirror
+    #: image — required-and-enforced with no client sending it — would simply lock her out.
+    idempotency_key: str | None = None
     datetime: dt.datetime  # REPORTED — when she took the correction
     bg_before: int
     units: float

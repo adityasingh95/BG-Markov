@@ -199,6 +199,13 @@ class CorrectionEvent(Base):
     # known" and is excluded from the clean ISF set (07 §6). Never hand-entered.
     iob_at_start: Mapped[float | None] = mapped_column(default=None)  # valid only if < 0.5
     food_in_window: Mapped[bool] = mapped_column()
+    # ★ S-1019. A correction writes to `bolus_log` exactly as a meal does, so a retried
+    # submission carries the same harm: overstated IOB, and the calculator subtracts IOB.
+    # UNIQUE at the database because a read-then-insert races. Nullable, and several NULLs
+    # coexist — every correction recorded before S-1019 has no key.
+    idempotency_key: Mapped[str | None] = mapped_column(
+        unique=True, index=True, default=None
+    )
 
 
 class HypoRescueLog(Base):

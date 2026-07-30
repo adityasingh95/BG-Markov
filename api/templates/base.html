@@ -11,6 +11,9 @@
        (ADR-8), and a page that loaded its own script first would quietly get `undefined`
        and fall back to whatever the catch block does. #}
     <script src="{{ url_for('static', path='reported-time.js') }}"></script>
+    {# S-1019: one idempotency key per form fill. Same reason for <head>: a page script
+       that ran first would get `undefined` and fall back to minting per submit. #}
+    <script src="{{ url_for('static', path='submission-key.js') }}"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>

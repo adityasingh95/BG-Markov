@@ -7,6 +7,8 @@
   var form = document.getElementById("meal-form");
   if (!form) return;
   var DRAFT_KEY = "bgmarkov.meal-draft.v1";
+  // ★ S-1019: stored beside the draft, because a restored draft is the SAME submission.
+  var KEY_STORE = "bgmarkov.meal-key.v1";
   var toast = document.getElementById("toast");
   var timeInput = form.querySelector("[data-meal-time]");
   var chosen = form.querySelector("[data-chosen]");
@@ -33,6 +35,7 @@
 
   // --- Draft persistence --------------------------------------------------
   function saveDraft() {
+    startNewFillIfNeeded();
     var data = {};
     form.querySelectorAll("input, textarea").forEach(function (el) {
       if (el.name && el.type !== "hidden") data[el.name] = el.value;
@@ -53,6 +56,22 @@
 
   function clearDraft() {
     try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* ignore */ }
+  }
+
+  // ★ S-1019: the key rotates when the NEXT FILL BEGINS, not the moment a save returns.
+  // Rotating on success looks equivalent and is not: the response arrives in a few
+  // milliseconds on a local server, so a second tap that lands just after it would carry a
+  // fresh key and log a second meal — the exact double-tap this story exists to stop, with
+  // a window too narrow to reproduce by hand and wide enough to happen to her.
+  // A fill "begins" the first time she touches the form while NO DRAFT EXISTS. The draft
+  // is the durable record of a fill in progress, and it is cleared only by a confirmed
+  // save — so "no draft, and she is typing" is exactly "a new submission starts here", and
+  // it survives a reload, which an in-memory flag does not. That mattered: a reload between
+  // two genuine meals would otherwise reuse the key and the second meal would vanish.
+  function startNewFillIfNeeded() {
+    var hasDraft;
+    try { hasDraft = !!localStorage.getItem(DRAFT_KEY); } catch (e) { hasDraft = true; }
+    if (!hasDraft) window.BGKey.rotate(KEY_STORE);
   }
 
   // --- Chip groups (single-select) ---------------------------------------
@@ -126,8 +145,9 @@
     // said "breakfast". The server now refuses anything carrying an offset.
     var reported = localIso(iso);
     return {
-      idempotency_key: (window.crypto && crypto.randomUUID)
-        ? crypto.randomUUID() : String(Date.now()),
+      // ★ S-1019: read, not minted. `payload()` runs once per SUBMIT, so minting here made
+      // every tap a new submission and S-1016's server-side guard could never fire.
+      idempotency_key: window.BGKey.current(KEY_STORE),
       datetime: reported,
       meal_type: form.querySelector('[name="meal_type"]').value || mealTypeFor(iso),
       pre_bg: parseInt(form.querySelector('[name="pre_bg"]').value, 10),
@@ -156,6 +176,11 @@
       if (offsetField) offsetField.focus();
       return;
     }
+    // Belt as well as braces — and the only part of this she can see. Pressing a button
+    // that appears to do nothing is why people press it again.
+    var button = form.querySelector('button[type="submit"]');
+    if (button) button.disabled = true;
+
     fetch(form.action, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -164,13 +189,16 @@
       if (!r.ok) throw new Error("submit failed");
       return r.json();
     }).then(function (body) {
-      clearDraft();  // only after a confirmed save
+      clearDraft();  // only after a confirmed save — and it is what marks the fill finished
       toast.hidden = false;
       toast.textContent = "✓ " + (body.message || "Logged.");
       toast.scrollIntoView({ block: "nearest" });
     }).catch(function () {
+      // The key is NOT rotated here: a failed submit must stay safe to retry.
       toast.hidden = false;
       toast.textContent = "Could not save — your entry is kept; try again.";
+    }).then(function () {
+      if (button) button.disabled = false;
     });
   });
 
