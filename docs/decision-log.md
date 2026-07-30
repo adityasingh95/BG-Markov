@@ -1523,7 +1523,7 @@ operator; it needs a surface, and inventing one is not this story's call.
 **What the first version got wrong.** DL-053 said *"a `SafetyViolation` propagates"*, full
 stop. Running the wired path found the case that makes that too broad: **INV-6 fired on the
 `07 §4` baseline while she was logging a meal**, and the request returned HTTP 500. She could
-not log, and the meal was **lost** — not merely unpredicted.
+not log, and the meal was lost — not merely unpredicted.
 
 The baseline is an **internal diagnostic she never sees**. Blocking her primary capture
 surface because a number nobody reads came out implausible is the wrong trade, and it is the
@@ -1544,10 +1544,10 @@ path does with the raise.
 
 ### A third defect this exposed: refusals were being scored as predictions
 `data.scoring.scored_predictions` did not exclude rows with `guardrail_fired` set. A refusal
-carries no distribution, so scoring it reads as **"the model predicted no low"** — a
+carries no distribution, so scoring it reads as **"the model predicted no low"** — which is a
 different statement from *"the model declined to predict"*, and the model's own record takes
-the blame. Brier and calibration were polluted the same way. Refusals are now excluded from
-scoring; they remain auditable and separately countable.
+the blame for it. Brier and calibration were polluted the same way. Refusals are now excluded
+from scoring; they remain auditable and separately countable.
 
 **Still not decided** (unchanged): whether a caught failure or a run of refusals should
 surface on the operator dashboard. It now leaves a durable trace, which is a precondition for

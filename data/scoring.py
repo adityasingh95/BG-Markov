@@ -98,10 +98,9 @@ def scored_predictions(session: Session, *, model_version: str) -> ScoredPredict
                 PredictionLog.actual_state.is_not(None),
                 # ★ A REFUSAL is not a prediction. A guarded refusal carries no usable
                 # distribution, so scoring it reads as "the model predicted no low" — which
-                # is a different statement from "the model declined to predict", and the
-                # model's own record takes the blame for it. Brier and calibration are
-                # polluted the same way. Refusals stay auditable and separately countable;
-                # they are not evidence about accuracy.
+                # is a different statement from "the model declined to predict", and it is
+                # the model's record that gets the blame. Refusals are auditable (S-801/
+                # S-802) and separately countable; they are not evidence about accuracy.
                 PredictionLog.guardrail_fired.is_(None),
             )
             .order_by(PredictionLog.created_at)
