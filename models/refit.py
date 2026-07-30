@@ -32,7 +32,12 @@ from data.tables import ModelArtifact
 from data.training import MIN_TRAINING_ROWS, TRAILING_WINDOW_DAYS, TrainingData
 from data.training import assemble_training_data as assemble_training_data
 from models.metrics import hypo_recall_at_far, off_by_one_rate, severe_state_error_rate
-from models.ordinal import DEFAULT_HYPO_WEIGHT, fit_ordinal, hypo_confidence_weights
+from models.ordinal import (
+    DEFAULT_HYPO_WEIGHT,
+    HYPO_STATES,
+    fit_ordinal,
+    hypo_confidence_weights,
+)
 from models.recency import recency_weights
 from models.validation import temporal_cv
 
@@ -42,6 +47,7 @@ __all__ = [
     "TRAILING_WINDOW_DAYS",
     "composite_weights",
     "run_refit",
+    "score_predictions",
 ]
 
 _CV_SPLITS = 3
@@ -158,24 +164,47 @@ def _score(
         return np.asarray(states[np.argmax(proba, axis=1)], dtype=float)
 
     result = temporal_cv(x, data.y_state, data.dates, fit_predict, n_splits=_CV_SPLITS)
-    pred = np.asarray(result.oos_predictions(), dtype=int)
-    truth = result.oos_truth()
+    return score_predictions(
+        np.asarray(result.oos_predictions(), dtype=int), result.oos_truth()
+    )
+
+
+def score_predictions(
+    pred: npt.NDArray[np.int_], truth: npt.NDArray[np.int_]
+) -> dict[str, Any]:
+    """Out-of-sample metrics from predicted vs observed states.
+
+    ★ **The hypo score is derived from ``pred``, never from ``truth``.** An earlier version
+    ranked `is_hypo` (the truth) against itself, which made hypo recall come back **1.0 for
+    every model regardless of what it predicted** — leakage in the most literal form, in the
+    one number Gate 1's beats-baseline condition turns on. It was invisible in the unit tests
+    and obvious the moment a refit ran against seeded data, which is exactly the failure mode
+    this project exists to make loud: *a model that looks good on retrospective data, gets
+    trusted, and is quietly wrong about a low.*
+
+    Split out as a public function precisely so it can be tested on hand-built arrays, where
+    "predicts no lows ⇒ recall 0.0" is checkable without fitting anything.
+
+    Plain accuracy is absent, deliberately: meaningless on an imbalanced 5-class problem and
+    forbidden to headline.
+    """
     if pred.size == 0:
         return {"hypo_recall": None, "n_scored": 0, "n_hypo_observed": 0}
 
-    # A hard predicted state is a degenerate "score": 1.0 for a predicted hypo, else 0.0.
-    is_hypo = np.isin(truth, (1, 2))
+    is_hypo = np.asarray(np.isin(truth, list(HYPO_STATES)), dtype=bool)
     n_hypo = int(is_hypo.sum())
+
+    # A hard predicted state is a degenerate "score": 1.0 where a low was predicted, else 0.
+    hypo_score = np.asarray(np.isin(pred, list(HYPO_STATES)), dtype=float)
 
     # ★ Hypo recall is UNDEFINED when the window contains no lows — or no non-lows. Recorded
     # as null, never as 0.0: a recall of zero reads as "it missed every low", and a window
     # with no lows in it is a completely different, and far more important, statement. It
     # means the model has never seen the event it exists to predict, and Gate 1's
-    # beats-baseline condition has nothing to compare. Failing closed here keeps that
-    # visible instead of laundering it into a number.
+    # beats-baseline condition has nothing to compare.
     recall: float | None = None
     if 0 < n_hypo < len(truth):
-        recall = float(hypo_recall_at_far(is_hypo.astype(float), is_hypo).recall)
+        recall = float(hypo_recall_at_far(hypo_score, is_hypo).recall)
 
     return {
         "hypo_recall": recall,

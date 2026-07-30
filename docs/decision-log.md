@@ -1384,3 +1384,52 @@ low"*. A window with no lows means **the model has never seen the event it exist
 predict**, and Gate 1's beats-baseline condition has nothing to compare. Two opposite
 statements must not share a number. `data.scoring` fails closed on the same condition, so the
 dashboard shows its empty state rather than a headline metric with a denominator of zero.
+
+---
+
+## DL-051 — Two defects the first demo run found, that 700 tests did not
+**Story:** found while building the demo harness (post-S-1009) · **Type:** defects fixed ·
+**Date:** 2026-07-30
+
+Running the finished system against a seeded 240-day database — for the first time, end to
+end — surfaced two defects in under an hour. Both are recorded because of *how* they were
+found, not only *what* they were.
+
+### 1. ★ Hypo recall was leaking, and read 1.0 for every model
+`models.refit` ranked `is_hypo` — **the truth** — against itself, so
+`hypo_recall_at_far` returned `1.0` regardless of what the model predicted. The defect was
+introduced while handling the undefined-recall case (no lows in the window) and it survived
+28 tests, because every test asserted on *the null-vs-zero distinction* and none asserted
+that a **bad model scores badly**.
+
+**Why this one matters more than its size.** Hypo recall is the metric Gate 1's
+beats-baseline condition turns on. A permanent 1.0 means every model beats every baseline,
+and Gate 1's most important condition becomes a formality. It is precisely the failure the
+project charter names: *"a model that looks good on retrospective data, gets trusted, and is
+quietly wrong about a low."*
+
+It was caught by **reading a number that looked too good** — the escalation rule *"the model
+performs suspiciously well. Almost always leakage. Investigate."* applied to our own output.
+
+Fixed by extracting `score_predictions(pred, truth)` as a public, array-level function, so
+"predicts no lows ⇒ recall 0.0" is testable without fitting anything. Four tests added:
+zero, one, **strictly between** (the case a boundary-hardcoded implementation cannot fake),
+and null.
+
+**On the seeded data the honest figure is `hypo_recall = 0.0` with 18 lows observed** — the
+model misses every low. Gate 1 correctly refuses to open.
+
+### 2. The a11y suite shared a persistent database with every previous run
+`tests/a11y/conftest.py::live_server` started the app with no `BGAPP_DB_URL`, so it used
+`api.deps`' default `./bgapp-dev.db` — a real file in the repo root that each run appended
+to. Found when the calculator's implausible-input test failed against **34 accumulated
+profile rows** and passed immediately against a clean file, having tested nothing about the
+code either time.
+
+A test whose verdict depends on what ran before it is not a test. Fixed with a per-session
+temp database and a reset of the module-level `_engine` cache; the suite now runs twice
+consecutively with identical results and creates no file in the repo.
+
+> **The lesson, stated once:** the unit and integration suites were green throughout. Both
+> defects needed the system **run as a system, on data that looks like hers**. That is a
+> different activity from testing, and it is not optional.

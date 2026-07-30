@@ -12,6 +12,7 @@ managed browser (CI installs it via ``playwright install --with-deps chromium``)
 
 from __future__ import annotations
 
+import os
 import socket
 import threading
 import time
@@ -29,11 +30,28 @@ def _free_port() -> int:
 
 
 @pytest.fixture(scope="session")
-def live_server() -> Iterator[str]:
-    """Run the FastAPI app on a background uvicorn thread; yield its base URL."""
+def live_server(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    """Run the FastAPI app on a background uvicorn thread; yield its base URL.
+
+    ★ **Its database is a fresh per-session temp file.** Without the override the app
+    falls back to `api.deps`' default `./bgapp-dev.db` — a persistent file in the repo
+    root that every run appends to. That is not a tidiness issue: on an accumulated
+    database these tests grade a page in a state nobody asked for, and the verdict depends
+    on what happened to run earlier. It was found exactly that way — the calculator's
+    implausible-input a11y test failed against 34 accumulated profile rows and passed
+    immediately on a clean file, having tested nothing about the code either time.
+
+    `_engine` is reset because it is a module-level cache: a run that touched
+    `api.deps` before this fixture would otherwise keep serving the old database.
+    """
     import uvicorn
 
+    import api.deps as deps
     from api.app import app  # imported lazily: absent app ⇒ clear RED, not a collect error
+
+    db = tmp_path_factory.mktemp("a11y") / "live.db"
+    os.environ["BGAPP_DB_URL"] = f"sqlite:///{db}"
+    deps._engine = None
 
     port = _free_port()
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")

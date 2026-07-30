@@ -607,3 +607,61 @@ def test_the_oldest_rescued_low_keeps_a_positive_weight(session: Session) -> Non
     data = assemble_training_data(session, as_of=_NOW)
     weights = composite_weights(data, as_of=_NOW)
     assert weights[data.meal_ids.index(old_low.meal_id)] > 0.0
+
+
+# --- ★ the metric Gate 1 turns on --------------------------------------------
+
+
+def test_a_model_that_predicts_no_lows_scores_zero_recall_not_one() -> None:
+    """★ ADVERSARIAL (SDET). Caught by running the app against seeded data, where every
+    refit reported `hypo_recall: 1.0` — the shape CLAUDE.md names: *"the model performs
+    suspiciously well. Almost always leakage. Investigate."*
+
+    It was leakage in the most literal form: the score being ranked was derived from the
+    **truth** rather than from the prediction, so recall came back 1.0 no matter what the
+    model did.
+
+    Hypo recall is the metric Gate 1's beats-baseline condition turns on. A model that
+    never predicts a low must score **0.0** — that is the whole point of measuring it.
+    """
+    from models.refit import score_predictions
+
+    truth = np.array([3, 3, 2, 3, 1, 3, 4, 3, 2, 5], dtype=int)
+    blind = np.full(truth.shape, 3, dtype=int)  # predicts "in range" every single time
+
+    metrics = score_predictions(blind, truth)
+    assert metrics["hypo_recall"] == 0.0, (
+        "a model that never predicts a low scored above zero — the score is not coming "
+        "from the prediction"
+    )
+    assert metrics["n_hypo_observed"] == 3
+
+
+def test_a_model_that_finds_every_low_scores_one() -> None:
+    from models.refit import score_predictions
+
+    truth = np.array([3, 3, 2, 3, 1, 3, 4, 3, 2, 5], dtype=int)
+    perfect = truth.copy()
+    assert score_predictions(perfect, truth)["hypo_recall"] == 1.0
+
+
+def test_recall_is_strictly_between_when_the_model_finds_some_lows() -> None:
+    """★ The one that separates "computed from the prediction" from "hard-coded to a
+    boundary". Both 0.0 and 1.0 are reachable by a broken implementation; a partial score
+    is not."""
+    from models.refit import score_predictions
+
+    truth = np.array([3, 3, 2, 3, 1, 3, 4, 3, 2, 5], dtype=int)
+    partial = np.array([3, 3, 2, 3, 3, 3, 4, 3, 3, 5], dtype=int)  # finds 1 of the 3 lows
+
+    recall = score_predictions(partial, truth)["hypo_recall"]
+    assert 0.0 < recall < 1.0, f"expected a partial recall, got {recall}"
+
+
+def test_recall_is_none_when_there_are_no_lows_to_recall() -> None:
+    from models.refit import score_predictions
+
+    truth = np.array([3, 3, 4, 3, 5, 3, 4, 3, 3, 5], dtype=int)
+    metrics = score_predictions(truth.copy(), truth)
+    assert metrics["hypo_recall"] is None
+    assert metrics["n_hypo_observed"] == 0
