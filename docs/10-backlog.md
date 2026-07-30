@@ -616,6 +616,12 @@ reads the row. **DL-056.**
   decision, not a wiring fix (DL-059).
 - **No operator surface for prediction refusals.** They leave a durable trace (DL-053);
   nothing displays it.
+- **`/operator/shadow` still says "No model has been fitted yet"** when one has been fitted
+  and promoted. The real reason the panel is empty is that fewer than 10 predictions have
+  been scored — a different statement, and the one an operator needs in order to know what
+  to do next. Small, but it is a false sentence on a clinical screen.
+- **The profile page does not refresh after a save**, so the old "In force now" sits beside
+  a ✓ (S-1020 outcome).
 - **Historical rows are not audited for the S-1018 shift.** Nothing is known to be affected —
   no real capture has happened — but that is a statement about this project's stage, not a
   guarantee. Check before first real use.

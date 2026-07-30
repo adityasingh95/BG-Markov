@@ -402,15 +402,20 @@ def step_6_basal(page: Page, base: str, shots: Shots, db: str) -> None:
 
     page.goto(base + "/basal", wait_until="networkidle")
     shots.take(page, "basal-form")
-    page.fill("#date", NOW.strftime("%Y-%m-%d"))
+    # ★ A date the seed does NOT already cover. `record_basal` treats a repeat date as a
+    # CORRECTION, not a second dose (S-1013), so re-posting a seeded day would leave the row
+    # count unchanged and the demo would report a defect that is the rule working.
+    when = (NOW + dt.timedelta(days=1)).strftime("%Y-%m-%d")
+    page.fill("#date", when)
     page.fill("#units", "26")
     page.fill("#time_taken", "22:15")
     page.locator('button[type="submit"]').click()
-    page.wait_for_load_state("networkidle")
-    landed = page.url
-    body = page.locator("body").inner_text().strip()
-    print(f"        after submit the browser is at: {landed}")
-    print(f"        the page now says: {body[:200]}")
+    try:
+        page.wait_for_selector("#toast:not([hidden])", timeout=10_000)
+        print(f'        toast: "{page.locator("#toast").inner_text().strip()}"')
+    except Exception:  # noqa: BLE001 - the demo reports, it does not assert
+        print("        no toast appeared")
+    print(f"        after submit the browser is still at: {page.url}")
     shots.take(page, "basal-after-submit")
 
     with session_factory(engine)() as s:
