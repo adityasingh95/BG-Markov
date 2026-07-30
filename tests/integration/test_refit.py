@@ -56,6 +56,14 @@ from models.state import bg_to_state
 _NOW = dt.datetime(2026, 7, 1, 12, 0)
 
 
+class _FixedClock:
+    """`record_basal` takes a `Clock` (an object with `.now()`), not a callable — the
+    project has exactly one sanctioned wall-clock reader and this is how it is injected."""
+
+    def now(self) -> dt.datetime:
+        return _NOW
+
+
 @pytest.fixture()
 def session(tmp_path: pathlib.Path) -> Iterator[Session]:
     engine = make_engine(f"sqlite:///{tmp_path / 'refit.db'}")
@@ -84,8 +92,10 @@ def _meal(
         pre_bg=pre_bg,
         pre_bg_time=when - dt.timedelta(minutes=5),
         post_bg=post_bg,
-        post_bg_time=when + dt.timedelta(minutes=240) if post_bg is not None else None,
-        elapsed_min=240 if post_bg is not None else None,
+        # S-203's valid window is 105-135 min (core.validity). 120 sits mid-window;
+        # the earlier 240 excluded every fixture meal as `outside_window`.
+        post_bg_time=when + dt.timedelta(minutes=120) if post_bg is not None else None,
+        elapsed_min=120 if post_bg is not None else None,
         meal_bolus_units=units,
         correction_bolus_units=0.0,
         bolus_offset_min=-10,
@@ -123,7 +133,7 @@ def _basal_series(session: Session, *, start: dt.date, days: int, units: float) 
             units=units,
             time_taken=dt.time(22, 0),
             logged_by=LoggedBy.patient,
-            clock=lambda: _NOW,
+            clock=_FixedClock(),
         )
     session.flush()
 
@@ -179,7 +189,7 @@ def test_the_assembler_raises_rather_than_silently_dropping_a_lost_rescue(
     _spread_meals(session, n=10, end=_NOW - dt.timedelta(days=1))
     _basal_series(session, start=(_NOW - dt.timedelta(days=200)).date(), days=200, units=24.0)
     # A rescue on the ledger whose meal row is gone — the low that disappears silently.
-    session.add(HypoRescueLog(meal_id=99999, datetime=_NOW, carbs_g=15.0))
+    session.add(HypoRescueLog(meal_id=99999, grams=15.0, logged_at=_NOW))
     session.flush()
 
     with pytest.raises(SafetyViolation):
@@ -198,9 +208,12 @@ def test_effective_basal_is_the_ewma_and_not_the_raw_daily_dose(session: Session
     so the assertion actually bites.
     """
     start = (_NOW - dt.timedelta(days=200)).date()
-    _basal_series(session, start=start, days=150, units=24.0)
-    _basal_series(session, start=start + dt.timedelta(days=150), days=50, units=30.0)
-    _spread_meals(session, n=12, end=_NOW - dt.timedelta(days=1))
+    # The step sits 2 days before the most recent meal ON PURPOSE. The EWMA half-life is
+    # 25 h, so 50 days after a step it has fully converged to 30.0 and is indistinguishable
+    # from the raw dose — the assertion below would pass against the forbidden shortcut.
+    _basal_series(session, start=start, days=198, units=24.0)
+    _basal_series(session, start=start + dt.timedelta(days=198), days=2, units=30.0)
+    _spread_meals(session, n=12, end=_NOW - dt.timedelta(hours=6))
 
     data = assemble_training_data(session, as_of=_NOW)
     col = data.feature_names.index("effective_basal")
@@ -211,11 +224,13 @@ def test_effective_basal_is_the_ewma_and_not_the_raw_daily_dose(session: Session
 
     doses = [
         (dt.datetime.combine(start + dt.timedelta(days=i), dt.time(22, 0)),
-         24.0 if i < 150 else 30.0)
+         24.0 if i < 198 else 30.0)
         for i in range(200)
     ]
     smoothed = effective_basal(doses)
     assert min(smoothed) - 1e-6 <= float(values.max()) <= max(smoothed) + 1e-6
+    # ★ Smoothed, not stepped: the most recent meal sits strictly between the two doses.
+    assert 24.0 < float(values.max()) < 30.0
 
 
 def test_iob_at_meal_is_derived_from_the_bolus_log(session: Session) -> None:
@@ -404,8 +419,19 @@ def test_the_artifact_records_what_it_was_fitted_on(session: Session) -> None:
 
     artifact = run_refit(session, as_of=_NOW)
     assert artifact.n_rows == len([m for m in meals if m.post_bg is not None])
-    assert artifact.feature_list == FEATURE_NAMES
     assert "hypo_recall" in artifact.metrics
+
+    # ★ `feature_list` records what was ACTUALLY fitted, not what was offered — a subset of
+    # FEATURE_NAMES, with the rest named in `dropped_constant_features`. The manifest exists
+    # so an operator months later can answer "what did this model see?", and "it saw all 23"
+    # would be false whenever a column carried no rank. Both halves are asserted, because a
+    # subset alone is satisfiable by dropping everything silently.
+    assert set(artifact.feature_list) <= set(FEATURE_NAMES)
+    assert artifact.feature_list, "no features survived"
+    dropped = artifact.metrics["dropped_constant_features"]
+    assert set(artifact.feature_list) | set(dropped) == set(FEATURE_NAMES), (
+        "a feature was neither fitted nor recorded as dropped — it vanished"
+    )
 
 
 def test_a_refit_with_too_little_data_refuses_rather_than_fitting_noise(
@@ -475,3 +501,30 @@ def test_a_prediction_with_no_meal_is_left_alone(session: Session) -> None:
     )
     session.flush()
     assert backfill_actual_states(session) == 0
+
+
+def test_hypo_recall_is_null_not_zero_when_the_window_contains_no_lows(
+    session: Session,
+) -> None:
+    """★ ADVERSARIAL (SDET, added during GREEN).
+
+    A recall of **0.0** reads as *"it missed every low"*. A window with **no lows in it** is a
+    completely different, and far more important, statement: the model has never seen the
+    event it exists to predict, and Gate 1's beats-baseline condition has nothing to compare.
+    Collapsing the second into the first would put a number on the operator's screen that
+    means the opposite of the truth.
+    """
+    _basal_series(session, start=(_NOW - dt.timedelta(days=200)).date(), days=200, units=24.0)
+    for i in range(25):
+        _meal(
+            session,
+            when=_NOW - dt.timedelta(days=3 * i, hours=i % 5),
+            pre_bg=110 + (i % 4) * 20,
+            post_bg=(120, 150, 200, 260, 175)[i % 5],  # no state 1 or 2 anywhere
+            carbs=30.0 + i,
+        )
+    session.flush()
+
+    artifact = run_refit(session, as_of=_NOW)
+    assert artifact.metrics["hypo_recall"] is None, "an undefined recall was reported as 0.0"
+    assert artifact.metrics["n_hypo_observed"] == 0

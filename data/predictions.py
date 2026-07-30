@@ -12,11 +12,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from core.safety import inv9_prediction_persisted
-from data.tables import PredictionLog
+from data.tables import MealEvent, PredictionLog
 from models.guardrails import GuardedPrediction
+from models.state import bg_to_state
 
 
 def record_prediction(
@@ -99,3 +101,49 @@ def serve_prediction(
         guardrail_fired=guarded.reason.value if guarded.reason is not None else None,
     )
     return ServedPrediction(prediction_id=row.prediction_id, guarded=guarded)
+
+
+def backfill_actual_states(session: Session) -> int:
+    """Fill ``prediction_log.actual_state`` from each prediction's meal outcome (S-1009,
+    DL-049). Returns the number filled; **idempotent**.
+
+    The column has existed since S-201, commented *"backfilled"*, with nothing backfilling
+    it. It is the **outcome half of every shadow-mode comparison**: without it there is no
+    hypo recall, no Brier score and no calibration curve, so the operator's dashboard can
+    never show evidence and **Gate 1 can never open**. The model would be fitted, correct,
+    and permanently unreviewable — and the failure is silent, because the dashboard renders
+    a perfectly honest empty state while nothing anywhere says *this can never fill in*.
+
+    ★ **A prediction whose meal has no ``post_bg`` is left ``NULL``.** "Not yet known" and
+    "state 3" must never be the same value: defaulting an unread outcome to the in-range
+    state would quietly score every un-followed-up meal as a success — including the ones
+    that went low, which are the ones the whole system exists for.
+
+    Derived, never entered — the same rule as IOB, and the same shape as
+    ``backfill_correction_iob`` (S-306b).
+    """
+    rows = list(
+        session.scalars(
+            select(PredictionLog)
+            .join(MealEvent, PredictionLog.meal_id == MealEvent.meal_id)
+            .where(
+                PredictionLog.actual_state.is_(None),
+                MealEvent.post_bg.is_not(None),
+            )
+        )
+    )
+    meals = {
+        m.meal_id: m
+        for m in session.scalars(
+            select(MealEvent).where(MealEvent.meal_id.in_([r.meal_id for r in rows]))
+        )
+    }
+    filled = 0
+    for row in rows:
+        meal = meals.get(row.meal_id) if row.meal_id is not None else None
+        if meal is None or meal.post_bg is None:
+            continue
+        row.actual_state = bg_to_state(float(meal.post_bg))
+        filled += 1
+    session.flush()
+    return filled

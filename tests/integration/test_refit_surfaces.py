@@ -38,6 +38,11 @@ from models.state import bg_to_state
 _NOW = dt.datetime(2026, 7, 1, 12, 0)
 
 
+class _FixedClock:
+    def now(self) -> dt.datetime:
+        return _NOW
+
+
 @pytest.fixture()
 def session(tmp_path: pathlib.Path) -> Iterator[Session]:
     engine = make_engine(f"sqlite:///{tmp_path / 'surfaces.db'}")
@@ -60,9 +65,11 @@ def _scored_meal(session: Session, *, i: int, post_bg: int, version: str) -> Non
     when = _NOW - dt.timedelta(days=2 + i)
     meal = MealEvent(
         datetime=when, logged_at=when, logged_by=LoggedBy.patient, meal_type=MealType.lunch,
-        pre_bg=140, pre_bg_time=when, post_bg=post_bg,
-        post_bg_time=when + dt.timedelta(minutes=240), elapsed_min=240,
-        meal_bolus_units=5.0, bolus_offset_min=-10, carbs_g=45.0, fiber_g=5.0,
+        # pre_bg and carbs VARY on purpose: a design matrix whose columns are all
+        # constant carries no rank, and the refit correctly refuses to fit it.
+        pre_bg=110 + (i % 4) * 20, pre_bg_time=when, post_bg=post_bg,
+        post_bg_time=when + dt.timedelta(minutes=120), elapsed_min=120,
+        meal_bolus_units=4.0 + (i % 3), bolus_offset_min=-10, carbs_g=30.0 + i, fiber_g=5.0,
         ex_intensity=ExIntensity.none,
     )
     session.add(meal)
@@ -139,10 +146,12 @@ def test_only_the_promoted_versions_predictions_are_scored(session: Session) -> 
     """★ A prediction made by last month's model is not evidence about this month's. Mixing
     them would let a retired model's record flatter — or damn — the current one."""
     _promoted(session, version="v-new")
+    # Both versions carry a mix of lows and non-lows: a version whose window has no lows
+    # is correctly unscoreable, which would make this test pass for the wrong reason.
     for i in range(12):
-        _scored_meal(session, i=i, post_bg=150, version="v-new")
+        _scored_meal(session, i=i, post_bg=(70, 150, 150, 210)[i % 4], version="v-new")
     for i in range(12, 20):
-        _scored_meal(session, i=i, post_bg=70, version="v-old")
+        _scored_meal(session, i=i, post_bg=(70, 150)[i % 2], version="v-old")
     backfill_actual_states(session)
 
     report, _baseline, _calibration = load_shadow_evidence(session)
@@ -159,7 +168,10 @@ def test_the_dashboard_renders_the_real_report(client: TestClient, session: Sess
     r = client.get("/operator/shadow")
     assert r.status_code == 200
     body = r.text.lower()
-    assert "no model" not in body and "not yet" not in body, "the empty state is still shown"
+    # Match the template's actual empty-state sentence. The earlier substrings ("no model",
+    # "not yet") also occur in the Gate-1 conditions checklist, where they are correct — an
+    # assertion that cannot tell the empty state from an unmet condition tests neither.
+    assert "nothing to show" not in body, "the empty state is still shown"
     assert "accuracy" not in body, "a plain-accuracy figure appeared on the shadow page"
 
 
@@ -183,13 +195,13 @@ def test_cli_refit_writes_an_unpromoted_artifact(
         for i in range(200):
             record_basal(
                 s, date=start + dt.timedelta(days=i), units=24.0,
-                time_taken=dt.time(22, 0), logged_by=LoggedBy.patient, clock=lambda: _NOW,
+                time_taken=dt.time(22, 0), logged_by=LoggedBy.patient, clock=_FixedClock(),
             )
         for i in range(25):
             _scored_meal(s, i=i, post_bg=(70, 120, 150, 210, 260)[i % 5], version="seed")
         s.commit()
 
-    monkeypatch.setenv("BGAPP_DB_PATH", str(db))
+    monkeypatch.setenv("BGAPP_DB_URL", f"sqlite:///{db}")
     assert main(["refit"]) == 0
 
     out = capsys.readouterr().out.lower()
@@ -198,3 +210,81 @@ def test_cli_refit_writes_an_unpromoted_artifact(
     with session_factory(engine)() as s:
         artifact = s.scalars(select(ModelArtifact)).one()
         assert artifact.is_promoted is False
+
+
+def test_a_window_with_no_lows_is_not_presentable_evidence(session: Session) -> None:
+    """★ ADVERSARIAL (SDET, added during GREEN).
+
+    Twelve scored predictions and not one low. Every metric on the page would compute — and
+    the one the operator is actually deciding on would not exist. Gate 1's beats-baseline
+    condition **is** a hypo-recall comparison, so a window containing no lows cannot support
+    the decision this screen exists for.
+
+    The dangerous version of this is not a crash. It is a page that renders, looks like
+    evidence, and quietly omits the only number that mattered.
+    """
+    _promoted(session)
+    for i in range(12):
+        _scored_meal(session, i=i, post_bg=(150, 210, 175)[i % 3], version="v-2026-07")
+    backfill_actual_states(session)
+
+    report, _baseline, _calibration = load_shadow_evidence(session)
+    assert report is None
+
+
+def test_too_few_scored_predictions_are_not_presentable_evidence(session: Session) -> None:
+    """A hypo recall over three predictions is a fraction with a denominator of one."""
+    _promoted(session)
+    for i in range(4):
+        _scored_meal(session, i=i, post_bg=(70, 150)[i % 2], version="v-2026-07")
+    backfill_actual_states(session)
+
+    report, _baseline, _calibration = load_shadow_evidence(session)
+    assert report is None
+
+
+# --- ★ ADVERSARIAL (SDET, added during GREEN) --------------------------------
+
+
+def test_a_window_with_no_lows_is_unscoreable_rather_than_shown(session: Session) -> None:
+    """★ The most seductive version of the empty-state failure.
+
+    There are twenty scored predictions. There is a promoted model. Everything looks ready —
+    and not one of those outcomes was a low. Hypo recall is undefined without lows to recall,
+    and Gate 1's beats-baseline condition IS a hypo-recall comparison, so this window cannot
+    support the decision the page exists for.
+
+    A report here would carry a headline number that is a fraction over zero, on the screen
+    where the operator decides whether she may see the model's output.
+    """
+    _promoted(session)
+    for i in range(20):
+        _scored_meal(session, i=i, post_bg=(140, 160, 210)[i % 3], version="v-2026-07")
+    backfill_actual_states(session)
+
+    report, _baseline, _calibration = load_shadow_evidence(session)
+    assert report is None, "a window containing no lows produced a hypo-recall report"
+
+
+def test_a_window_with_only_lows_is_also_unscoreable(session: Session) -> None:
+    """The other side of the same hole: with no non-lows there is no false-alarm rate to
+    hold the recall at, so "recall @ FAR" is not a quantity that exists."""
+    _promoted(session)
+    for i in range(20):
+        _scored_meal(session, i=i, post_bg=(50, 70)[i % 2], version="v-2026-07")
+    backfill_actual_states(session)
+
+    report, _baseline, _calibration = load_shadow_evidence(session)
+    assert report is None
+
+
+def test_a_handful_of_outcomes_is_not_a_report(session: Session) -> None:
+    """★ Nine predictions with two lows would give a hypo recall with a denominator of two.
+    That is noise wearing a report's clothes, and it is the number Gate 1 turns on."""
+    _promoted(session)
+    for i in range(9):
+        _scored_meal(session, i=i, post_bg=(70, 150, 150)[i % 3], version="v-2026-07")
+    backfill_actual_states(session)
+
+    report, _baseline, _calibration = load_shadow_evidence(session)
+    assert report is None

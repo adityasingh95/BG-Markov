@@ -57,9 +57,10 @@ from data.repositories import (
     iob_at_start_at,
     shadow_days,
 )
+from data.scoring import scored_predictions
 from data.tables import BolusLog, BolusType, CorrectionEvent, LoggedBy, MealEvent
 from models.metrics import CalibrationVerdict
-from models.shadow import ShadowReport
+from models.shadow import ShadowReport, build_shadow_report
 from prescribe.gates import Gate1Status, gate1_status
 from prescribe.readout import PatientReadout
 
@@ -347,15 +348,44 @@ def load_shadow_evidence(
     *"may she see it?"*, which is Gate 1's job on an entirely different surface (INV-2,
     S-1002).
 
-    **Today it returns nothing, and that is correct.** A shadow report needs predictions
-    with their outcomes backfilled (`prediction_log.actual_state`) and a scored model; no
-    model has been promoted and no meal has been logged. Rather than fabricate a report to
-    make the page look populated, the page renders an explicit empty state. Scoring a live
-    model from `prediction_log` arrives with the refit story (S-1009).
+    **Wired in S-1009.** It reads the promoted artifact and the predictions scored against
+    that version, whose outcomes DL-049's backfill has filled in.
+
+    ★ **It fails closed three times over**, and each `None` is a true statement rather than a
+    missing feature: no promoted model, no scored predictions, or too few of them all return
+    the empty state. Wiring this function is exactly the moment it becomes tempting to make
+    the page look populated — and the operator opens Gate 1 on this screen, so a report built
+    from four outcomes is more dangerous than no report at all.
+
+    ``predicted_bg``/``reference_bg`` are the **state midpoints**, not stored BG values: the
+    log records a distribution over states, not a predicted number, so an mg/dL-scale metric
+    here is a coarse stand-in and is labelled as one rather than being presented as accuracy
+    the log cannot support.
     """
-    if get_promoted_artifact(session) is None:
+    promoted = get_promoted_artifact(session)
+    if promoted is None:
         return None, BaselineComparison(), None
-    return None, BaselineComparison(), None
+
+    scored = scored_predictions(session, model_version=promoted.version)
+    if scored is None:
+        return None, BaselineComparison(), None
+
+    midpoint = {1: 40.0, 2: 67.0, 3: 130.0, 4: 215.0, 5: 300.0}
+    report = build_shadow_report(
+        hypo_score=scored.hypo_score,
+        is_hypo=scored.is_hypo,
+        predicted_bg=[midpoint[int(s)] for s in scored.pred_states],
+        reference_bg=[midpoint[int(s)] for s in scored.actual_states],
+        pred_states=scored.pred_states,
+        actual_states=scored.actual_states,
+        # β_insulin is sign-constrained ≥ 0 in every fitted model (INV-8); the unconstrained
+        # confounding alarm is a separate S-503 diagnostic not stored on the artifact, so it
+        # reads 0.0 (no alarm) until a refit records it. Flagged in the S-1009 outcome.
+        unconstrained_beta_insulin=float(
+            promoted.metrics.get("unconstrained_beta_insulin", 0.0) or 0.0
+        ),
+    )
+    return report, BaselineComparison(), None
 
 
 @app.get("/operator/shadow", response_class=HTMLResponse)
