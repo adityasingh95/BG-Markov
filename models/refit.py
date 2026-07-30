@@ -144,10 +144,6 @@ def _score(
         y_train: npt.NDArray[np.int_],
         x_test: npt.NDArray[np.float64],
     ) -> npt.NDArray[np.float64]:
-        # ★ Re-checked PER FOLD, not once globally. A column can vary across the whole
-        # window and still be constant inside an early expanding-window fold — she may not
-        # have exercised at all in the first two months. Dropping only the globally-constant
-        # columns leaves that fold with a constant column and statsmodels raises.
         # ★ Re-checked PER FOLD, not once globally. A column can carry rank across the
         # whole window and still be redundant inside an early expanding-window fold — she
         # may not have exercised at all in the first two months. Filtering only globally

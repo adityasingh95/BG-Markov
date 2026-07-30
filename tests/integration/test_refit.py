@@ -158,12 +158,23 @@ def _spread_meals(session: Session, *, n: int, end: dt.datetime) -> list[MealEve
 def test_a_rescued_meal_is_absent_from_training_and_still_a_hypo_event(
     session: Session,
 ) -> None:
-    """★ THE ONE THAT CATCHES THE SHORTCUT.
+    """A rescued meal is absent from training, asserted end to end from the database —
+    which is what has been missing, since every other INV-7 test drives it from a
+    hand-built list.
 
-    `get_training_set` is where INV-7 is wired; an assembler with its own
-    `select(MealEvent)` is one line shorter and routes around it. This asserts the
-    invariant **end to end from the database**, which is what has been missing — every
-    existing INV-7 test drives it from a hand-built list.
+    ⚠ **This test does NOT catch the get_training_set bypass**, despite reading as though
+    it should. It was labelled "the one that catches the shortcut" and the adversarial pass
+    disproved that: planting a private `select(MealEvent)` that replicates
+    `get_training_set`'s validity logic minus the INV-7 call leaves this test **green**,
+    because a hypo-rescued meal fails S-203 validity anyway and is excluded either way.
+
+    The test that actually catches the bypass is
+    `test_the_assembler_raises_rather_than_silently_dropping_a_lost_rescue` — the ledger
+    reconciliation, which has no other route to the same answer. Kept as a corroborating
+    assertion, relabelled so nobody trusts it for a job it does not do.
+
+    The non-emptiness assertion below is not decoration: under the plant the whole training
+    set came back empty, and "the rescue is not in it" was true of nothing at all.
     """
     _spread_meals(session, n=12, end=_NOW - dt.timedelta(days=1))
     rescued = _meal(
@@ -172,17 +183,25 @@ def test_a_rescued_meal_is_absent_from_training_and_still_a_hypo_event(
     _basal_series(session, start=(_NOW - dt.timedelta(days=200)).date(), days=200, units=24.0)
 
     data = assemble_training_data(session, as_of=_NOW)
-    assert rescued.meal_id not in data.meal_ids, (
-        "a hypo-rescued meal reached training — the assembler bypassed get_training_set"
-    )
+    assert data.meal_ids, "the training set is empty — this assertion would be vacuous"
+    assert rescued.meal_id not in data.meal_ids, "a hypo-rescued meal reached training"
 
 
 def test_the_assembler_raises_rather_than_silently_dropping_a_lost_rescue(
     session: Session,
 ) -> None:
-    """INV-7's other half: a rescued meal must be *retained* as a hypo event. Deleting the
-    row is the vector S-305 armed the ledger against, and the assembler must not be the
-    place it goes quiet."""
+    """★ THE ONE THAT ACTUALLY CATCHES THE BYPASS (established by the adversarial pass).
+
+    INV-7's other half: a rescued meal must be *retained* as a hypo event. Deleting the row
+    is the vector S-305 armed the ledger against, and the assembler must not be where it
+    goes quiet.
+
+    This is the only assertion in the suite that a private `select(MealEvent)` cannot
+    satisfy. Validity filtering excludes rescued meals on its own, so "the rescue is absent
+    from training" is reachable without INV-7 — but the **ledger reconciliation** is not.
+    It has no route to the answer except through `get_training_set`, which is why it is the
+    real guard and the other test is corroboration.
+    """
     from core.safety import SafetyViolation
     from data.tables import HypoRescueLog
 
@@ -528,3 +547,63 @@ def test_hypo_recall_is_null_not_zero_when_the_window_contains_no_lows(
     artifact = run_refit(session, as_of=_NOW)
     assert artifact.metrics["hypo_recall"] is None, "an undefined recall was reported as 0.0"
     assert artifact.metrics["n_hypo_observed"] == 0
+
+
+def test_no_composite_weight_is_ever_zero(session: Session) -> None:
+    """★ ADVERSARIAL (SDET, added after a plant SURVIVED the first pass).
+
+    `test_recency_weight_is_strictly_positive_at_the_oldest_edge` tests `recency_weights` —
+    the **pure function**. Production does not use the pure function; it uses
+    `composite_weights`. Planting `np.where(combined < 0.35, 0.0, combined)` there — the
+    "tidy up negligible weights" refactor, one line, reads as housekeeping — left the entire
+    suite green.
+
+    That is the failure CLAUDE.md names by hand: *"the obvious refactor silently deletes
+    exactly the lows the system exists to predict."* A row weighted 0.0 is a row that was not
+    in the fit, and the rows that reach zero first are the oldest — which, after the hypo
+    up-weight, are disproportionately the rescued lows.
+
+    So this asserts on the composition, over a set built to contain the worst case: an old,
+    low-confidence, ordinary meal at the very edge of the window.
+    """
+    from models.refit import composite_weights
+
+    _basal_series(session, start=(_NOW - dt.timedelta(days=400)).date(), days=400, units=24.0)
+    _spread_meals(session, n=12, end=_NOW - dt.timedelta(days=1))
+    oldest = _meal(
+        session,
+        when=_NOW - dt.timedelta(days=TRAILING_WINDOW_DAYS - 1),
+        post_bg=150,
+        # The lowest confidence that still passes S-203 validity (MIN_MACRO_CONFIDENCE
+        # is 50) — below it the meal is excluded before weighting ever sees it.
+        confidence=50,
+    )
+    session.flush()
+
+    data = assemble_training_data(session, as_of=_NOW)
+    weights = composite_weights(data, as_of=_NOW)
+
+    assert float(weights.min()) > 0.0, (
+        "a training row was weighted to zero — that row was not in the fit at all"
+    )
+    assert weights[data.meal_ids.index(oldest.meal_id)] > 0.0
+
+
+def test_the_oldest_rescued_low_keeps_a_positive_weight(session: Session) -> None:
+    """★ Stated as the clinical claim it is: *a rescued low from five months ago is still a
+    low.* Recency reduces how much it counts. It must never decide it never happened."""
+    from models.refit import composite_weights
+
+    _basal_series(session, start=(_NOW - dt.timedelta(days=400)).date(), days=400, units=24.0)
+    _spread_meals(session, n=12, end=_NOW - dt.timedelta(days=1))
+    old_low = _meal(
+        session,
+        when=_NOW - dt.timedelta(days=TRAILING_WINDOW_DAYS - 2),
+        post_bg=58,
+        confidence=50,
+    )
+    session.flush()
+
+    data = assemble_training_data(session, as_of=_NOW)
+    weights = composite_weights(data, as_of=_NOW)
+    assert weights[data.meal_ids.index(old_low.meal_id)] > 0.0
