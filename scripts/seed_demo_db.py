@@ -21,6 +21,7 @@ import pathlib
 from data.basal import record_basal
 from data.db import create_all, make_engine, session_factory
 from data.profile import append_profile_version
+from data.provenance import mark_demo_database
 from data.repositories import annotate_validity
 from data.tables import (
     BolusLog,
@@ -54,6 +55,13 @@ def seed(db_path: str, *, days: int, seed_value: int, end: dt.date) -> dict[str,
     counts = {"meals": 0, "boluses": 0, "basal": 0, "rescues": 0, "valid": 0}
 
     with session_factory(engine)() as session:
+        # ★ S-1024. FIRST, before any synthetic row exists — so a run that dies halfway
+        # still leaves a database that admits what it is. A half-seeded file that renders
+        # as real capture is the exact failure the mark exists to prevent.
+        mark_demo_database(
+            session, note=f"synthetic generator: {days} days, seed {seed_value}, end {end}"
+        )
+        session.flush()
         append_profile_version(
             session, effective_from=start, icr=9.0, isf=30.0, target_bg=135,
             changed_by=LoggedBy.operator,

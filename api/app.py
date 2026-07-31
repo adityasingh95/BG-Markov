@@ -14,7 +14,6 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -40,6 +39,7 @@ from api.schemas import (
     PromotionRequest,
     PromotionResult,
 )
+from api.templating import provenance_middleware, templates
 from core.clock import SystemClock
 from data.adherence import GATE1_VALID_MEALS, adherence_metrics
 from data.basal import record_basal
@@ -70,11 +70,12 @@ _TEST_DELAY_MIN = 120  # 05b §3.1 — "test your BG" prompt is reported mealtim
 _CORRECTION_FOLLOWUP_MIN = 240  # F-3.2 — correction +4 h follow-up BG
 
 _BASE_DIR = Path(__file__).resolve().parent
-templates = Jinja2Templates(directory=str(_BASE_DIR / "templates"))
 
 app = FastAPI(title="BG-Markov", docs_url=None, redoc_url=None)
 app.include_router(bolus_router)
 app.mount("/static", StaticFiles(directory=str(_BASE_DIR / "static")), name="static")
+# S-1024: one middleware, so every rendered page knows whether its data is synthetic.
+app.middleware("http")(provenance_middleware)
 
 # Seeded favourite meals — the adherence mechanism (05b §3). Tapping one
 # populates all macros so a repeat meal is a few taps. Persisting favourite meal

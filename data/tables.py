@@ -208,6 +208,30 @@ class CorrectionEvent(Base):
     )
 
 
+class DataProvenance(Base):
+    """What kind of data this database holds (S-1024, DL-062).
+
+    ★ **Provenance belongs to the data, not to the environment.** An env var saying "this is
+    demo data" can be forgotten, inherited, or left over from the previous run, and the
+    mistake is silent in both directions. A row travels with the file: move it, reopen it in
+    a month, hand it to someone else, and it still says what it is.
+
+    At most **one** row. The question is *what is this database*, not *how many times did
+    somebody say so*.
+    """
+
+    __tablename__ = "data_provenance"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    #: Currently only ``"demo"`` is ever written. Real capture leaves the table EMPTY rather
+    #: than writing ``"patient"``: absence must not be mistaken for a claim, and a fresh
+    #: database on day one of capture must not carry a banner of any kind.
+    kind: Mapped[str] = mapped_column()
+    #: Which synthetic data — days, seed. What makes a stale demo file diagnosable later.
+    note: Mapped[str | None] = mapped_column(default=None)
+    created_at: Mapped[dt.datetime] = mapped_column()
+
+
 class HypoRescueLog(Base):
     """An independent, append-only ledger of hypo rescues (REQ-012, INV-7).
 

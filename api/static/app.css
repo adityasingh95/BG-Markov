@@ -220,6 +220,27 @@ main.container > section > h2 {
 }
 .skip-link:focus { left: 0; z-index: 20; }
 
+/* --- Demo-data banner (S-1024) ------------------------------------------ */
+/* Loud on purpose, and it must never be mistaken for a clinical warning: this is a
+   statement about the DATA, not about her. So it uses the danger token for attention but
+   says what it is in words — the same rule as every other cue here (05b §2). */
+.demo-banner {
+  margin: 0;
+  padding: 10px 16px;
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  text-align: center;
+}
+.demo-banner strong {
+  display: inline-block;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-right: 0.5rem;
+}
+
 /* ========================================================================== */
 /* Controls                                                                   */
 /* ========================================================================== */

@@ -22,6 +22,7 @@ import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from starlette.responses import HTMLResponse
 from starlette.routing import Route
 
 from api.app import app
@@ -62,6 +63,11 @@ def _html_get_paths() -> list[str]:
             continue
         methods = route.methods or set()
         if "GET" not in methods:
+            continue
+        # ★ HTML pages only, decided by the route's DECLARED response class — not by a
+        # hand-written exclusion list, which is the same forgettable list this enumeration
+        # exists to avoid. `/openapi.json` and `/docs` are routes and are not pages.
+        if not (isinstance(route, APIRoute) and route.response_class is HTMLResponse):
             continue
         path = route.path
         if path.startswith(("/api/", "/static")):

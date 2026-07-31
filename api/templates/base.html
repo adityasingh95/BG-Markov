@@ -24,6 +24,16 @@
     <header class="container">
       <strong>BG-Markov</strong>
     </header>
+    {# S-1024: rendered from a context processor on the ONE templates object, so it
+       reaches every page including ones nobody has written yet. Absent entirely — not
+       hidden, not empty — when the database is not marked. #}
+    {% if is_demo_data %}
+    <p class="demo-banner" role="status">
+      <strong>{{ demo_banner_mark }}</strong>
+      This database was created by the synthetic generator. Every number on every screen
+      is made up. Nothing here says anything about her.
+    </p>
+    {% endif %}
     <main id="main" class="container">
       {% block content %}{% endblock %}
     </main>

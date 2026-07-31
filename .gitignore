@@ -38,3 +38,9 @@ demo-ui-shots/
 demo-ui.db
 browser-artifacts/
 *.webm
+
+# S-1024 — local databases. `bgapp-dev.db` would be HER RECORDS; it must never be
+# committed. `bgapp-demo.db` is synthetic and regenerable in seconds.
+bgapp-dev.db
+bgapp-demo.db
+bgapp-*.db

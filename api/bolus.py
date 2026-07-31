@@ -17,20 +17,18 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from api.deps import get_session
+from api.templating import templates
 from core.safety import BOLUS_BG_FLOOR
 from data.repositories import active_profile, boluses_before, iob_at_start_at
 from prescribe.bolus import BolusRecommendation, recommend_bolus
 
 router = APIRouter()
-templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
 
 
 class CalculatorState(StrEnum):

@@ -39,6 +39,23 @@ Every unusual constraint in this pack — Gate 1, the guardrails, the shadow mod
 
 ---
 
+## Running it locally
+
+**→ `docs/RUNBOOK.md`** — one command to start, a manual verification checklist, and an
+explicit list of what is **known not to work** so you do not spend time on it.
+
+```bash
+./scripts/dev.sh setup      # venv + pinned deps + schema (Alembic)
+./scripts/dev.sh demo       # seed SYNTHETIC data, then serve -> http://127.0.0.1:8000
+./scripts/dev.sh status     # which local database is which
+```
+
+★ A database created by the synthetic generator carries a **DEMO DATA banner on every
+screen**, and the marker lives in the database rather than the environment (S-1024, DL-062).
+On screen, 658 synthetic meals render exactly like 658 real ones.
+
+---
+
 ## Running & verifying the build (EPICs 1–9 shipped)
 
 Requires **Python 3.12** and (for the accessibility tests) an internet
