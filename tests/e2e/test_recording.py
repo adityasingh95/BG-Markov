@@ -60,6 +60,13 @@ def test_recording_on_writes_a_video_and_a_trace(
     assert video.stat().st_size > 0, "the video is a zero-byte placeholder"
     assert trace.exists(), f"no trace at {trace}"
 
+    # ★ Only the NAMED video survives. `save_as` COPIES, so the hash-named original Playwright
+    # wrote stays behind unless it is removed — and a directory holding
+    # `on.webm` beside `2b487ebe518b47…webm` of identical bytes is the confusion the naming
+    # existed to prevent. Observed on the first real recording run, not reasoned about.
+    videos = sorted(pth.name for pth in (tmp_path / "video").glob("*.webm"))
+    assert videos == ["on.webm"], f"stray unnamed recordings left behind: {videos}"
+
 
 def test_the_trace_actually_contains_the_run(
     browser: Browser, live_server: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

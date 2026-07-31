@@ -30,3 +30,11 @@ export-*.csv
 # OS
 .DS_Store
 .hypothesis/
+
+# S-1023 — browser recordings (video + Playwright traces). A 12 MB video in the history is
+# a bad trade; regenerate with `--record` or BGAPP_BROWSER_ARTIFACTS.
+demo-ui-recording/
+demo-ui-shots/
+demo-ui.db
+browser-artifacts/
+*.webm

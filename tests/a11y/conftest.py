@@ -22,6 +22,8 @@ import httpx
 import pytest
 from playwright.sync_api import Browser, Page
 
+from tests.conftest import close_recorded_context, new_recorded_context
+
 
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -82,11 +84,16 @@ def live_server(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
 
 
 @pytest.fixture
-def page(browser: Browser, live_server: str) -> Iterator[Page]:  # browser: tests/conftest.py
-    context = browser.new_context()
+def page(  # browser: tests/conftest.py
+    browser: Browser, live_server: str, request: pytest.FixtureRequest
+) -> Iterator[Page]:
+    # S-1023: one recording implementation, shared with the e2e suite, so there cannot be a
+    # suite that is quietly "the one that isn't recorded".
+    name = f"a11y-{request.node.name}"
+    context = new_recorded_context(browser, name=name)
     pg = context.new_page()
     pg.goto(live_server + "/", wait_until="networkidle")
     try:
         yield pg
     finally:
-        context.close()
+        close_recorded_context(context, name=name)

@@ -15,6 +15,7 @@ have done.
 
 Usage:
     python -m scripts.demo_ui --db demo-ui.db --out demo-ui-shots
+    python -m scripts.demo_ui --record demo-ui-recording --slow-mo 350   # video + trace
 """
 
 from __future__ import annotations
@@ -32,6 +33,8 @@ from typing import Any
 import httpx
 from playwright.sync_api import Page, sync_playwright
 from sqlalchemy import func, select
+
+from tests.conftest import ARTIFACTS_ENV, close_recorded_context, new_recorded_context
 
 NOW = dt.datetime(2026, 7, 30, 12, 0)
 
@@ -55,6 +58,55 @@ def check(ok: bool, message: str) -> bool:
 
 def note(message: str) -> None:
     print(f"[{_NOTE}] {message}")
+
+
+# --------------------------------------------------------------------------- narration
+
+_BANNER_ID = "bgmarkov-demo-banner"
+
+#: ★ `position: fixed` with `left: 0; right: 0`, so the banner is exactly viewport-wide and
+#: cannot create horizontal overflow. `position: absolute` would grow the page and break the
+#: 200%-zoom assertions — measuring the narration instead of the layout.
+_BANNER_CSS = (
+    "position:fixed;left:0;right:0;top:0;z-index:2147483647;pointer-events:none;"
+    "box-sizing:border-box;max-width:100%;padding:10px 16px;"
+    "font:600 15px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+    "background:#0a5c64;color:#fff;letter-spacing:.01em;"
+)
+
+
+#: Set by `main()` when --record is given. A module flag rather than a parameter threaded
+#: through ten step functions: the narration is presentation, not behaviour, and the step
+#: signatures should keep saying what the step DOES.
+RECORDING = False
+
+
+def narrate(page: Page, text: str) -> None:
+    """Burn a caption into the page so the video is self-describing.
+
+    A screen recording of a form being filled in is not a demo; it is footage. The caption
+    is what turns it into one — and it is drawn only when recording, so a normal run
+    measures the app and nothing else.
+    """
+    if not RECORDING:
+        return
+    page.evaluate(
+        """([id, css, text]) => {
+            let el = document.getElementById(id);
+            if (!el) { el = document.createElement('div'); el.id = id;
+                       document.body.appendChild(el); }
+            el.setAttribute('style', css);
+            el.textContent = text;
+        }""",
+        [_BANNER_ID, _BANNER_CSS, text],
+    )
+
+
+def clear_narration(page: Page) -> None:
+    """Remove the caption before anything geometric is measured."""
+    page.evaluate(
+        "(id) => { const e = document.getElementById(id); if (e) e.remove(); }", _BANNER_ID
+    )
 
 
 # --------------------------------------------------------------------------- server
@@ -197,6 +249,7 @@ class Shots:
 
 def step_1_log_a_meal(page: Page, base: str, shots: Shots, db: str) -> int | None:
     h("UI 1 — She logs a meal on the phone")
+    narrate(page, '1 · She logs a meal on her phone')
     before = counts(db)
     page.goto(base + "/", wait_until="networkidle")
     shots.take(page, "meal-form-empty")
@@ -253,6 +306,7 @@ def step_1_log_a_meal(page: Page, base: str, shots: Shots, db: str) -> int | Non
 
 def step_2_double_tap(page: Page, base: str, shots: Shots, db: str) -> None:
     h("UI 2 — She taps 'Log meal' twice (the shaky-hands case)")
+    narrate(page, "2 · She taps 'Log meal' twice — one meal, one bolus (S-1019)")
     before = counts(db)
     page.goto(base + "/", wait_until="networkidle")
     page.locator(".chip.favourite").first.click()
@@ -290,6 +344,7 @@ def step_2_double_tap(page: Page, base: str, shots: Shots, db: str) -> None:
 
 def step_3_post_bg(page: Page, base: str, shots: Shots, meal_id: int, db: str) -> None:
     h("UI 3 — Two hours later: the post-meal reading")
+    narrate(page, '3 · Two hours later — the post-meal reading (this used to 500)')
     from data.db import make_engine, session_factory
     from data.tables import MealEvent
 
@@ -334,6 +389,7 @@ def step_3_post_bg(page: Page, base: str, shots: Shots, meal_id: int, db: str) -
 
 def step_4_readout(page: Page, base: str, shots: Shots, meal_id: int) -> None:
     h("UI 4 — What she is shown about that meal (INV-2)")
+    narrate(page, '4 · What she is shown before Gate 1 — INV-2')
     page.goto(base + f"/meals/{meal_id}/readout", wait_until="networkidle")
     text = page.locator("main").inner_text().strip()
     print("        page says:")
@@ -354,6 +410,7 @@ def step_4_readout(page: Page, base: str, shots: Shots, meal_id: int) -> None:
 
 def step_5_calculator(page: Page, base: str, shots: Shots) -> None:
     h("UI 5 — The bolus calculator, driven from the form")
+    narrate(page, '5 · The bolus calculator — INV-3 and INV-4')
 
     def work_out(carbs: str, bg: str, label: str) -> str:
         page.goto(base + "/bolus", wait_until="networkidle")
@@ -393,6 +450,7 @@ def step_5_calculator(page: Page, base: str, shots: Shots) -> None:
 
 def step_6_basal(page: Page, base: str, shots: Shots, db: str) -> None:
     h("UI 6 — Recording the daily Tresiba dose")
+    narrate(page, '6 · The daily Tresiba dose (this used to 422 into a JSON page)')
     from data.db import make_engine, session_factory
     from data.tables import BasalLog
 
@@ -435,6 +493,7 @@ def step_6_basal(page: Page, base: str, shots: Shots, db: str) -> None:
 
 def step_6b_correction(page: Page, base: str, shots: Shots, db: str) -> None:
     h("UI 6b — A correction bolus with no food (the clean ISF reading)")
+    narrate(page, '6b · A correction with no food — the clean ISF signal')
     from data.db import make_engine, session_factory
     from data.tables import CorrectionEvent
 
@@ -460,6 +519,7 @@ def step_6b_correction(page: Page, base: str, shots: Shots, db: str) -> None:
 
 def step_7_operator(page: Page, base: str, shots: Shots, db: str) -> None:
     h("UI 7 — The operator's screens")
+    narrate(page, "7 · The operator's screens — she sees none of this")
     sub("/operator — the gate dashboard")
     page.goto(base + "/operator", wait_until="networkidle")
     text = page.locator("main").inner_text()
@@ -511,7 +571,9 @@ def step_9_her_timezone(browser: Any, base: str, shots: Shots, db: str) -> None:
     with `new Date(iso).toISOString()`, and the server stores the instant it is given.
     """
     h("UI 9 — The same form, on a phone set to Asia/Kolkata (UTC+5:30)")
-    context = browser.new_context(
+    context = new_recorded_context(
+        browser,
+        name="demo-kolkata",
         viewport={"width": 390, "height": 844},
         timezone_id="Asia/Kolkata",
         locale="en-IN",
@@ -519,6 +581,7 @@ def step_9_her_timezone(browser: Any, base: str, shots: Shots, db: str) -> None:
     page = context.new_page()
     typed = "2026-07-29T08:00"
     page.goto(base + "/", wait_until="networkidle")
+    narrate(page, "9 \u00b7 The same form on a phone set to Asia/Kolkata (UTC+5:30)")
     page.locator(".chip.favourite").first.click()
     page.fill("#meal-time", typed)
     page.fill("#f-pre_bg", "127")
@@ -549,14 +612,16 @@ def step_9_her_timezone(browser: Any, base: str, shots: Shots, db: str) -> None:
             "browser from her local time, so the row also says 'breakfast' at 02:30: the "
             "corruption is self-inconsistent inside a single row and still raises nothing."
         )
-    context.close()
+    close_recorded_context(context, name="demo-kolkata")
 
 
 def step_8_phone_and_zoom(page: Page, base: str, shots: Shots) -> None:
     h("UI 8 — On the phone, and at 200% zoom")
     page.set_viewport_size({"width": 390, "height": 844})
     page.goto(base + "/", wait_until="networkidle")
+    narrate(page, "8 \u00b7 On a 390px phone, and at 200% zoom")
     shots.take(page, "phone-meal-form")
+    clear_narration(page)  # never measure the narration
     overflow = page.evaluate(
         "() => document.documentElement.scrollWidth - document.documentElement.clientWidth"
     )
@@ -566,6 +631,7 @@ def step_8_phone_and_zoom(page: Page, base: str, shots: Shots) -> None:
     page.evaluate("() => { document.documentElement.style.fontSize = '32px'; }")
     page.wait_for_timeout(200)
     shots.take(page, "zoom-200pct")
+    clear_narration(page)
     overflow = page.evaluate(
         "() => document.documentElement.scrollWidth - document.documentElement.clientWidth"
     )
@@ -583,7 +649,28 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", default="demo-ui-shots")
     p.add_argument("--days", type=int, default=240)
     p.add_argument("--seed", type=int, default=7)
+    p.add_argument(
+        "--record",
+        metavar="DIR",
+        default=None,
+        help="record a video + Playwright trace of the walkthrough into DIR (S-1023)",
+    )
+    p.add_argument(
+        "--slow-mo",
+        type=int,
+        default=0,
+        metavar="MS",
+        help="pause MS between actions so a human can follow the video",
+    )
     args = p.parse_args(argv)
+
+    global RECORDING
+    RECORDING = args.record is not None
+    if RECORDING:
+        # The recording helpers are shared with the test suites, and they are switched on by
+        # this one environment variable — so the demo and the suites cannot drift into two
+        # different notions of "recorded".
+        os.environ[ARTIFACTS_ENV] = str(pathlib.Path(args.record).resolve())
 
     h("SETUP — a seeded demo database and a promoted model")
     ensure_db(args.db, days=args.days, seed_value=args.seed)
@@ -600,8 +687,12 @@ def main(argv: list[str] | None = None) -> int:
             root = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
             if root and pathlib.Path(root, "chromium").exists():
                 executable = str(pathlib.Path(root, "chromium"))
-            browser = pw.chromium.launch(executable_path=executable)
-            context = browser.new_context(viewport={"width": 1280, "height": 900})
+            browser = pw.chromium.launch(
+                executable_path=executable, slow_mo=args.slow_mo or 0
+            )
+            context = new_recorded_context(
+                browser, name="demo-walkthrough", viewport={"width": 1280, "height": 900}
+            )
             page = context.new_page()
             page.on("pageerror", lambda e: print(f"        [js error] {e}"))
 
@@ -617,7 +708,7 @@ def main(argv: list[str] | None = None) -> int:
             step_8_phone_and_zoom(page, base, shots)
             step_9_her_timezone(browser, base, shots, args.db)
 
-            context.close()
+            close_recorded_context(context, name="demo-walkthrough")
             browser.close()
     finally:
         server.should_exit = True
@@ -626,6 +717,17 @@ def main(argv: list[str] | None = None) -> int:
     h("DONE")
     print(f"  {shots.n} screenshots in {shots.out}/")
     print(f"  final counts: {counts(args.db)}")
+    if RECORDING:
+        rec = pathlib.Path(args.record)
+        videos = sorted(rec.glob("video/*.webm"))
+        traces = sorted(rec.glob("trace/*.zip"))
+        # ★ Reported by LOOKING, not by asserting the flag was passed. A recorder that is
+        # configured and produces nothing is the same declared-and-unconnected failure this
+        # project has now found four times.
+        print(f"  videos : {[str(v) for v in videos] or 'NONE — recording produced nothing'}")
+        print(f"  traces : {[str(t) for t in traces] or 'NONE'}")
+        if traces:
+            print(f"  view a trace with:  playwright show-trace {traces[0]}")
     return 0
 
 

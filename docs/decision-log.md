@@ -1820,3 +1820,41 @@ break was a **hard floor in `rem`** — `minmax(14rem, …)`, `min-width: 15rem`
 `flex: 0 0 auto`, and the flex default `min-width: auto`. Each is invisible at 100% zoom on a
 laptop, and each takes the page sideways at 200% on a 390px phone. The operator's screen is a
 laptop screen; hers is not. `min(…, 100%)` is the fix in every case.
+
+---
+
+## DL-061 — Browser runs record themselves, opt-in, and the assertion is on the file
+**Story:** S-1023 · **Type:** Test-tooling decision · **Date:** 2026-07-31
+
+**Why.** Every browser assertion this project makes is reported as a sentence. When
+`test_post_bg_form_asks_reported_time_and_saves` was green on the toast *"Could not save"*,
+**the run looked exactly like a passing run** and there was nothing to go back and watch. And
+screenshots cannot show *sequence* — that the toast came after the click, that the button
+greyed out during the request, that the second tap did nothing. The S-1019 double-tap is a
+thing you have to watch.
+
+### Decisions
+1. **Opt-in, via `BGAPP_BROWSER_ARTIFACTS`.** Video and tracing cost real wall-clock and
+   disk (11 MB for eight tests), and an always-on recorder fills a directory nobody opens.
+   A test asserts the **off** path leaves nothing, so the default cannot drift into the slow
+   one.
+2. **★ The acceptance criterion is "a file exists on disk", not "recording is configured".**
+   Those two have already diverged twice here — `idempotency_key` was required and read by
+   nothing (S-1016); `serve_meal_prediction` was written and called by nothing (S-1015).
+   A recorder that sets `record_video_dir` and never calls `save_as` satisfies every
+   configuration check and produces a hash-named file nobody finds.
+3. **One implementation, shared by both suites and the demo script.** There must not be a
+   suite that is quietly "the one that isn't recorded".
+4. **Traces carry screenshots and snapshots.** A trace without them is a list of call names —
+   it looks like evidence and answers nothing.
+5. **Artifacts are git-ignored.** A 12 MB video in the history is a bad trade against
+   regenerating it in two minutes.
+
+### ★ The lesson from the first real run
+`Video.save_as` **copies**. Two contexts produced **four** videos: the named ones and the
+hash-named originals, identical bytes. The three tests written first all passed, because each
+asserted *the named file exists* — true whether or not the unnamed one also does.
+
+**The assertion that caught it is about what is absent.** Presence is what tests check by
+habit; absence is what they forget. It is the same shape as S-1019's *"two separate entries
+still create two meals"* — the guard against the fix doing too much, rather than too little.

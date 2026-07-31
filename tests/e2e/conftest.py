@@ -30,6 +30,8 @@ import pytest
 from playwright.sync_api import Browser, BrowserContext, Page
 from sqlalchemy.orm import Session
 
+from tests.conftest import close_recorded_context, new_recorded_context
+
 #: The exact strings the client scripts show when a write fails. Kept verbatim rather than
 #: matched loosely: `"could not" not in toast` also passes on an EMPTY toast, and an empty
 #: toast means she was told nothing at all.
@@ -153,33 +155,47 @@ def db_session(live_server: str, e2e_db_path: Path) -> Iterator[Session]:
 
 
 @pytest.fixture
-def page(browser: Browser, live_server: str) -> Iterator[Page]:  # browser: tests/conftest.py
-    context = browser.new_context()
+def page(  # browser: tests/conftest.py
+    browser: Browser, live_server: str, request: pytest.FixtureRequest
+) -> Iterator[Page]:
+    # S-1023: records a video + trace named after the test when BGAPP_BROWSER_ARTIFACTS is
+    # set, and costs nothing when it is not.
+    name = f"e2e-{request.node.name}"
+    context = new_recorded_context(browser, name=name)
     pg = context.new_page()
     pg.goto(live_server + "/", wait_until="networkidle")
     try:
         yield pg
     finally:
-        context.close()
+        close_recorded_context(context, name=name)
 
 
 @pytest.fixture
-def browser_at(browser: Browser) -> Iterator[Callable[[str], BrowserContext]]:
+def browser_at(
+    browser: Browser, request: pytest.FixtureRequest
+) -> Iterator[Callable[[str], BrowserContext]]:
     """Open a browser context in a named IANA timezone.
 
     ★ "The phone is in India" is her actual configuration, not an exotic one. Every other
     fixture inherits the container's timezone, which is UTC — so a UTC round trip looks
     correct for the wrong reason and a timezone bug is invisible (S-1018).
     """
-    contexts: list[BrowserContext] = []
+    contexts: list[tuple[BrowserContext, str]] = []
 
     def _open(timezone_id: str) -> BrowserContext:
-        ctx = browser.new_context(timezone_id=timezone_id, locale="en-IN")
-        contexts.append(ctx)
+        ctx = new_recorded_context(
+            browser,
+            name=f"e2e-{request.node.name}-{timezone_id.replace('/', '-')}",
+            timezone_id=timezone_id,
+            locale="en-IN",
+        )
+        contexts.append((ctx, timezone_id))
         return ctx
 
     try:
         yield _open
     finally:
-        for ctx in contexts:
-            ctx.close()
+        for ctx, tz in contexts:
+            close_recorded_context(
+                ctx, name=f"e2e-{request.node.name}-{tz.replace('/', '-')}"
+            )

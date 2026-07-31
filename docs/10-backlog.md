@@ -613,6 +613,13 @@ palette and component vocabulary now come from the published UI/UX prototype art
 two divergences where it disagreed with `05b §2` — 48px targets, and a tick plus a heavier
 border rather than colour alone. **DL-060.**
 
+### S-1023 — The browser run records itself — REQ-057 — **DONE 2026-07-31**
+`BGAPP_BROWSER_ARTIFACTS=DIR pytest tests/e2e` and
+`python -m scripts.demo_ui --record DIR --slow-mo 220` leave a **video and a Playwright
+trace** per context, named after the test. Opt-in, because 8 e2e tests cost 11 MB. The demo
+burns a step caption into the page so the video narrates itself, removed before every
+geometry assertion. **DL-061.**
+
 ### Still open after EPIC 11
 - **S-1017 — arm the confounding alarm.** A refit does not record
   `unconstrained_beta_insulin`, so the INV-8 alarm reads "no alarm" because nothing measured
