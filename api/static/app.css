@@ -1,31 +1,230 @@
 /*
- * app.css — accessibility design tokens for the shared UI shell (S-102).
- * Loaded AFTER pico.min.css so these tokens win. Everything here exists to
- * satisfy 05b §2: she may be logging while cognitively impaired by a low.
+ * app.css — the BG-Markov design system (S-102 accessibility tokens, S-1022 visual language).
+ * Loaded AFTER pico.min.css so these rules win.
+ *
+ * ★ The palette, radii, shadow, type ramp and component vocabulary below are taken from the
+ * UI/UX prototype (published artifact "BG-Markov — UI/UX prototype", 2026-07-18). The
+ * prototype is not a file in this repository; S-1022 records that, and records the two
+ * places this implementation deliberately DIVERGES from it, both in the same direction:
+ *
+ *   1. Touch targets are 48px, not the prototype's 46. `05b §2` says 48 and she may be
+ *      tapping at BG 55.
+ *   2. A chosen chip is marked by a TICK and a heavier border as well as the accent fill.
+ *      The prototype signalled chosen state with colour alone, which is invisible in
+ *      greyscale — `05b §2`: "colour is never the sole signal".
+ *
+ * A prototype is a proposal. Where it disagrees with the accessibility spec, the spec wins.
  */
 
-/* Base font >= 18px. Higher specificity than Pico's own :root font-size
-   media-query rules, and later in source order, so this wins deterministically. */
+/* ========================================================================== */
+/* Tokens — from the prototype                                                */
+/* ========================================================================== */
+
 :root {
+  --paper: #f6f8fb;
+  --card: #ffffff;
+  --raised: #eef3f8;
+  --ink: #16202b;
+  --slate: #526176;
+  --mist: #c9d6e2;
+  --line: #dde6ef;
+  --accent: #0e7c86;
+  --accent-ink: #0a5c64;
+  --ok: #2f7d55;
+  --ok-bg: #e6f2ea;
+  --warn: #8f6410;
+  --warn-bg: #f6edd8;
+  --danger: #b3302a;
+  --danger-bg: #f7e3e1;
+  --neutral: #526176;
+  --neutral-bg: #e9eef4;
+  --shadow: 0 1px 2px rgba(20, 32, 43, 0.06), 0 6px 20px rgba(20, 32, 43, 0.06);
+  --radius: 14px;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* Base font >= 18px, and a 48px minimum target. Higher specificity than Pico's own
+     :root media-query rules and later in source order, so this wins deterministically. */
   font-size: 18px;
   --target-min: 48px;
 }
 
-/* --- Skip link ---------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0c131a;
+    --card: #141f2a;
+    --raised: #1b2833;
+    --ink: #e4edf5;
+    --slate: #9db0c2;
+    --mist: #33475a;
+    --line: #26343f;
+    --accent: #2bb6c2;
+    --accent-ink: #7fd8e0;
+    --ok: #5fbd86;
+    --ok-bg: #123024;
+    --warn: #d7a13f;
+    --warn-bg: #33280d;
+    --danger: #e8756c;
+    --danger-bg: #371b19;
+    --neutral: #9db0c2;
+    --neutral-bg: #1e2a35;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* An explicit choice overrides the system preference, in both directions. */
+:root[data-theme="light"] {
+  --paper: #f6f8fb; --card: #ffffff; --raised: #eef3f8; --ink: #16202b; --slate: #526176;
+  --mist: #c9d6e2; --line: #dde6ef; --accent: #0e7c86; --accent-ink: #0a5c64;
+  --ok: #2f7d55; --ok-bg: #e6f2ea; --warn: #8f6410; --warn-bg: #f6edd8;
+  --danger: #b3302a; --danger-bg: #f7e3e1; --neutral: #526176; --neutral-bg: #e9eef4;
+  --shadow: 0 1px 2px rgba(20, 32, 43, 0.06), 0 6px 20px rgba(20, 32, 43, 0.06);
+}
+:root[data-theme="dark"] {
+  --paper: #0c131a; --card: #141f2a; --raised: #1b2833; --ink: #e4edf5; --slate: #9db0c2;
+  --mist: #33475a; --line: #26343f; --accent: #2bb6c2; --accent-ink: #7fd8e0;
+  --ok: #5fbd86; --ok-bg: #123024; --warn: #d7a13f; --warn-bg: #33280d;
+  --danger: #e8756c; --danger-bg: #371b19; --neutral: #9db0c2; --neutral-bg: #1e2a35;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* Pico reads its own variables for the components it owns, so the tokens are handed to it
+   rather than fought with rule by rule. */
+:root {
+  --pico-font-family: var(--sans);
+  --pico-background-color: var(--paper);
+  --pico-color: var(--ink);
+  --pico-muted-color: var(--slate);
+  --pico-muted-border-color: var(--line);
+  --pico-primary: var(--accent);
+  --pico-primary-background: var(--accent);
+  --pico-primary-border: var(--accent-ink);
+  --pico-primary-inverse: #ffffff;
+  --pico-primary-focus: var(--accent);
+  --pico-form-element-background-color: var(--card);
+  --pico-form-element-border-color: var(--line);
+  --pico-form-element-color: var(--ink);
+  --pico-h1-color: var(--ink);
+  --pico-h2-color: var(--ink);
+  --pico-h3-color: var(--ink);
+  --pico-border-radius: 10px;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent-ink); }
+.muted { color: var(--slate); }
+.tnum, table, .metric-value { font-variant-numeric: tabular-nums; }
+
+/* ========================================================================== */
+/* Shell — the prototype's top bar                                            */
+/* ========================================================================== */
+
+body > header.container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 0;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  max-width: none;
+}
+body > header.container strong {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-size: 1rem;
+}
+/* The brand dot, from the prototype's `.brand .dot`. */
+body > header.container strong::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--accent), var(--accent-ink));
+}
+
+main.container {
+  max-width: 920px;
+  padding-top: 22px;
+  padding-bottom: 72px;
+}
+
+h1 {
+  font-size: 1.7rem;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  margin-bottom: 0.25rem;
+}
+main.container > h1 + p,
+main.container > p:first-of-type.muted {
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+}
+
+/* --- Cards --------------------------------------------------------------- */
+/* Every top-level section and form is a card (prototype `.card`). */
+main.container > section,
+main.container > form,
+main.container > .risk {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 22px;
+  margin-bottom: 18px;
+}
+main.container > section > :last-child,
+main.container > form > :last-child { margin-bottom: 0; }
+
+/* A section INSIDE a card is grouping, not another card — otherwise the meal form becomes
+   a stack of boxes in a box. Its heading becomes the prototype's small caps eyebrow. */
+form section,
+section section,
+form fieldset {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0 0 22px;
+}
+form section h2,
+section section h2,
+main.container > section > h2 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--slate);
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+/* --- Skip link ----------------------------------------------------------- */
 .skip-link {
   position: absolute;
   left: -9999px;
   top: 0;
   padding: 0.5rem 1rem;
-  background: var(--pico-primary-background);
-  color: var(--pico-primary-inverse);
+  background: var(--accent);
+  color: #ffffff;
 }
-.skip-link:focus {
-  left: 0;
-  z-index: 10;
-}
+.skip-link:focus { left: 0; z-index: 20; }
 
-/* --- Touch targets >= 48 x 48 px ---------------------------------------- */
+/* ========================================================================== */
+/* Controls                                                                   */
+/* ========================================================================== */
+
+/* ★ 48px, not the prototype's 46 — `05b §2` is the binding number (S-1022). */
 button,
 [role="button"],
 .chip,
@@ -35,103 +234,278 @@ input[data-field-kind] {
   min-width: var(--target-min);
 }
 
-/* --- Numeric / clinical fields ------------------------------------------ */
-.field {
-  display: block;
-  margin-bottom: 1rem;
-}
-.field-label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-}
-.field-input {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.num-input {
-  width: 100%;
-  max-width: 12rem;
-  margin-bottom: 0;
-}
-.field-suffix {
-  font-weight: 600;
-  white-space: nowrap;
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 
-/* --- Chips (recents, timing quick-picks) -------------------------------- */
+/* --- Fields (prototype `.field`) ----------------------------------------- */
+.field { display: block; margin-bottom: 16px; }
+.field-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--slate);
+  margin-bottom: 6px;
+}
+.field-input { display: flex; align-items: center; gap: 10px; }
+
+.num-input,
+.dish-search,
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="text"],
+input[type="search"],
+textarea,
+select {
+  font: inherit;
+  font-size: 1rem;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  margin-bottom: 0;
+}
+.num-input { width: 100%; max-width: 12rem; }
+/* ★ A date+time needs more room than a 3-digit BG. At `max-width: 12rem` the browser
+   clipped the reported mealtime to "0/2026, 11:20 AM" — the ONE field ADR-8 exists to
+   protect, rendered unreadable by a width intended for a dose box. */
+/* `min-width` in rem is another hard floor at 200% zoom on a 390px screen — the same
+   93px-overflow shape as the metric grid. `min(…, 100%)` gives the field the room it needs
+   on a laptop and lets it shrink on the phone. */
+input[type="datetime-local"].num-input {
+  max-width: 100%;
+  width: auto;
+  min-width: min(15rem, 100%);
+}
+input[type="date"], input[type="time"] { width: auto; min-width: min(11rem, 100%); }
+.dish-search { width: 100%; }
+.field-suffix { font-weight: 700; white-space: nowrap; color: var(--slate); }
+label > input:not([type="checkbox"]):not([type="radio"]),
+label > select { margin-top: 6px; }
+label { font-size: 0.85rem; font-weight: 600; color: var(--slate); }
+label small.muted, small.muted { font-weight: 500; }
+
+/* --- Chips (prototype `.chip-btn`) --------------------------------------- */
 .recents,
 .chips {
   display: flex;
+  gap: 8px;
   flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.recents {
   border: 0;
   padding: 0;
 }
-/* Timing stacks its quick-picks above the free numeric offset field. */
 .timing {
   border: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 10px;
 }
-.timing-custom {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0;
+.timing legend {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--slate);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0;
 }
-.timing-custom .field {
-  margin-bottom: 0;
-}
+.timing-custom { display: flex; flex-direction: column; gap: 8px; margin-bottom: 0; }
+.timing-custom .field { margin-bottom: 0; }
+
 .chip {
+  appearance: none;
   width: auto;
-  padding: 0.5rem 1rem;
-}
-.primary {
-  width: 100%;
-}
-
-/* Validation message — text, not colour alone; AA contrast on the light theme. */
-.field-error {
-  color: #b32d2e;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
   font-weight: 600;
-  margin: 0.35rem 0 0;
+  padding: 10px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: none;
+}
+.chip:hover { border-color: var(--accent); background: var(--card); }
+
+/* ★ Pico stretches the children of `[role="group"]` to fill the row, which turns a chip
+   into a slab and destroys the size difference between "a choice" and "the action". The
+   role is there for the screen reader and must stay; only its layout is overridden. */
+.recents[role="group"],
+.chips[role="group"] {
+  box-shadow: none;
+  border: 0;
+}
+.recents[role="group"] > *,
+.chips[role="group"] > * {
+  /* `0 1 auto`, not `0 0 auto`: hug the content when there is room, and SHRINK when there
+     is not. At 200% zoom on a 390px screen "⭐ Dal + 2 roti + sabzi" is 385px wide, and a
+     chip that refuses to shrink takes the page sideways with it. */
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 100%;
+  border-radius: 999px;
+  margin: 0;
+}
+.chip { max-width: 100%; overflow-wrap: anywhere; }
+
+/* ★ Chosen state carries THREE signals, not one. The prototype filled the chip with the
+   accent and stopped there; a filled chip and an outlined chip are the same chip in
+   greyscale, on a sun-washed screen, and to a colour-blind reader. So the tick appears and
+   the border doubles as well — `05b §2`, colour is never the sole signal. */
+.chip[aria-pressed="true"] {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent-ink);
+  border-width: 3px;
+  font-weight: 700;
+}
+.chk { display: none; font-weight: 800; }
+.chip[aria-pressed="true"] .chk { display: inline; }
+
+.chosen { margin: 10px 0 0; font-weight: 700; font-size: 0.85rem; }
+
+/* --- Buttons (prototype `.btn`) ------------------------------------------ */
+button[type="submit"],
+.primary {
+  appearance: none;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.9rem;
+  border-radius: 10px;
+  padding: 11px 18px;
+  border: 1px solid var(--accent-ink);
+  background: var(--accent);
+  color: #ffffff;
+  cursor: pointer;
+}
+.primary,
+form > button[type="submit"] { width: 100%; }
+button.secondary {
+  background: var(--card);
+  color: var(--ink);
+  border: 1.5px solid var(--line);
+  font-weight: 700;
+}
+button[disabled] {
+  cursor: not-allowed;
+  opacity: 1;
+  background: var(--raised);
+  color: var(--slate);
+  border-color: var(--line);
 }
 
-/* --- Risk cue: colour is never the sole signal (05b §2) ------------------ */
-/* Meaning lives in the icon + text; the tint/border only reinforce it, so the
-   cue is fully legible without colour vision. */
+/* --- Disclosure (prototype `details.help`) ------------------------------- */
+details,
+details.optional {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--accent);
+  border-radius: 10px;
+  margin-bottom: 18px;
+  padding: 0;
+}
+details > summary {
+  cursor: pointer;
+  padding: 13px 16px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  min-height: var(--target-min);
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+}
+details[open] > summary { border-bottom: 1px solid var(--line); }
+details > *:not(summary) { padding-left: 16px; padding-right: 16px; }
+details > *:last-child { padding-bottom: 14px; }
+
+/* Validation message — word, weight and rule, never colour alone. */
+.field-error {
+  color: var(--danger);
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin: 8px 0 0;
+  padding-left: 10px;
+  border-left: 4px solid var(--danger);
+}
+
+/* --- Toast (prototype `.confirm`) ---------------------------------------- */
+.toast {
+  margin-top: 20px;
+  padding: 16px 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  border-top: 8px solid var(--ok);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+/* ========================================================================== */
+/* Risk cue — prototype `.readout` (05b §5)                                   */
+/* ========================================================================== */
+/* Meaning lives in the icon and the words; the stripe and tint only reinforce it, so the
+   cue is fully legible with no colour vision at all. */
 .risk {
   display: flex;
   align-items: flex-start;
-  gap: 0.6rem;
-  padding: 0.75rem 1rem;
-  border-left: 6px solid var(--pico-del-color, #b32d2e);
-  background: #fff8e1;
-  color: #1a1a1a;
-  border-radius: 4px;
-}
-.risk-icon {
-  font-size: 1.4rem;
-  line-height: 1.2;
-}
-
-/* --- Keep the layout single-column and overflow-free at 200% zoom -------- */
-img,
-input,
-textarea,
-select {
+  gap: 14px;
+  padding: 24px 22px;
+  border: 1px solid var(--line);
+  border-top: 8px solid var(--warn);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  box-sizing: border-box;
   max-width: 100%;
 }
+.risk > div { min-width: 0; overflow-wrap: anywhere; }
+.risk-icon { font-size: 1.6rem; line-height: 1.1; }
+.risk p { margin-bottom: 10px; max-width: 52ch; }
+.risk p:last-child { margin-bottom: 0; }
+.risk .muted { font-size: 0.85rem; }
+.metric-big {
+  font-size: 1.55rem;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+}
+/* The 22ch measure is the PROTOTYPE'S READOUT headline rule, and it belongs to the
+   readout. Applied globally it wrapped the operator's "Gate 1 is CLOSED — all five must be
+   true." at half the available width for no reason. */
+.risk .metric-big { max-width: 22ch; }
 
-/* --- S-1001a: operator shadow report card -------------------------------- */
-/* Screen-reader-only text. The gate checklist's ✓/✕ is aria-hidden decoration;
-   the meaning has to reach a screen reader in words (05b §2). */
+/* The calculator's dose is the number she reads — the prototype's `.doseline .dose`
+   treatment. IOB, immediately above it, deliberately stays smaller: the two are not equally
+   important and rendering them the same size says they are. */
+section[aria-label="Suggestion"] > .metric-big {
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 4px 0 18px;
+}
+/* The prototype puts a dashed rule above the closing "test as usual" line. */
+.risk p:last-child {
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+  color: var(--slate);
+  font-size: 0.85rem;
+}
+
+/* ========================================================================== */
+/* Operator surfaces                                                          */
+/* ========================================================================== */
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -144,69 +518,146 @@ select {
   border: 0;
 }
 
+/* Gate checklist — prototype `.checks`. */
 .gate-checklist {
   list-style: none;
   padding-left: 0;
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
 }
 .gate-checklist li {
-  padding: 0.35rem 0;
+  display: flex;
+  /* ★ `flex-wrap` and `min-width: 0` are load-bearing, not tidiness. A flex item defaults
+     to `min-width: auto`, so it refuses to shrink below its content: at 390px and 200%
+     zoom the condition's detail text pushed 93px off the side of the page. Invisible on a
+     laptop; the operator screen is a laptop screen, which is exactly why it survived. */
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: flex-start;
+  font-size: 0.85rem;
   line-height: 1.5;
+  padding: 10px 14px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
 }
+.gate-checklist li > * { min-width: 0; overflow-wrap: anywhere; }
+/* The ✓ / ✕ badge — prototype `.checks .mk`. Deliberately NOT colour-coded: the template
+   emits the same markup for met and not-met, and inferring the state from the glyph in CSS
+   would put a safety signal in a stylesheet. The glyph and the screen-reader text carry it. */
+.gate-checklist li > span[aria-hidden] {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: var(--card);
+  border: 1px solid var(--line);
+  margin-top: 1px;
+}
+.gate-checklist li > .muted { flex-basis: 100%; font-size: 0.78rem; }
 
+/* Metrics — prototype `.metric`. */
 .metric-cards {
   display: grid;
-  gap: 1rem;
+  gap: 12px;
+  /* `minmax(14rem, …)` is a HARD floor: at 390px and 200% zoom the track is wider than the
+     viewport and the page scrolls sideways — 93px of it, caught by the S-1001a overflow
+     test. `min(14rem, 100%)` keeps the multi-column layout on a laptop and lets the track
+     collapse on the screen she actually holds. */
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
 }
 .metric-card {
-  border: 1px solid var(--pico-muted-border-color, #cfd8dc);
-  border-radius: 6px;
-  padding: 0.85rem 1rem;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
 }
 .metric-card dt {
+  font-size: 0.7rem;
+  color: var(--slate);
   font-weight: 700;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
-.metric-card dd {
-  margin: 0;
-}
+.metric-card dd { margin: 0; }
 .metric-value {
-  font-size: 1.6rem;
-  font-weight: 700;
-  margin: 0.2rem 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 6px 0 0;
+  line-height: 1.05;
 }
-.metric-plain {
-  margin: 0.2rem 0;
-}
-.metric-technical {
-  margin: 0.35rem 0 0;
-  font-size: 0.9rem;
-}
+.metric-plain { margin: 6px 0 0; font-size: 0.85rem; }
+.metric-technical { margin: 9px 0 0; font-size: 0.72rem; color: var(--slate); }
 
-/* Verdict badges. The WORD is the signal (05b §2) — the tint only reinforces it,
-   so every badge is fully legible with no colour vision at all. */
+/* Verdict badges — prototype `.pill`. The WORD is the signal; the tint reinforces it. */
 .verdict {
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 0.1rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 4px 11px;
   border-radius: 999px;
   border: 1px solid currentColor;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
-.verdict-better { color: #1b5e20; }
-.verdict-same { color: #37474f; }
-.verdict-worse { color: #8d4b00; }
-.verdict-ok { color: #37474f; }
-.verdict-alarm { color: #b32d2e; }
+.verdict-better { color: var(--ok); background: var(--ok-bg); }
+.verdict-same { color: var(--neutral); background: var(--neutral-bg); }
+.verdict-worse { color: var(--warn); background: var(--warn-bg); }
+.verdict-ok { color: var(--neutral); background: var(--neutral-bg); }
+.verdict-alarm { color: var(--danger); background: var(--danger-bg); }
 
+/* Empty state — prototype `.verdict` block. */
 .empty-state {
-  border-left: 6px solid var(--pico-muted-border-color, #cfd8dc);
-  padding: 0.75rem 1rem;
-  background: #f5f7f8;
-  color: #1a1a1a;
-  border-radius: 4px;
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--accent);
+  padding: 18px 20px;
+  background: var(--raised);
+  color: var(--ink);
+  border-radius: var(--radius);
+  font-size: 0.88rem;
 }
+
+/* Tables — prototype `table.grid`. */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+table th,
+table td {
+  border: 1px solid var(--line);
+  padding: 7px 9px;
+  text-align: center;
+}
+table th { background: var(--raised); color: var(--slate); font-weight: 700; }
+table caption {
+  text-align: left;
+  font-size: 0.7rem;
+  color: var(--slate);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+/* ========================================================================== */
+/* Overflow discipline — 05b §2, usable at 200%                               */
+/* ========================================================================== */
+
+img, input, textarea, select { max-width: 100%; }
 
 /* Wide content scrolls inside its own box; the page never scrolls sideways. */
 details table {
@@ -215,27 +666,21 @@ details table {
   max-width: 100%;
 }
 
-/* --- S-1003: the calculator ---------------------------------------------- */
-/* The arithmetic line is long and unbroken by design — it is the working, and
-   breaking it into pieces would make it harder to check. So it wraps rather than
-   pushing the page sideways at 200% zoom, where she is most likely to be reading
-   it (05b §2). */
+/* The arithmetic line is long and unbroken by design — it IS the working, and breaking it
+   into pieces would make it harder to check. Rendered as the prototype's `.work` block, and
+   wrapping rather than pushing the page sideways at 200% zoom, where she is most likely to
+   be reading it. */
 .metric-technical code {
   display: block;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 12px 14px;
+  margin-top: 8px;
+  color: var(--ink);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-width: 100%;
-}
-
-/* A flex item defaults to `min-width: auto`, so it refuses to shrink below its
-   content and pushes the page sideways — invisible at 100%, a 2px horizontal
-   scroll at 200% zoom. The risk box is shared by the readout and the calculator,
-   so it is fixed here rather than per-screen. */
-.risk {
-  box-sizing: border-box;
-  max-width: 100%;
-}
-.risk > div {
-  min-width: 0;
-  overflow-wrap: anywhere;
 }

@@ -1,5 +1,9 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+{# S-1022: no hard-coded `data-theme`. The prototype ships light AND dark tokens, and
+   pinning the attribute to "light" made the whole design follow the system into a dark
+   room while every colour stayed light — measured at 1.9:1 body contrast. An explicit
+   choice can still be set here or by script; absent one, the phone decides. #}
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
