@@ -13,7 +13,12 @@
 # open http://127.0.0.1:8000
 ```
 
-Needs **Python 3.12**. `setup` is idempotent; run it again after a `git pull`.
+Needs **Python 3.12**, and nothing else — no `sqlite3` CLI, no system packages. `setup` is
+idempotent; run it again after a `git pull`.
+
+Schema migration is handled by `python -m scripts.migrate_db <url>`, which `dev.sh` calls on
+every start. It prints what it had to do; `stamped (built by create_all), then upgraded` is
+normal on a database that was created by seeding or by simply starting the app.
 
 ### The two databases, and why they are separate files
 

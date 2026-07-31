@@ -30,25 +30,15 @@ activate() {
   . .venv/bin/activate
 }
 
-# Bring a SQLite file to the current schema.
+# Bring a database to the current schema.
 #
-# ★ The awkward case is real and easy to hit: `api/deps.py` calls `create_all()` on the first
-# request, so a database created by simply starting the app has every table and NO
-# `alembic_version` row. `alembic upgrade` then fails with "table already exists" and looks
-# like a broken migration. Stamping first is the honest repair — the schema IS at head, it
-# just was not recorded as such.
+# ★ This delegates to Python and does NOT reason about the database in bash. The first
+# version shelled out to the `sqlite3` CLI to check for migration history; that binary is not
+# installed everywhere, the check silently answered "no", and `alembic upgrade` then died
+# with "table audit_log already exists" — the operator's FIRST command failing with a wall of
+# SQL. The venv's Python is already a hard requirement; sqlite3 never was.
 migrate() {
-  local url="$1"
-  local file="${url#sqlite:///}"
-  if [ -f "$file" ] && ! sqlite3 "$file" \
-      "select name from sqlite_master where name='alembic_version';" 2>/dev/null | grep -q .; then
-    if sqlite3 "$file" "select name from sqlite_master where name='meal_event';" 2>/dev/null | grep -q .; then
-      warn "$(basename "$file") has tables but no migration history (created by create_all)."
-      warn "stamping it at head, then upgrading."
-      BGAPP_DB_URL="$url" alembic stamp head >/dev/null
-    fi
-  fi
-  BGAPP_DB_URL="$url" alembic upgrade head
+  python -m scripts.migrate_db "$1"
 }
 
 cmd_setup() {
