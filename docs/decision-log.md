@@ -1776,3 +1776,47 @@ so `gate1.is_open` is only true *after* a promotion that no UI can perform. `POS
 /api/operator/promote` exists (S-1001b) and nothing reaches it; the demo promoted by calling
 Python directly. Adding a promotion control is a **safety-design decision**, not a wiring fix,
 and is not taken here.
+
+---
+
+## DL-060 — The prototype is the design source; the accessibility spec outranks it
+**Story:** S-1022 · **Type:** UI-design decision, plus a provenance correction · **Date:** 2026-07-30
+
+**The correction first.** S-1022 was opened with the claim *"there is no prototype"*. That is
+true of this **repository** — 259 commits, every branch, two passing mentions in
+`10-backlog.md` and DL-034 and no file — and it is **false about the project**. The operator
+had one: the published artifact **"BG-Markov — UI/UX prototype" (2026-07-18)**, produced in
+this session and shown to them, and still present in the session scratchpad. *"I could not
+find it"* and *"it does not exist"* are different claims and the first was reported as the
+second.
+
+**What the built screens looked like before.** Raw Pico defaults. Every button the same
+solid slab, so `Log meal` competed with a timing chip; no card treatment, no type ramp; and
+`aria-pressed` set correctly by `app.js` with **no CSS reading it**, while `.chk` (the ✓)
+rendered unconditionally — so **all three favourites looked chosen at all times**.
+
+### Decisions
+1. **The prototype is the design source of record** for palette, radii, shadow, type ramp
+   and component vocabulary. It is reproduced in `api/static/app.css` with a header naming
+   its provenance, because a design system whose origin is undocumented gets "tidied" by the
+   next person who finds a value they dislike.
+2. **★ Where the prototype and `05b §2` disagree, `05b` wins**, and the divergence is written
+   down at the point of divergence:
+   - touch targets are **48px**, not 46;
+   - chosen state carries a **tick and a heavier border** as well as the accent fill,
+     because a filled chip and an outlined chip are the same chip in greyscale.
+
+   A prototype is a proposal about how something should look. The accessibility spec is a
+   statement about who can use it.
+3. **No hard-coded `data-theme`.** The prototype ships light *and* dark tokens; pinning the
+   attribute to `light` made the design follow the system into a dark room while every colour
+   stayed light — **1.9:1 measured body contrast**, worse than having no dark mode at all.
+4. **Selection state is asserted on computed style, in a browser.** Asserting on `app.css`
+   source text proves a rule was typed, not that it applies — and the tick is checked through
+   the box model, because a tick hidden with `display: none` is still in `textContent`.
+
+**The recurring shape, recorded because it is now four-for-four in one story.** Every layout
+break was a **hard floor in `rem`** — `minmax(14rem, …)`, `min-width: 15rem`,
+`flex: 0 0 auto`, and the flex default `min-width: auto`. Each is invisible at 100% zoom on a
+laptop, and each takes the page sideways at 200% on a 390px phone. The operator's screen is a
+laptop screen; hers is not. `min(…, 100%)` is the fix in every case.

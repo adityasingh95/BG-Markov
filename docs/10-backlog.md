@@ -606,6 +606,13 @@ navigated to the JSON body. The class-level guard then found a third — the **k
 *"Could not save — please try again."* Every flow now asserts through `assert_saved` **and**
 reads the row. **DL-056.**
 
+### S-1022 — The design system, from the prototype — `05b §2` — **DONE 2026-07-30**
+The built screens were raw Pico: every button the same slab, and `aria-pressed` set by
+`app.js` with **no CSS reading it**, so all three favourites looked chosen at all times. The
+palette and component vocabulary now come from the published UI/UX prototype artifact, with
+two divergences where it disagreed with `05b §2` — 48px targets, and a tick plus a heavier
+border rather than colour alone. **DL-060.**
+
 ### Still open after EPIC 11
 - **S-1017 — arm the confounding alarm.** A refit does not record
   `unconstrained_beta_insulin`, so the INV-8 alarm reads "no alarm" because nothing measured
@@ -622,6 +629,10 @@ reads the row. **DL-056.**
   to do next. Small, but it is a false sentence on a clinical screen.
 - **The profile page does not refresh after a save**, so the old "In force now" sits beside
   a ✓ (S-1020 outcome).
+- **`05b §5.1`'s distribution is not rendered.** The readout shows a headline and a hypo-risk
+  band; the spec's mockup also shows Low / In range / High with bars and percentages. Adding
+  them changes what `PatientReadout` carries — model-output shaping under INV-2, so a story,
+  not a stylesheet change (S-1022 outcome).
 - **Historical rows are not audited for the S-1018 shift.** Nothing is known to be affected —
   no real capture has happened — but that is a statement about this project's stage, not a
   guarantee. Check before first real use.
