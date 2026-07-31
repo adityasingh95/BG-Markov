@@ -1858,3 +1858,49 @@ asserted *the named file exists* — true whether or not the unnamed one also do
 **The assertion that caught it is about what is absent.** Presence is what tests check by
 habit; absence is what they forget. It is the same shape as S-1019's *"two separate entries
 still create two meals"* — the guard against the fix doing too much, rather than too little.
+
+---
+
+## DL-062 — Provenance lives in the database, and every screen renders it
+**Story:** S-1024 [SAFETY] · **Type:** Data-provenance decision · **Date:** 2026-07-31
+
+**The risk.** `scripts/seed_demo_db.py` produces 658 meals, 1034 boluses, 29 hypo rescues
+and a fitted model, and **every screen renders it exactly as it renders real capture**. The
+adherence dashboard says *"413 / 150 valid meals"*; the calculator subtracts a real-looking
+IOB; the shadow report scores a real-looking model.
+
+The failure this enables is not a crash. It is **believing a number**. An operator who reads
+the shadow report on a seeded database and sees a plausible hypo recall has learned nothing
+about her, and nothing on the page tells him so. That is the project's stated worst case —
+*"a model that looks good on retrospective data, gets trusted, and is quietly wrong about a
+low"* — arrived at from a different direction.
+
+### Decisions
+1. **The marker is a row in the database**, not an environment variable. `BGAPP_DEMO=1` can
+   be forgotten, inherited from a parent shell, or left set from the previous run, and the
+   mistake is **silent in both directions**. A row travels with the file: move it, reopen it
+   in a month, hand it to someone else, and it still says what it is. Same principle as
+   `shadow_days` being derived rather than stored (S-1007) and ADR-7's live gates.
+2. **Absence means *not marked*.** It does not mean demo and it does not mean patient. The
+   alternative — defaulting to "demo" — would stamp a banner across her real records on the
+   first day of capture, which teaches her to ignore banners. What makes that default safe
+   is the **seeder-always-marks test**, not optimism.
+3. **The seeder marks FIRST**, before writing any synthetic row, so a run that dies halfway
+   still leaves a database that admits what it is.
+4. **One `Jinja2Templates` instance**, and the banner is a context processor on it. Two
+   instances already existed; a context added to one and not the other is the shape of every
+   gap this epic found. A structural test pins it at one.
+5. **The banner reads the request's own database.** The first implementation opened its own
+   session and described a different file than the page — *worse* than no banner, because a
+   mislabelled page is trusted. A middleware now resolves the session through
+   `app.dependency_overrides`, exactly as a route dependency does.
+6. **It fails quiet.** An unreadable or pre-migration database yields no banner rather than
+   an exception: this is a caption, and a caption must never be the reason her logging screen
+   fails to render.
+
+### On the runbook
+`docs/RUNBOOK.md` carries a **KNOWN NOT WORKING** section — the Gate-1 deadlock, the missing
+promote control, the dark β_insulin alarm, the stale shadow copy. Publishing the defects
+beside the instructions is deliberate: an operator who discovers them by hand will reasonably
+assume he has misconfigured something, and will spend the evening looking for his own
+mistake.

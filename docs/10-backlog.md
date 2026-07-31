@@ -620,6 +620,13 @@ trace** per context, named after the test. Opt-in, because 8 e2e tests cost 11 M
 burns a step caption into the page so the video narrates itself, removed before every
 geometry assertion. **DL-061.**
 
+### S-1024 [SAFETY] — Local deployment; the database says what it is — REQ-056 — **DONE 2026-07-31**
+`./scripts/dev.sh setup | serve | demo | status | reset | check`, and `docs/RUNBOOK.md` with a
+24-step manual checklist and an explicit **known not working** list. A database made by the
+synthetic generator carries a **DEMO DATA banner on every screen**, marked in the database
+rather than the environment — on screen, 658 synthetic meals render exactly like 658 real
+ones. **DL-062.**
+
 ### Still open after EPIC 11
 - **S-1017 — arm the confounding alarm.** A refit does not record
   `unconstrained_beta_insulin`, so the INV-8 alarm reads "no alarm" because nothing measured
