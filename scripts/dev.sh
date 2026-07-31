@@ -7,6 +7,7 @@
 #   ./scripts/dev.sh reset     # delete the local databases (asks first)
 #   ./scripts/dev.sh check     # the CI gates: ruff + mypy --strict + pytest + coverage
 #   ./scripts/dev.sh status    # which databases exist, what they hold
+#   ./scripts/dev.sh doctor    # preflight: is this machine ready?
 #
 # ★ `06 §7` — this binds to 127.0.0.1 only. The app never leaves localhost in v1.
 #
@@ -81,17 +82,27 @@ cmd_demo() {
 }
 
 cmd_reset() {
-  local found=()
-  [ -f "${DEV_DB}" ]  && found+=("${DEV_DB}")
-  [ -f "${DEMO_DB}" ] && found+=("${DEMO_DB}")
-  if [ ${#found[@]} -eq 0 ]; then log "nothing to delete"; return 0; fi
-  warn "about to DELETE:"
-  for f in "${found[@]}"; do printf '     %s (%s)\n' "$f" "$(du -h "$f" | cut -f1)"; done
-  # ★ Confirmable, and never in one tap (05b §2). A local dev database is cheap; the habit
-  # of deleting one without reading which is not.
-  read -r -p "  type DELETE to confirm: " reply
-  [ "$reply" = "DELETE" ] || die "not confirmed — nothing deleted"
-  for f in "${found[@]}"; do rm -f "$f"; log "deleted $f"; done
+  # * No arrays. bash 3.2 -- which is what a stock macOS ships, frozen in 2007 -- treats
+  # ${arr[@]} on an EMPTY array as an unbound variable under `set -u`, so the array version
+  # aborted on a laptop with nothing to delete: the one case where it should say so calmly.
+  local any=0
+  for f in "${DEV_DB}" "${DEMO_DB}"; do
+    [ -f "$f" ] || continue
+    if [ "$any" -eq 0 ]; then warn "about to DELETE:"; any=1; fi
+    printf '     %s (%s)\n' "$f" "$(du -h "$f" | cut -f1)"
+  done
+  if [ "$any" -eq 0 ]; then log "nothing to delete"; return 0; fi
+
+  # Confirmable, and never in one tap (05b section 2). A local dev database is cheap; the
+  # habit of deleting one without reading which is not.
+  printf '  type DELETE to confirm: '
+  local reply=""
+  read -r reply || true
+  [ "$reply" = "DELETE" ] || die "not confirmed -- nothing deleted"
+  for f in "${DEV_DB}" "${DEMO_DB}"; do
+    if [ -f "$f" ]; then rm -f "$f"; log "deleted $f"; fi
+  done
+  return 0
 }
 
 cmd_status() {
@@ -122,6 +133,78 @@ PY
   done
 }
 
+# Is a TCP port already taken? Asked in Python, not with lsof/netstat/ss, because which of
+# those exists depends on the machine -- the sqlite3 lesson again.
+port_in_use() {
+  "${1}" - "${2}" <<'PORTCHECK' 2>/dev/null
+import socket, sys
+s = socket.socket()
+try:
+    s.bind(("127.0.0.1", int(sys.argv[1])))
+except OSError:
+    sys.exit(0)   # in use
+else:
+    sys.exit(1)   # free
+finally:
+    s.close()
+PORTCHECK
+}
+
+cmd_doctor() {
+  # * Everything else in this script assumes the machine is ready. This is the command that
+  # says otherwise IN A SENTENCE, rather than letting a missing prerequisite surface as a
+  # traceback forty lines deep -- which is how the sqlite3 dependency was found.
+  local ok=1
+  printf '  %-22s %s\n' "shell" "${BASH_VERSION:-unknown}"
+  case "${BASH_VERSION:-}" in
+    3.*)
+      warn "bash 3.2 (stock macOS). Supported -- but if anything here misbehaves,"
+      warn "  'brew install bash' and re-run with the newer one."
+      ;;
+  esac
+
+  local py="${PYTHON:-python3.12}"
+  if command -v "$py" >/dev/null 2>&1; then
+    printf '  %-22s %s (%s)\n' "python" "$("$py" --version 2>&1)" "$(command -v "$py")"
+  else
+    ok=0
+    warn "no ${py} on PATH."
+    warn "  macOS:   brew install python@3.12"
+    warn "  Ubuntu:  sudo apt install python3.12 python3.12-venv"
+    warn "  or:      https://www.python.org/downloads/   (any 3.12.x)"
+    warn "  have it elsewhere?  PYTHON=/full/path/to/python3.12 ./scripts/dev.sh setup"
+  fi
+
+  if [ -d .venv ]; then
+    if .venv/bin/python -c "import fastapi, sqlalchemy, alembic" >/dev/null 2>&1; then
+      printf '  %-22s %s\n' "venv" "present, deps installed"
+    else
+      ok=0
+      printf '  %-22s %s\n' "venv" "present but INCOMPLETE"
+      warn "run: ./scripts/dev.sh setup"
+    fi
+  else
+    printf '  %-22s %s\n' "venv" "absent -- run: ./scripts/dev.sh setup"
+  fi
+
+  # A port already in use looks exactly like a broken app, and is not.
+  local pyprobe="python3"
+  command -v "$pyprobe" >/dev/null 2>&1 || pyprobe="$py"
+  if command -v "$pyprobe" >/dev/null 2>&1 && port_in_use "$pyprobe" "$PORT"; then
+    ok=0
+    warn "port ${PORT} is already in use -- try: BGAPP_PORT=8123 ./scripts/dev.sh demo"
+  else
+    printf '  %-22s %s\n' "port ${PORT}" "free"
+  fi
+
+  echo
+  if [ "$ok" -eq 1 ]; then
+    log "ready. next:  ./scripts/dev.sh demo"
+  else
+    die "not ready -- see the notes above"
+  fi
+}
+
 cmd_check() { exec ./scripts/verify.sh; }
 
 case "${1:-}" in
@@ -131,8 +214,9 @@ case "${1:-}" in
   reset)  shift; cmd_reset "$@" ;;
   status) shift; cmd_status "$@" ;;
   check)  shift; cmd_check "$@" ;;
+  doctor) shift; cmd_doctor "$@" ;;
   *)
-    sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,15p' "$0" | sed 's/^#//' | sed 's/^ //'
     exit 1
     ;;
 esac
