@@ -15,7 +15,10 @@ printf '\n\033[1mBG-Markov\033[0m — checking this machine\n\n'
 # forty lines deep — which is exactly how this project found its `sqlite3` dependency.
 ./scripts/dev.sh doctor || exit 1
 
-if [ ! -d .venv ] || ! .venv/bin/python -c "import fastapi" >/dev/null 2>&1; then
+VENV_BIN=bin
+[ -d .venv/Scripts ] && VENV_BIN=Scripts   # Windows / Git Bash
+
+if [ ! -d .venv ] || ! ".venv/${VENV_BIN}/python" -c "import fastapi" >/dev/null 2>&1; then
   printf '\n\033[1m==>\033[0m first run — installing (a few minutes)\n\n'
   ./scripts/dev.sh setup
 fi

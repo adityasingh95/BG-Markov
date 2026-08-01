@@ -85,6 +85,54 @@ def test_no_construct_that_breaks_on_a_stock_mac(
     assert not offenders, f"{construct}: {why}\n  {offenders}"
 
 
+_ENTRY_SCRIPTS = ("scripts/dev.sh", "start.sh")
+
+
+@pytest.mark.parametrize("script", _ENTRY_SCRIPTS)
+def test_no_hard_coded_venv_bin_directory(script: str) -> None:
+    """★ A venv puts its executables in `bin` on POSIX and **`Scripts` on Windows** — which
+    includes Git Bash, a POSIX shell driving a Windows Python.
+
+    A hard-coded `.venv/bin` is the single thing that stops these scripts working on the
+    operator's laptop, and it fails as `No such file or directory` for `activate` — which
+    reads as a broken install rather than a wrong path.
+    """
+    path = pathlib.Path(__file__).resolve().parents[2] / script
+    offenders = [
+        line.strip()
+        for raw in path.read_text(encoding="utf-8").splitlines()
+        for line in [raw.strip()]
+        if ".venv/bin" in line and not line.startswith("#")
+    ]
+    assert not offenders, f"{script} hard-codes .venv/bin: {offenders}"
+
+
+def test_database_paths_are_relative() -> None:
+    """★ Under Git Bash, `pwd` is `/c/Users/...`.
+
+    Python's sqlite3 driver does not resolve that as a Windows path, so an absolute
+    `sqlite:///${ROOT}/bgapp.db` would silently create or look for the database somewhere
+    else — the worst kind of wrong, because the app still starts.
+    """
+    text = (pathlib.Path(__file__).resolve().parents[2] / "scripts" / "dev.sh").read_text()
+    offenders = [
+        line.strip()
+        for raw in text.splitlines()
+        for line in [raw.strip()]
+        if not line.startswith("#") and "${ROOT}" in line and ".db" in line
+    ]
+    assert not offenders, f"absolute database paths: {offenders}"
+
+
+def test_python_is_discovered_not_assumed() -> None:
+    """`python3.12` exists on Linux, often not on macOS, and essentially never on Windows —
+    where it is `python` or the `py -3.12` launcher."""
+    text = (pathlib.Path(__file__).resolve().parents[2] / "scripts" / "dev.sh").read_text()
+    assert "find_python" in text, "dev.sh assumes an interpreter name instead of finding one"
+    for candidate in ("python3.12", "python3", "python", "py -3.12"):
+        assert candidate in text, f"find_python does not try {candidate!r}"
+
+
 def test_it_offers_a_preflight_check() -> None:
     """★ `doctor` exists so a missing prerequisite is a sentence, not a traceback.
 

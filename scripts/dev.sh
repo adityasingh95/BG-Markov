@@ -17,18 +17,30 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 
-DEV_DB="${ROOT}/bgapp-dev.db"
-DEMO_DB="${ROOT}/bgapp-demo.db"
+# * RELATIVE, not "${ROOT}/...". Under Git Bash on Windows `pwd` is /c/Users/..., which
+# Python's sqlite3 driver does not resolve as a Windows path -- it would silently create or
+# look for the database somewhere else entirely. The script cd's to the repo root above, so
+# a bare filename is both correct and portable.
+DEV_DB="bgapp-dev.db"
+DEMO_DB="bgapp-demo.db"
 PORT="${BGAPP_PORT:-8000}"
+
+# * Where a venv puts its executables: `bin` on POSIX, `Scripts` on Windows -- including
+# under Git Bash, which is a POSIX shell driving a Windows Python. Resolved once, here,
+# because a hard-coded `.venv/bin` is the single thing that stops this script working on the
+# operator's laptop.
+venv_bin() {
+  if [ -d .venv/Scripts ]; then printf 'Scripts'; else printf 'bin'; fi
+}
 
 log()  { printf '\033[1m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m!!\033[0m %s\n' "$*"; }
 die()  { printf '\033[31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 
 activate() {
-  [ -d .venv ] || die "no .venv — run: ./scripts/dev.sh setup"
+  [ -d .venv ] || die "no .venv -- run: ./scripts/dev.sh setup"
   # shellcheck disable=SC1091
-  . .venv/bin/activate
+  . ".venv/$(venv_bin)/activate"
 }
 
 # Bring a database to the current schema.
@@ -42,12 +54,33 @@ migrate() {
   python -m scripts.migrate_db "$1"
 }
 
+# Find a Python 3.12. `python3.12` on Linux, often `python3` on macOS/Homebrew, and on
+# Windows usually just `python` or the `py -3.12` launcher -- so the name is discovered, not
+# assumed. PYTHON=... always wins.
+find_python() {
+  if [ -n "${PYTHON:-}" ]; then printf '%s' "$PYTHON"; return 0; fi
+  local candidate
+  for candidate in python3.12 python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 &&
+       "$candidate" -c 'import sys; sys.exit(0 if sys.version_info[:2]==(3,12) else 1)' \
+       >/dev/null 2>&1; then
+      printf '%s' "$candidate"; return 0
+    fi
+  done
+  # The Windows launcher is not on PATH as an interpreter name.
+  if command -v py >/dev/null 2>&1 && py -3.12 -c "pass" >/dev/null 2>&1; then
+    printf 'py -3.12'; return 0
+  fi
+  return 1
+}
+
 cmd_setup() {
-  local py="${PYTHON:-python3.12}"
-  command -v "$py" >/dev/null || die "need Python 3.12 (set PYTHON=... to override)"
-  [ -d .venv ] || { log "creating .venv ($py)"; "$py" -m venv .venv; }
+  local py
+  py="$(find_python)" || die "need Python 3.12 -- run ./scripts/dev.sh doctor for how to get it"
+  # shellcheck disable=SC2086
+  [ -d .venv ] || { log "creating .venv ($py)"; $py -m venv .venv; }
   # shellcheck disable=SC1091
-  . .venv/bin/activate
+  . ".venv/$(venv_bin)/activate"
   log "installing pinned deps (.[dev])"
   python -m pip install --upgrade pip >/dev/null
   pip install -e ".[dev]" >/dev/null
@@ -163,20 +196,22 @@ cmd_doctor() {
       ;;
   esac
 
-  local py="${PYTHON:-python3.12}"
-  if command -v "$py" >/dev/null 2>&1; then
-    printf '  %-22s %s (%s)\n' "python" "$("$py" --version 2>&1)" "$(command -v "$py")"
+  local py=""
+  if py="$(find_python)"; then
+    # shellcheck disable=SC2086
+    printf '  %-22s %s (%s)\n' "python 3.12" "$($py --version 2>&1)" "$py"
   else
     ok=0
-    warn "no ${py} on PATH."
-    warn "  macOS:   brew install python@3.12"
-    warn "  Ubuntu:  sudo apt install python3.12 python3.12-venv"
-    warn "  or:      https://www.python.org/downloads/   (any 3.12.x)"
-    warn "  have it elsewhere?  PYTHON=/full/path/to/python3.12 ./scripts/dev.sh setup"
+    warn "no Python 3.12 found (tried python3.12, python3, python, py -3.12)."
+    warn "  macOS:    brew install python@3.12"
+    warn "  Ubuntu:   sudo apt install python3.12 python3.12-venv"
+    warn "  Windows:  https://www.python.org/downloads/  then use Git Bash or WSL"
+    warn "  elsewhere?  PYTHON=/full/path/to/python3.12 ./scripts/dev.sh setup"
   fi
 
   if [ -d .venv ]; then
-    if .venv/bin/python -c "import fastapi, sqlalchemy, alembic" >/dev/null 2>&1; then
+    printf '  %-22s %s\n' "venv layout" ".venv/$(venv_bin)"
+    if ".venv/$(venv_bin)/python" -c "import fastapi, sqlalchemy, alembic" >/dev/null 2>&1; then
       printf '  %-22s %s\n' "venv" "present, deps installed"
     else
       ok=0
@@ -189,7 +224,7 @@ cmd_doctor() {
 
   # A port already in use looks exactly like a broken app, and is not.
   local pyprobe="python3"
-  command -v "$pyprobe" >/dev/null 2>&1 || pyprobe="$py"
+  command -v "$pyprobe" >/dev/null 2>&1 || pyprobe="python"
   if command -v "$pyprobe" >/dev/null 2>&1 && port_in_use "$pyprobe" "$PORT"; then
     ok=0
     warn "port ${PORT} is already in use -- try: BGAPP_PORT=8123 ./scripts/dev.sh demo"
