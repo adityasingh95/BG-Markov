@@ -1,7 +1,10 @@
 # INSTALL — from nothing to a running app
 
-Zero to the app open in a browser. **About 15 minutes**, and roughly ten of those are
-dependencies downloading while you do something else.
+Zero to the app open in a browser. **Around 5 minutes**, nearly all of it one download.
+
+The install itself is quick — measured at **1m 28s** once the files are local. What you are
+waiting on is **511 MB of dependencies** coming down the wire, so your connection sets the
+pace: roughly a minute on fast broadband, five or more on a slow link.
 
 What you end up with: BG-Markov at <http://127.0.0.1:8000>, loaded with **synthetic** data,
 every page carrying a red DEMO DATA banner.
@@ -143,8 +146,9 @@ BG-Markov — checking this machine
 ==> installing pinned deps (.[dev])
 ```
 
-**The install step is where the ten minutes go.** `pymc`, `numba`, `scipy` and `llvmlite`
-are hundreds of megabytes between them. There is no progress bar. It has not hung.
+**`installing pinned deps` is the slow line.** It downloads 511 MB — `llvmlite` alone is
+162 MB, `scipy` 108 MB, `pandas` 75 MB — and unpacks to a 953 MB `.venv`. There is no
+progress bar and it prints nothing for the duration. **It has not hung.**
 
 Then:
 
