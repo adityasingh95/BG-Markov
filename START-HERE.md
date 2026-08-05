@@ -2,6 +2,10 @@
 
 You need **Python 3.12**. Nothing else.
 
+> Starting from scratch — no clone yet, or nothing installed? **`INSTALL.md`** is the full
+> walkthrough: prerequisites, the branch you must check out, and what every failure message
+> means. This page assumes you already have the repo.
+
 ```bash
 ./start.sh
 ```
@@ -23,8 +27,9 @@ Common answers:
 
 | It says | Do |
 |---|---|
-| `no python3.12 on PATH` | macOS: `brew install python@3.12` · Ubuntu: `sudo apt install python3.12 python3.12-venv` · else <https://www.python.org/downloads/> |
-| `have it elsewhere?` | `PYTHON=/full/path/to/python3.12 ./start.sh` |
+| `no Python 3.12 found (tried python3.12, python3, python, py -3.12)` | macOS: `brew install python@3.12` · Ubuntu: `sudo apt install python3.12 python3.12-venv` · Windows: <https://www.python.org/downloads/> then **reopen the shell** |
+| ...and you have it somewhere unusual | `PYTHON=/full/path/to/python3.12 ./start.sh` |
+| `venv present but INCOMPLETE` | `rm -rf .venv && ./start.sh` |
 | `port 8000 is already in use` | `BGAPP_PORT=8123 ./start.sh` |
 
 **Windows:** this needs a POSIX shell — use **WSL** or **Git Bash**. Or run the three steps

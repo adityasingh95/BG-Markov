@@ -41,8 +41,13 @@ Every unusual constraint in this pack — Gate 1, the guardrails, the shadow mod
 
 ## Running it locally
 
-**→ `docs/RUNBOOK.md`** — one command to start, a manual verification checklist, and an
-explicit list of what is **known not to work** so you do not spend time on it.
+**→ `INSTALL.md`** — from nothing to a running app: prerequisites, **the branch you must
+check out** (the repository default is not it), the one command to start, and a
+message-by-message troubleshooting table.
+
+**→ `docs/RUNBOOK.md`** — once it is running: a manual verification checklist with the
+expected values written down, and an explicit list of what is **known not to work** so you
+do not spend time on it.
 
 ```bash
 ./scripts/dev.sh setup      # venv + pinned deps + schema (Alembic)
