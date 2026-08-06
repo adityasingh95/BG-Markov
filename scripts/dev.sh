@@ -8,6 +8,7 @@
 #   ./scripts/dev.sh check     # the CI gates: ruff + mypy --strict + pytest + coverage
 #   ./scripts/dev.sh status    # which databases exist, what they hold
 #   ./scripts/dev.sh doctor    # preflight: is this machine ready?
+#   ./scripts/dev.sh python    # print the Python 3.12 it found; non-zero if there is none
 #
 # ★ `06 §7` — this binds to 127.0.0.1 only. The app never leaves localhost in v1.
 #
@@ -240,6 +241,15 @@ cmd_doctor() {
   fi
 }
 
+# Expose the interpreter search so `bootstrap.sh` can ask the same question this script
+# asks, rather than re-implementing the candidate list. Two copies of "which Python counts"
+# is two copies that drift, and the one that drifts is always the one nobody runs.
+cmd_python() {
+  local py
+  py="$(find_python)" || return 1
+  printf '%s\n' "$py"
+}
+
 cmd_check() { exec ./scripts/verify.sh; }
 
 case "${1:-}" in
@@ -250,8 +260,9 @@ case "${1:-}" in
   status) shift; cmd_status "$@" ;;
   check)  shift; cmd_check "$@" ;;
   doctor) shift; cmd_doctor "$@" ;;
+  python) shift; cmd_python "$@" ;;
   *)
-    sed -n '2,15p' "$0" | sed 's/^#//' | sed 's/^ //'
+    sed -n '2,16p' "$0" | sed 's/^#//' | sed 's/^ //'
     exit 1
     ;;
 esac

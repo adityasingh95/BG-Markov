@@ -36,6 +36,13 @@ side by side.
 
 ## 2. Install the prerequisites
 
+> **You can skip most of this.** Once you have git and the repo cloned ([§3](#3-clone-it)),
+> `./bootstrap.sh` checks for Python 3.12 and — after showing you the exact command and
+> waiting for you to type `YES` — installs it for you. It never installs anything you did
+> not agree to, and it never touches a Python you already have.
+>
+> Read on if you would rather do it by hand, or if you do not have `winget` / `brew` / `apt`.
+
 ### Windows
 
 1. **Git** — <https://git-scm.com/download/win>. The installer includes **Git Bash**, which
@@ -121,13 +128,21 @@ and file-sync tools lock and copy files mid-write — which corrupts databases.
 ## 4. Run it
 
 ```bash
-./start.sh
+./bootstrap.sh
 ```
 
-That is the whole command. It checks the machine, creates `.venv`, installs the pinned
-dependencies, builds the schema, seeds a synthetic database, and serves it.
+That is the whole command. It checks the machine, offers to install Python 3.12 if it is
+missing, updates the checkout, creates `.venv`, installs the pinned dependencies, builds the
+schema, seeds a synthetic database, and serves it.
 
-If your shell refuses with *Permission denied*, use `bash start.sh` instead.
+If your shell refuses with *Permission denied*, use `bash bootstrap.sh` instead.
+
+**If it installs Python for you, it stops there and tells you to reopen your shell.** That is
+not a failure. `PATH` is read when a shell starts, so the window you are in cannot see the
+Python that was just installed. Close it, open a new one, and run `./bootstrap.sh` again.
+
+Already have Python 3.12 and would rather skip the checks? `./start.sh` does the install and
+serve without the bootstrap steps.
 
 ### What you should see
 

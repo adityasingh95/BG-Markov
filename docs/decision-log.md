@@ -1904,3 +1904,44 @@ promote control, the dark β_insulin alarm, the stale shadow copy. Publishing th
 beside the instructions is deliberate: an operator who discovers them by hand will reasonably
 assume he has misconfigured something, and will spend the evening looking for his own
 mistake.
+
+---
+
+## DL-063 — `bootstrap.sh` may install software, but only after a typed confirmation (S-1025)
+
+**Date:** 2026-08-06 · **Decided by:** Dev + SDET · **Supersedes:** nothing
+
+`start.sh` assumed the machine was ready and *reported* when it was not. That was right as
+far as it went, and it went one step short of what the operator needed: `doctor` printed
+`no Python 3.12 found`, which is accurate and actionable and still left him to go and find
+an installer by hand. `bootstrap.sh` closes that step.
+
+**A script that installs software is a different kind of thing from one that runs an app,**
+so three constraints are wired in rather than documented:
+
+1. **Typed confirmation, and no flag that skips it.** The exact command is printed and then
+   run through `eval` of that same string, so what he agreed to and what executes cannot
+   differ. There is no `--yes`: consent you can pass on a command line is consent nobody read.
+2. **After installing, it stops.** `PATH` is read when a shell starts, so the shell that ran
+   the installer cannot see the new interpreter. Continuing produces a second, confusing
+   failure that reads as a broken install and sends the reader to debug the wrong thing.
+3. **It never pulls over uncommitted work.** Dirty tree ⇒ skip and say so. `--ff-only`
+   otherwise, so there is no merge, no rebase, and no conflict he did not start.
+
+**The interpreter search was not duplicated.** `bootstrap.sh` asks `./scripts/dev.sh python`,
+a new subcommand exposing the existing `find_python`. Two copies of "which Python counts" is
+two copies that drift, and the one that drifts is always the one nobody runs.
+
+### ★ A test was too weak, and a planted defect proved it
+
+The first version of `test_accepting_installs_then_stops_and_says_to_reopen` asserted that
+the word *serving* never appeared in the output. **It could not fail.** With no Python on the
+stubbed `PATH`, a script that wrongly carried on past the install dies at `doctor` long
+before it serves — so the assertion held whether the script stopped deliberately or crashed
+into a wall. The plant survived.
+
+It now stubs `git` as a **progress marker** and asserts the log never reaches it, because
+`git` is the first thing the script touches after the install step. The lesson is the one
+this project keeps relearning: *asserting that a bad thing did not happen is worthless if the
+bad thing could not have happened in the test environment anyway.* All four plants — install
+without asking, carry on afterwards, pull over a dirty tree, `reset --hard` — are now caught.
