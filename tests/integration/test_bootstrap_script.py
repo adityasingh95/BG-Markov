@@ -148,38 +148,58 @@ def test_accepting_installs_then_stops_and_says_to_reopen(tmp_path: pathlib.Path
 
 
 @pytest.fixture
-def dirty_clone(tmp_path: pathlib.Path) -> pathlib.Path:
-    """A real clone of this repo with an uncommitted change in it.
+def dirty_working_tree(tmp_path: pathlib.Path) -> pathlib.Path:
+    """A minimal git repo holding the scripts under test, with an uncommitted change.
 
-    ★ The scripts are copied in from the WORKING TREE after cloning. `git clone` only carries
-    committed content, so without this the test would exercise whatever was last committed
-    rather than the code under test — and would pass or fail depending on whether someone had
-    remembered to commit, which is not a property of the script.
+    ★ Built from `git init`, **not** cloned from this repository. The first version cloned
+    the whole repo, which put a second copy of `core/`, `models/`, `features/` and
+    `prescribe/` on disk — and coverage counted every line of it as unexecuted, dragging the
+    90 % gate to 51 % and failing the build for a reason nothing to do with the code.
+
+    A test fixture that changes the measured coverage of unrelated modules is a defect in the
+    fixture. This one carries only the three scripts the test actually drives.
+
+    The scripts are copied from the WORKING TREE, so the test exercises the code under test
+    rather than whatever happened to be committed last.
     """
-    dest = tmp_path / "clone"
-    subprocess.run(
-        ["git", "clone", "--depth", "1", "--no-hardlinks", str(_ROOT), str(dest)],
-        capture_output=True,
-        check=True,
-        timeout=180,
-    )
+    dest = tmp_path / "repo"
+    dest.mkdir()
     for rel in ("bootstrap.sh", "scripts/dev.sh", "start.sh"):
         target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes((_ROOT / rel).read_bytes())
         target.chmod(0o755)
+    (dest / "START-HERE.md").write_text("committed content\n", encoding="utf-8")
+
+    def _git(*args: str) -> None:
+        subprocess.run(
+            ["git", *args],
+            cwd=dest,
+            capture_output=True,
+            check=True,
+            timeout=60,
+            env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
+        )
+
+    _git("init", "-q")
+    _git("add", "-A")
+    _git("commit", "-qm", "initial")
+
+    # The uncommitted change the script must refuse to pull over.
     (dest / "START-HERE.md").write_text("locally edited, not committed\n", encoding="utf-8")
     return dest
 
 
 def test_a_dirty_tree_is_reported_and_skipped_not_pulled_over(
-    dirty_clone: pathlib.Path, tmp_path: pathlib.Path
+    dirty_working_tree: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
     """★ The operator's uncommitted work is his. Skip the pull; never resolve it for him."""
     sentinel = tmp_path / "installed.log"
     stub = tmp_path / "empty"
     stub.mkdir()
 
+    dirty_clone = dirty_working_tree
     result = _run(dirty_clone, stub, "", "--no-start")
     combined = (result.stdout + result.stderr).lower()
 
