@@ -27,6 +27,31 @@ from playwright.sync_api import Browser, BrowserContext, sync_playwright
 #: Set this to a directory to record. Absent ⇒ no video, no trace, no cost.
 ARTIFACTS_ENV = "BGAPP_BROWSER_ARTIFACTS"
 
+
+def uninstrumented_env(**overrides: str) -> dict[str, str]:
+    """Environment for a subprocess that must NOT join pytest's coverage session.
+
+    ★ `pytest-cov.pth` lives in site-packages, so **every** Python process started during a
+    test run silently enrols itself and writes its own `.coverage.*` file. When that child
+    runs with a `cwd` outside the repository — which any test driving a script in `tmp_path`
+    does — coverage cannot find `pyproject.toml`, falls back to its default of *no branch
+    tracking*, and the parent's `branch = true` data will not merge with it. The run then dies
+    at report time with
+
+        INTERNALERROR> coverage.exceptions.DataError:
+            Can't combine statement coverage data with branch data
+
+    **after every test has already passed**, so the failure reads as a broken coverage tool
+    rather than as something a test did. It cost two red CI runs before it was recognised.
+
+    Use this for any subprocess spawned for its *behaviour* rather than its coverage.
+    """
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith(("COV_CORE", "COVERAGE_"))
+    } | overrides
+
 #: The video frame. Fixed at context creation, so a test that changes viewport mid-run
 #: (the 200% zoom and 390px checks) is letterboxed rather than re-encoded.
 VIDEO_SIZE = {"width": 1280, "height": 900}

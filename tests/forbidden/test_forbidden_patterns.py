@@ -433,3 +433,42 @@ def test_pre_bg_binner_guard_is_armed_once_model_code_exists() -> None:
         "real state-binner name in _BINNER_NAMES so the pre_bg input-path guard has a "
         "live target (do not let a renamed binner slip past)."
     )
+
+
+# --- Subprocesses must not inherit pytest's coverage session (CI #103, #104) --------------
+
+
+def test_no_test_hands_os_environ_straight_to_a_subprocess() -> None:
+    """★ `pytest-cov.pth` enrols every Python child in the coverage session.
+
+    A child launched with `cwd` outside the repository cannot find `pyproject.toml`, so it
+    records **statement-only** data while the parent records branch data, and the combine at
+    report time aborts the entire run:
+
+        INTERNALERROR> coverage.exceptions.DataError:
+            Can't combine statement coverage data with branch data
+
+    It fires **after every test has passed**, so it reads as a broken coverage tool rather
+    than as something a test did — it took two red CI runs to recognise, and the first fix
+    only covered one of the two test files that had the problem.
+
+    `tests/conftest.py::uninstrumented_env` is the one way to build such an environment.
+    """
+    import pathlib
+    import re
+
+    tests_root = pathlib.Path(__file__).resolve().parents[1]
+    pattern = re.compile(r"env\s*=\s*(\{\s*\*\*\s*os\.environ|dict\(\s*os\.environ\s*\))")
+
+    offenders: list[str] = []
+    for path in sorted(tests_root.rglob("test_*.py")):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if pattern.search(line):
+                offenders.append(f"{path.relative_to(tests_root)}:{number}: {line.strip()}")
+
+    assert not offenders, (
+        "a test passes os.environ straight to a subprocess, which drags pytest-cov's hooks "
+        "along and can abort the run at coverage-combine time.\n"
+        "Use `uninstrumented_env()` from tests/conftest.py instead.\n  "
+        + "\n  ".join(offenders)
+    )

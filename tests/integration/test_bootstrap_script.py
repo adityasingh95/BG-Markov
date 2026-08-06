@@ -18,6 +18,8 @@ import subprocess
 
 import pytest
 
+from tests.conftest import uninstrumented_env
+
 _ROOT = pathlib.Path(__file__).resolve().parents[2]
 _SCRIPT = _ROOT / "bootstrap.sh"
 
@@ -67,7 +69,12 @@ def _run(
     stdin: str,
     *args: str,
 ) -> subprocess.CompletedProcess[str]:
-    env = dict(os.environ)
+    # ★ Not `dict(os.environ)`. bootstrap.sh runs dev.sh, which runs Python; under
+    # pytest-cov every one of those children joins the coverage session and writes data with
+    # no branch tracking (their cwd is outside the repo, so they never find pyproject.toml).
+    # The combine then aborts the whole run after all tests have passed. See
+    # `uninstrumented_env` in tests/conftest.py — this cost two red CI runs.
+    env = uninstrumented_env()
     env["PATH"] = f"{stub}{os.pathsep}{env['PATH']}"
     # Keep the test off the operator's port even if a stray code path tries to serve.
     env["BGAPP_PORT"] = "8987"
@@ -178,8 +185,10 @@ def dirty_working_tree(tmp_path: pathlib.Path) -> pathlib.Path:
             capture_output=True,
             check=True,
             timeout=60,
-            env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
+            env=uninstrumented_env(
+                GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
+                GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t",
+            ),
         )
 
     _git("init", "-q")

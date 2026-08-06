@@ -19,13 +19,14 @@ a refusal was printed: a script that prints a refusal and unlinks anyway prints 
 from __future__ import annotations
 
 import ast
-import os
 import pathlib
 import sqlite3
 import subprocess
 import sys
 
 import pytest
+
+from tests.conftest import uninstrumented_env
 
 _ROOT = pathlib.Path(__file__).resolve().parents[2]
 _RUN_PY = _ROOT / "run.py"
@@ -119,28 +120,6 @@ def _make_db(path: pathlib.Path, *, demo_marked: bool) -> None:
     conn.close()
 
 
-def _uninstrumented_env() -> dict[str, str]:
-    """A subprocess environment with pytest-cov's hooks stripped out.
-
-    ★ `pytest-cov.pth` is installed in site-packages, so **every** Python subprocess started
-    during a test run silently joins the coverage session and writes its own `.coverage.*`
-    file. Those children record statement-only data; the parent runs with `branch = true`;
-    and combining them at report time aborts the whole run with
-
-        INTERNALERROR> coverage.exceptions.DataError:
-            Can't combine statement coverage data with branch data
-
-    — after every test has already passed, which makes it read like a coverage-tool bug
-    rather than something a test did. `run.py` is not in the measured set anyway; these
-    children are being driven for their behaviour, not their coverage.
-    """
-    return {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith(("COV_CORE", "COVERAGE_"))
-    } | {"BGAPP_ASSUME_TTY": "0"}
-
-
 def _reset(cwd: pathlib.Path, db: pathlib.Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(_ROOT / "run.py"), "reset", "--db", str(db), "--yes"],
@@ -149,7 +128,7 @@ def _reset(cwd: pathlib.Path, db: pathlib.Path) -> subprocess.CompletedProcess[s
         text=True,
         timeout=120,
         check=False,
-        env=_uninstrumented_env(),
+        env=uninstrumented_env(BGAPP_ASSUME_TTY="0"),
     )
 
 
