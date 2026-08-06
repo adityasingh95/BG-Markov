@@ -1945,3 +1945,58 @@ It now stubs `git` as a **progress marker** and asserts the log never reaches it
 this project keeps relearning: *asserting that a bad thing did not happen is worthless if the
 bad thing could not have happened in the test environment anyway.* All four plants — install
 without asking, carry on afterwards, pull over a dirty tree, `reset --hard` — are now caught.
+
+---
+
+## DL-064 — Reset refuses an unmarked database, and reads the mark read-only (S-1026)
+
+**Date:** 2026-08-06 · **Decided by:** Dev + SDET · **Supersedes:** nothing
+
+A non-technical tester needs to clear the practice data and put it back. Doing that puts a
+**destructive action one double-click away**, in a folder, next to the icon that starts the
+app.
+
+`dev.sh reset` was safe partly by accident of access: reaching it needed a terminal, a path,
+and typing `DELETE` — three filters a person who should not be deleting anything will fail.
+`Reset to empty.cmd` has none of them.
+
+**So the guard is not the confirmation.** A confirmation is what someone clicking through a
+task clicks through. `run.py reset` **refuses outright** to touch a database that is not
+marked as demonstration data, with no prompt and no override, and the test asserts the *file
+survives* rather than that a refusal was printed — a reset that prints a refusal and unlinks
+anyway prints exactly the same words. `bgapp-dev.db` is the real-capture path: her records,
+no seed, no way back.
+
+### ★ The guard was modifying the file it was guarding
+
+The first implementation asked the project — `data.provenance.is_demo_database` through a
+SQLAlchemy session. Correct answer, and **it wrote to the file**: SQLAlchemy opens read-write,
+the connection moved the database to WAL, and byte 18 of the header (write version) went
+1 → 2. On the refusal path the launcher was writing to her records before declining to delete
+them. Caught by an assertion that the file was *byte-identical* afterwards, not merely
+present.
+
+`run.py` now reads the mark with stdlib `sqlite3` in `mode=ro`. The cost is a second reading
+of the same fact, held together by a test asserting the two agree — which failed on its first
+run and caught a real defect: `mark_demo_database()` leaves `note` NULL, so keying on the
+banner text answered "not demo" for **every database the seeder actually makes**. Fail-closed,
+so nothing would have been destroyed — but "Reset to empty" would silently have done nothing.
+
+### Two more found by looking rather than assuming
+
+- **`-wal` and `-shm` survived the delete.** Unlinking the `.db` alone leaves the write-ahead
+  log; the next restore creates a file of the same name and SQLite tries to recover from the
+  orphan. Found by listing the directory after a real reset.
+- **`pytest-cov.pth` instruments every Python subprocess.** The launcher tests spawn
+  `python run.py`, each child wrote statement-only coverage data, and combining it with the
+  parent's branch data aborted the run with `Can't combine statement coverage data with
+  branch data` — *after* all 892 tests had passed, so it read as a coverage-tool bug rather
+  than as something a test did. Children now run with `COV_CORE_*` stripped.
+
+### `run.py` imports only the standard library, and a test says so
+
+It runs before anything is installed — that is its job. One third-party import at module
+level makes it crash on exactly the machine it exists to set up, and the crash is a
+traceback, which is what the whole file exists to prevent. Asserted by parsing the AST
+against `sys.stdlib_module_names`, because a grep for `import fastapi` passes a file that
+imports `pandas`.
