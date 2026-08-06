@@ -28,6 +28,14 @@ _INTERPRETERS = ("python3.12", "python3", "python", "py")
 #: turns a stubbed `apt-get` back into a real one if the script reaches for it directly.
 _INSTALLERS = ("winget", "brew", "apt-get", "apt", "sudo")
 
+#: ★ Not an installer — a **progress marker**. `git` is the first thing the script touches
+#: after the install step, so its absence from the log is proof the script stopped there.
+#: The assertion this replaced ("the word 'serving' never appears") could not fail: with no
+#: Python on the stubbed PATH, a runaway script dies at `doctor` long before it serves, so
+#: the test passed whether the script stopped on purpose or crashed into a wall. A plant
+#: survived it.
+_PROGRESS_MARKERS = ("git",)
+
 
 def _stub_dir(tmp_path: pathlib.Path, sentinel: pathlib.Path) -> pathlib.Path:
     """A directory to put FIRST on PATH: no working 3.12, and installers that only tattle."""
@@ -41,7 +49,7 @@ def _stub_dir(tmp_path: pathlib.Path, sentinel: pathlib.Path) -> pathlib.Path:
         p.write_text("#!/bin/sh\nexit 1\n")
         p.chmod(0o755)
 
-    for name in _INSTALLERS:
+    for name in _INSTALLERS + _PROGRESS_MARKERS:
         p = d / name
         p.write_text(
             "#!/bin/sh\n"
@@ -126,16 +134,28 @@ def test_accepting_installs_then_stops_and_says_to_reopen(tmp_path: pathlib.Path
     result = _run(_ROOT, stub, "YES\n")
     combined = (result.stdout + result.stderr).lower()
 
-    assert sentinel.exists(), "confirmed, but no installer was invoked"
+    log = sentinel.read_text() if sentinel.exists() else ""
+    assert log, "confirmed, but no installer was invoked"
     assert "reopen" in combined or "restart" in combined, (
         "installed without telling the operator the running shell cannot see the new Python"
     )
-    assert "serving" not in combined, "carried on into the app in a shell with a stale PATH"
+    # ★ The install step is the end of the run. `git` is the next thing the script touches,
+    # so seeing it in the log means execution continued in a shell whose PATH predates the
+    # install — the failure this test exists to prevent.
+    assert "git " not in log, (
+        f"carried on past the install in a shell with a stale PATH:\n{log}"
+    )
 
 
 @pytest.fixture
 def dirty_clone(tmp_path: pathlib.Path) -> pathlib.Path:
-    """A real clone of this repo with an uncommitted change in it."""
+    """A real clone of this repo with an uncommitted change in it.
+
+    ★ The scripts are copied in from the WORKING TREE after cloning. `git clone` only carries
+    committed content, so without this the test would exercise whatever was last committed
+    rather than the code under test — and would pass or fail depending on whether someone had
+    remembered to commit, which is not a property of the script.
+    """
     dest = tmp_path / "clone"
     subprocess.run(
         ["git", "clone", "--depth", "1", "--no-hardlinks", str(_ROOT), str(dest)],
@@ -143,6 +163,11 @@ def dirty_clone(tmp_path: pathlib.Path) -> pathlib.Path:
         check=True,
         timeout=180,
     )
+    for rel in ("bootstrap.sh", "scripts/dev.sh", "start.sh"):
+        target = dest / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((_ROOT / rel).read_bytes())
+        target.chmod(0o755)
     (dest / "START-HERE.md").write_text("locally edited, not committed\n", encoding="utf-8")
     return dest
 

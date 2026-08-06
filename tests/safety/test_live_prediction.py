@@ -174,11 +174,28 @@ def test_logging_a_meal_writes_a_prediction_row(client: TestClient, session: Ses
 
 
 def test_the_shadow_clock_starts(client: TestClient, session: Session) -> None:
+    """★ The clock starts when the first prediction is written, and accrues from THAT row.
+
+    This assertion used to read ``now=_NOW + timedelta(days=5)`` against a `created_at` that
+    the database stamps with the real wall clock. It passed only while the real date was
+    still behind that fixed literal, and **began failing on 2026-08-04** when it was not —
+    `shadow_days` clamps a negative interval to 0 (correctly), so the test reported that the
+    shadow clock does not start.
+
+    A safety test that decays on a calendar date is worse than no test: it is green for
+    months, then goes red for a reason that has nothing to do with the behaviour it guards,
+    and the natural response to a mysterious red is to weaken it. `now` is now derived from
+    the row itself, so the test asserts the real property — the clock starts, and time after
+    the first prediction counts — with no dependency on what today happens to be.
+    """
     _seed_and_promote(session)
     assert shadow_days(session, now=_NOW + dt.timedelta(days=5)) == 0
     client.post("/api/meals", json=_meal_payload())
     session.flush()
-    assert shadow_days(session, now=_NOW + dt.timedelta(days=5)) > 0
+
+    row = session.scalars(select(PredictionLog)).one()
+    assert shadow_days(session, now=row.created_at) == 0, "no time has elapsed yet"
+    assert shadow_days(session, now=row.created_at + dt.timedelta(days=5)) == 5
 
 
 # --- ★ DL-053: capture survives a broken model; invariants do not go quiet ----
