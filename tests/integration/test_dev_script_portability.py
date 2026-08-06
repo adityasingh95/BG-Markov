@@ -85,7 +85,7 @@ def test_no_construct_that_breaks_on_a_stock_mac(
     assert not offenders, f"{construct}: {why}\n  {offenders}"
 
 
-_ENTRY_SCRIPTS = ("scripts/dev.sh", "start.sh")
+_ENTRY_SCRIPTS = ("scripts/dev.sh", "start.sh", "bootstrap.sh")
 
 
 @pytest.mark.parametrize("script", _ENTRY_SCRIPTS)
