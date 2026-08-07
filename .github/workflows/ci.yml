@@ -5,9 +5,28 @@ on:
     branches: ["**"]
   pull_request:
 
+# ★ So that a cancelled run has a KNOWN cause.
+#
+# Runs #105 and #106 both stopped at 15m00s with conclusion `cancelled` and no retained logs.
+# `cancelled` is not something a failing test produces, and nothing in this file could account
+# for it. With a concurrency group, a superseded run is cancelled *by the run that replaced
+# it* and the UI says so — leaving any other cancellation as a genuine signal worth chasing
+# rather than one more thing that might be normal.
+#
+# Keyed per-ref: a push to one branch must never cancel another branch's run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
+    # ★ The suite takes ~5 minutes. Without a ceiling a hung job runs to GitHub's 6-hour
+    # default, which is indistinguishable from "CI is broken" and burns the runner minutes
+    # the next push needs. Twenty is a hang detector, not a performance budget — tight enough
+    # to be useful, loose enough that a slow-but-healthy run is never clipped. A timeout that
+    # clips healthy runs is worse than none: it teaches the reader that red means nothing.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 

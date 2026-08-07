@@ -125,6 +125,11 @@ def test_a_lost_response_is_safe_to_retry(
         "a dropped response must be reported as a failure she can retry"
     )
 
+    # ★ Clear the failure toast before retrying, so the assertion below cannot possibly be
+    # reading the PREVIOUS attempt's message. Without this the test is racing the app's own
+    # clear-then-write, and a stale read is indistinguishable from a real result.
+    page.evaluate("document.querySelector('#toast').textContent = ''")
+
     button.click()          # she presses Log again
     assert_saved(page)
     page.wait_for_timeout(500)

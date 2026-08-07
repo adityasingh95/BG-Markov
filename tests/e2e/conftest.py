@@ -71,7 +71,29 @@ def assert_saved(page: _HasToast, *, contains: str | None = None, timeout: int =
     """
     toast = page.locator("#toast")
     toast.wait_for(state="visible", timeout=timeout)
+
+    # ★ Visible is not the same as *written*.
+    #
+    # `wait_for(state="visible")` returns immediately when a toast is already on screen —
+    # exactly the situation after a failed attempt, where the failure message is still
+    # showing when she presses Log again. The app then clears the text and writes the new
+    # one, and a single read taken in between sees an empty string. That made
+    # `test_a_lost_response_is_safe_to_retry` fail roughly two runs in three, reporting "the
+    # toast is empty" and pointing at the retry logic rather than at this wait.
+    #
+    # A flaky test in this suite is worse than a missing one: it teaches the reader that red
+    # is noise, so the next real red gets re-run instead of read.
+    #
+    # Polled with `text_content()` rather than Playwright's `expect()`, which needs a real
+    # Locator — `_Toast` exists so this helper can be tested without a browser, and
+    # `expect()` broke all seven of those tests with a ValueError. A fix that costs the
+    # helper its own test coverage is not a fix.
+    deadline = time.monotonic() + (timeout / 1000.0)
     text = (toast.text_content() or "").strip()
+    while not text and time.monotonic() < deadline:
+        time.sleep(0.05)
+        text = (toast.text_content() or "").strip()
+
     assert text, "the toast is empty — she was told nothing at all"
     assert text not in FAILURE_TOASTS, f"the page reported a FAILURE, not a save: {text!r}"
     assert text.startswith(SUCCESS_MARKER), f"not a success confirmation: {text!r}"
