@@ -17,7 +17,7 @@ The model's output space. Ordered — this matters, and it is why the model is *
 | **4** | 181 – 250 | Hyperglycaemia | |
 | **5** | > 250 | Severe hyperglycaemia | |
 
-**Boundaries:** `[54, 80, 181, 251]`. Confirm State 2's upper edge with the endocrinologist (OQ-5).
+**Boundaries:** `[54, 80, 181, 251]`. **Declared** (`00a §4`, was OQ-5). State 2's upper edge stays at 80 rather than the standard 70 — it buys a warning band for a subject modelled as unable to feel a low.
 
 ### Rules
 
@@ -82,46 +82,61 @@ Invalid records are **kept**. `elapsed_min` is stored even when it falls outside
 
 ---
 
-## 3. Gate State Machine **[SAFETY]**
+## 3. Gate State Machine
 
-Gates are evaluated **from live data on every call.** Never cached, never configured, never stubbed. A cached "gate passed" is a silent safety failure (ADR-7).
+> **Research mode (`00a §3.1`).** The clinical gates are retired: there is no
+> patient to protect and no endocrinologist to wait for. What remains is a
+> **readiness ladder** — a statement of what has to be true before a given claim
+> is worth making. It gates *interpretation*, not access.
+>
+> Gates are still evaluated **from live data on every call.** Never cached, never
+> configured, never stubbed (ADR-7 — unchanged). A cached gate state produces a
+> result label that no longer matches the data behind it.
 
 ```
    ┌─────────────────────────────────────────────────────┐
    │ CLOSED                                              │
-   │ Logging only. No model. No output.                  │
+   │ Not enough data to fit. No model.                   │
    └───────────────────────┬─────────────────────────────┘
                            │ n_valid_meals ≥ 50
    ┌───────────────────────▼─────────────────────────────┐
    │ GATE 0 — MODEL TRAINS                               │
-   │ Metrics computed. OPERATOR-VISIBLE ONLY.            │
-   │ Patient sees nothing. (INV-2)                       │
+   │ Metrics computed. Results labelled PRELIMINARY.     │
+   │ Underpowered — report intervals, not points. (RQ-2) │
    └───────────────────────┬─────────────────────────────┘
                            │ n_valid_meals ≥ 150
                            │ AND hypo_recall > baseline
                            │ AND calibration acceptable (held-out)
-                           │ AND shadow_mode_days ≥ 90
+                           │ AND held-out temporal evaluation done
+                           │     (REQ-057 — replaces the 90-day clock)
    ┌───────────────────────▼─────────────────────────────┐
-   │ GATE 1 — PATIENT-VISIBLE RISK OUTPUT                │
-   │ Still shadow-logged. Guardrails active.             │
+   │ GATE 1 — H-1 IS ANSWERABLE                          │
+   │ The model beat the baseline on a held-out fold.     │
+   │ Guardrails active. Results still labelled.          │
    └───────────────────────┬─────────────────────────────┘
-                           │ icr_confirmed
-                           │ AND (isf_confirmed_by_endo
+                           │ icr declared (00a §4)
+                           │ AND (isf declared
                            │      OR n_clean_correction_events ≥ 5)
    ┌───────────────────────▼─────────────────────────────┐
-   │ GATE 2 — PRESCRIPTIVE MODULE ENABLED                │
-   │ Bolus calculator. NO ML in this path. (INV-1)       │
+   │ GATE 2 — PRESCRIPTIVE MODULE BUILDABLE              │
+   │ Output is a number in a study, NOT a dose.          │
+   │ NO ML in this path (ADR-10 — unchanged).            │
    └─────────────────────────────────────────────────────┘
 ```
+
+**Gate 2 opens on declared parameters, so it is open from the start.** That does
+not make the prescriptive module a dose calculator — it makes it an
+implementation of a formula whose behaviour is under test. INV-3 and INV-4 are
+what is being tested, and they are **kept in full**.
 
 ### Gate rules
 
 | Rule | |
 |---|---|
-| **Volume alone is never sufficient for Gate 1.** | 200 meals with hypo recall *below* the clinical baseline → **still blocked.** The model must earn it. |
-| **Gate 2 is blocked on a human, not on code.** | It waits on the endocrinologist (OQ-1, OQ-2). No amount of engineering opens it. |
-| **Gates only ever advance.** | A gate can be manually revoked by the operator. It never advances automatically past its condition. |
-| **No bypass exists.** | Not by fixture, not by mock, not by config flag, not by env var. SDET writes a test proving this for each gate. |
+| **Volume alone is never sufficient for Gate 1.** | 200 meals with hypo recall *below* the clinical baseline → **still closed.** Unchanged: the gate is a claim about the model, and row count is not evidence for it. |
+| **Gates may close as well as open.** | Resolves the contradiction between the old "gates only ever advance" and ADR-7. Gates are recomputed live; if a refit drops hypo recall below baseline, Gate 1 closes. **A closing gate suppresses ML output but leaves the clinical baseline visible** — the screen never goes blank. Mirrors the kill switch (§4). |
+| **Never advances past its condition.** | No gate opens on anything other than its stated condition being true of live data. |
+| **No bypass exists.** | Not by fixture, not by mock, not by config flag, not by env var. SDET writes a test proving this for each gate. **Unchanged — a stubbed gate produces a mislabelled result.** |
 
 ---
 

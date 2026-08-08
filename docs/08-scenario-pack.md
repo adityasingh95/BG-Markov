@@ -160,34 +160,36 @@ Scenario: Correction events beat the OLS estimate
   # Correction events are unconfounded. The OLS fit is not.
 ```
 
-## Feature: ★ Gates [SAFETY]
+## Feature: ★ Gates
+
+> **Research mode (`00a §3.1`).** INV-1 and INV-2 are retired; the gates are now a
+> readiness ladder labelling how strongly a result may be claimed. The scenarios
+> that survive are the ones about **evidence**, not access.
 
 ```gherkin
-Scenario: No patient output before Gate 1
-  Given 149 valid meals
-  When the patient requests a prediction
-  Then GATE_NOT_PASSED is returned                                   # INV-2
-
 Scenario: Volume alone does not open Gate 1
   Given 200 valid meals
   But hypo recall is below the clinical baseline
   Then Gate 1 remains CLOSED
-  # The model must EARN patient visibility. It is not granted by row count.
-
-Scenario: The bolus calculator is blocked without a confirmed ICR
-  Given icr is null
-  When a bolus recommendation is requested
-  Then GATE_NOT_PASSED is returned                                   # INV-1
-
-Scenario: No bypass exists
-  Given icr is null
-  Then no fixture, mock, config flag, or environment variable
-       can produce a bolus recommendation                            # INV-1
+  # UNCHANGED, and now the whole point of the gate: it is a claim about the
+  # model, and row count is not evidence for it.
 
 Scenario: Gates are never cached
   Given a gate was evaluated as passed a moment ago
   When the underlying data no longer satisfies it
   Then the next evaluation returns CLOSED                            # ADR-7
+
+Scenario: A closing gate falls back rather than blanking
+  Given Gate 1 was open
+  When a refit drops hypo recall below the clinical baseline
+  Then ML output is suppressed
+  And the clinical baseline is still shown                           # DL-004
+
+Scenario: No bypass exists
+  Then no fixture, mock, config flag, or environment variable
+       can alter a computed gate state
+  # A stubbed gate produces a result labelled with a claim the data
+  # does not support.
 ```
 
 ## Feature: ★ Prescriptive Safety [SAFETY]

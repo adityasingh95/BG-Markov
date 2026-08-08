@@ -23,9 +23,9 @@ She logs at the laptop, not at the table — often 30–40 minutes after eating.
 |---|---|---|---|
 | `profile_id` | int PK | No | |
 | `effective_from` | date | No | **Version every change. Never overwrite.** (REQ-054) |
-| `icr` | float | **Yes** | g carb per unit. **Null blocks Gate 2** (INV-1). Expected 7–10. |
-| `isf` | float | No | mg/dL per unit. Default 30. |
-| `isf_source` | enum | No | `default` \| `endo` \| `derived` |
+| `icr` | float | No | g carb per unit. **Declared: 8.3** (`00a §4`). INV-1 retired, so null no longer gates anything — and the column is no longer nullable. |
+| `isf` | float | No | mg/dL per unit. **Declared: 30.** |
+| `isf_source` | enum | No | `default` \| `endo` \| `derived` \| **`declared`** |
 | `target_bg` | int | No | 135 |
 | `bolus_brand` | text | No | `Fiasp` |
 | `basal_brand` | text | No | `Tresiba` |
@@ -86,6 +86,8 @@ She logs at the laptop, not at the table — often 30–40 minutes after eating.
 | `pre_ex_duration_min` | int | No | |
 | `hypo_treatment` | bool | No | Rescue carbs taken in the window |
 | `hypo_treatment_g` | float | Yes | |
+| `hypo_bg` | int | Yes | **The BG that triggered the rescue.** Required when `hypo_treatment = true`. See DL-008. |
+| `hypo_treatment_time` | datetime | Yes | **REPORTED.** When the rescue was taken. Required when `hypo_treatment = true`. |
 | `snack_during_window` | bool | No | |
 | `notes` | text | Yes | Free text: illness, stress, alcohol, sleep, injection site |
 | `is_valid` | bool | No | Computed — §5 |
@@ -113,6 +115,12 @@ get_hypo_events()    # INCLUDES rescued rows, as State 1 or 2
 
 A rescued meal appears in the second and not the first. **Both accessors must exist, and the hypo accessor must be tested against a dataset containing rescues.**
 
+**The state comes from `hypo_bg`, not `post_bg`** (DL-008). `post_bg` is measured
+*after* the rescue carbs and may read 120 — a rescued meal classified from it
+would be labelled State 3, silently converting a low into a normal reading. That
+is the same erasure INV-7 exists to prevent, one step further down. `hypo_bg` is
+therefore required whenever `hypo_treatment = true`.
+
 ### Nothing is hard-deleted
 Invalid records persist. `elapsed_min` is stored regardless. Adherence cannot be diagnosed from discarded data.
 
@@ -129,11 +137,17 @@ Standalone corrections with **no food** in the window. The **only causally clean
 | `datetime` | datetime | No | **REPORTED.** |
 | `logged_at` | datetime | No | |
 | `bg_before` | int | No | |
-| `bg_after` | int | No | Reading at **+4 h** |
-| `bg_after_time` | datetime | No | **REPORTED.** |
+| `bg_after` | int | **Yes** | Reading at **+4 h**. Null until the follow-up arrives — see DL-011. |
+| `bg_after_time` | datetime | **Yes** | **REPORTED.** Null until the follow-up arrives. |
 | `units` | float | No | |
 | `iob_at_start` | float | No | Computed. Valid only if < 0.5 |
-| `food_in_window` | bool | No | If true → invalid for ISF derivation |
+| `food_in_window` | bool | **Yes** | Null until the follow-up arrives. If true → invalid for ISF derivation |
+| `is_valid_for_isf` | bool | No | Computed. **False until the follow-up columns are filled.** |
+
+> **DL-011.** These columns were specified NOT NULL, but `05 §3` populates them
+> four hours later via `PATCH /followup` — the row could not be inserted at
+> creation time. They are nullable, and `is_valid_for_isf` carries the
+> completeness state rather than the nullability doing it implicitly.
 
 **Derived ISF** = mean of `(bg_before − bg_after) / units` over events with `iob_at_start < 0.5` **and** `food_in_window = false`. **Requires ≥ 5 valid events** to override the default (`07` §6).
 

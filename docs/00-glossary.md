@@ -36,13 +36,19 @@
 | **COB** | Carbs on Board. Not directly modelled; approximated by the 3-hour inter-meal exclusion rule. |
 | **Pre-bolus** | Injecting *before* eating. Represented as a **negative** `bolus_offset_min`. |
 | **Correction bolus** | Insulin to bring down a high, separate from meal coverage. Logged as a distinct field. |
-| **Over-basalization** | Basal dose too high. Causes unexplained lows. Common, under-diagnosed, and **especially dangerous in hypo unawareness.** Expected basal is 40–50% of TDD (24–30 U here). Flagged for the endocrinologist. |
+| **Over-basalization** | Basal dose too high. Causes unexplained lows. Common, under-diagnosed, and **especially dangerous in hypo unawareness.** Expected basal is 40–50% of TDD (24–30 U here). **Declared at 45:55** (`00a §4`, was OQ-3); the generator emits a plausible split rather than flagging one for review. |
 
 > ### ⚠️ Why ISF is the most dangerous constant in the system
 > ISF sits in the **denominator** of the correction term: `correction = (BG − target) / ISF`.
 > An ISF that is **too low causes over-dosing.**
 > At BG 250, target 135: assuming ISF 30 gives 3.8 U. If her true ISF is 50, that dose drops her by 191 mg/dL — **to 59 mg/dL. A hypo.**
-> This is why INV-1 hard-blocks the prescriptive module until ISF is confirmed.
+> This is why INV-1 hard-blocked the prescriptive module until ISF was confirmed.
+>
+> **In research mode INV-1 is retired** (`00a §3.1`) and ISF is declared at 30.
+> **This warning is not deleted**, because it no longer describes a dosing risk —
+> it describes the **loss asymmetry that makes hypo recall the primary metric.**
+> Under-correcting is recoverable; over-correcting is not. That is why the model
+> is evaluated on lows, and it is as true of a simulated subject as a real one.
 
 ## 3. Clinical — Nutrition & Activity
 
@@ -71,7 +77,10 @@
 | **Brier score** | Proper scoring rule for probabilistic accuracy. |
 | **Clarke / Parkes error grid** | Field-standard glucose-prediction evaluation. Weights errors by **clinical danger**, not magnitude. |
 | **Hypo recall @ fixed FAR** | **The primary metric.** Of all the lows that actually happened, how many did the model warn about — at an acceptable false-alarm rate. |
-| **Shadow mode** | The model predicts; predictions are logged and compared to actuals; **nothing is shown to the patient.** Minimum 90 days. |
+| **Shadow mode** | The model predicts; predictions are logged and compared to actuals. The 90-day minimum is **retired** (`00a §3.1`) — replaced by held-out temporal evaluation (REQ-057), which is the scientific content of the requirement without the calendar. |
+| **Declared parameter** | A clinical constant fixed by fiat for the experiment, with stated provenance — **not confirmed by a clinician.** `00a §4`. |
+| **Ground truth** | The generator's true parameters (`ICR`, `ISF`, `β_carb`, `β_ins`). Known by construction, **never readable by the model** (REQ-055). |
+| **Parameter recovery** | Whether an estimator returns the generator's true value, and with what error. The measurable form of "does the method work". |
 
 ## 5. System
 

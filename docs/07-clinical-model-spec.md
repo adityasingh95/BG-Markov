@@ -4,20 +4,42 @@
 *Read before: `models/`, `features/`, `prescribe/`.*
 
 > **⚠ This document takes precedence over every other doc on clinical and model matters.** If another document appears to contradict it, stop and escalate.
+>
+> **Research mode (`00a`).** `00a` decides what *blocks*; this document still
+> decides what is *true* about the clinical model. Nothing in §2–§12 is relaxed.
+> The only change is §1: the constants are **declared** rather than pending
+> clinical confirmation.
 
 ---
 
 ## 1. Clinical Constants
 
+**Declared research parameters** (`00a §4`). Chosen to be internally consistent
+and clinically plausible, with stated provenance. **Declared is not confirmed** —
+these are inputs to an experiment, and no result produced with them is a
+statement about any real person's insulin requirements.
+
 | Constant | Value | Source | Status |
 |---|---|---|---|
-| `ISF` | **30** mg/dL/U | 1800-rule: 1800/60 = 30 | **Provisional. Verify (OQ-2).** |
-| `ICR` | **TBD** | Expected 7–10 (500-rule: 500/60 ≈ 8.3) | **Required. Blocks Gate 2 (OQ-1).** |
-| `target_bg` | **135** | Midpoint of her 120–150 | Confirmed |
-| `TDD` | ~60 U | Patient | Confirmed |
-| `iob_tp` | **55** min | Fiasp peak | Confirmed |
+| `ISF` | **30** mg/dL/U | 1800-rule: 1800/60 = 30 | **Declared** (`isf_source = declared`). Was OQ-2. |
+| `ICR` | **8.3** g/U | 500-rule: 500/60 ≈ 8.3 | **Declared.** Was OQ-1, was blocking Gate 2. |
+| `target_bg` | **135** | Midpoint of 120–150 | Declared |
+| `TDD` | ~60 U | Subject definition | Declared |
+| `iob_tp` | **55** min | Fiasp peak | Confirmed (pharmacology) |
 | `iob_td` | **240** min | Operator decision | Confirmed |
-| `basal_halflife` | **25** h | Degludec EWMA | Confirmed |
+| `basal_halflife` | **25** h | Degludec EWMA | Confirmed (pharmacology) |
+| `MAX_BOLUS_U` | **15** U | INV-3 ceiling | Confirmed. **The config ceiling equals this value** — a config permitted to exceed the invariant is a defect. |
+
+`iob_tp`, `iob_td` and `basal_halflife` are pharmacological properties of Fiasp
+and degludec, not properties of the subject. They were never open questions and
+are unaffected.
+
+> **§6 (ISF from correction events) is now a result, not a gate.** It used to be
+> a route to unblocking Gate 2. It is now a direct test of the method: **does the
+> derivation recover the ISF the generator was configured with?** That is more
+> informative than the gate it replaced. Keep the ≥5-event threshold, the
+> `iob_at_start < 0.5` filter, the `food_in_window` filter, and the
+> raise-on-non-positive rule — all of them are what is being evaluated.
 
 ### ⚠ Why ISF is the most dangerous number in the system
 
@@ -36,7 +58,7 @@ correction_units = (current_bg − target_bg) / ISF
 
 An ISF that is *too high* merely under-corrects, which is recoverable. **The error is asymmetric, and our default sits on the dangerous side if wrong.**
 
-ISF 30 is internally consistent with a 60 U TDD, so the catastrophic case is unlikely — **but the 1800-rule is a population heuristic and individual ISF varies widely around it.** This is why INV-1 hard-blocks the prescriptive module, and why correction events (§6) are the highest-priority data the system collects.
+ISF 30 is internally consistent with a 60 U TDD, so the catastrophic case is unlikely — **but the 1800-rule is a population heuristic and individual ISF varies widely around it.** This is why INV-1 hard-blocked the prescriptive module. **INV-1 is retired in research mode** (`00a §3.1`), but correction events (§6) remain the highest-priority data the system collects — they are now the direct test of H-3 rather than a route to unblocking a gate.
 
 ---
 
@@ -252,14 +274,24 @@ Insulin resistance is present (TDD 60 U), so sensitivity drifts. **Monthly refit
 def recommend_bolus(carbs_g, current_bg, icr, isf, target_bg, iob):
     carb_dose  = carbs_g / icr
     correction = (current_bg - target_bg) / isf
-    return max(0.0, carb_dose + correction - iob)
+    raw        = carb_dose + correction - iob
+    capped     = min(raw, MAX_BOLUS_U)          # INV-3 — 15 U
+    return max(0.0, capped), raw > MAX_BOLUS_U  # (dose, capped_flag)
 ```
 
-**This is the standard clinical formula. It is causal by construction. No model output enters this path.**
+**This is the standard clinical formula. It is causal by construction. No model
+output enters this path.** The cap is shown in the code because it is an
+invariant, not a presentation detail — a reference implementation that omits it
+ships INV-3 half-built.
+
+> **The output is a number in a study, not a dose.** Research mode retires the
+> gate in front of this function; it does not turn the function into a dosing
+> tool. Every surface rendering its output carries the non-clinical-use banner
+> (REQ-058).
 
 | Guardrail | |
 |---|---|
-| **INV-1** | **Disabled until Gate 2.** Hard block. Not a warning. Not a config flag. |
+| ~~**INV-1**~~ | **RETIRED** (`00a §3.1`) — ICR is declared, so there is no clinical gate. INV-3 and INV-4 below are **unchanged and under test**. |
 | **INV-4** | Refuse below BG 80 → "Treat the low first." |
 | **INV-3** | Cap at 15 U. **A cap event is FLAGGED as implausible input, never silently clipped.** A typo must not produce a lethal dose. |
 | **INV-3** | Never negative. |

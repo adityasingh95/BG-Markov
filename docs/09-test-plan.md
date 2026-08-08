@@ -19,7 +19,7 @@ Green-before-red is a **process failure**. If it happens, the test is deleted an
 
 | Layer | Location | Runs | Purpose |
 |---|---|---|---|
-| **Safety** | `tests/safety/` | Every commit | **INV-1..9. Adversarial.** Assume a future refactor will try to weaken these. |
+| **Safety** | `tests/safety/` | Every commit | **The kept invariants — INV-3, 4, 6, 7, 8, 9. Adversarial.** Assume a future refactor will try to weaken these. INV-1/2/5 retired (`00a §3.1`). |
 | **Property** | `tests/property/` | Every commit | `hypothesis`. Monotonicity, bounds, invariance. |
 | **Golden** | `tests/golden/` | Every commit | Hard-coded clinical values. Locks curves against silent regression. |
 | **Unit** | `tests/unit/` | Every commit | Pure functions. |
@@ -34,7 +34,7 @@ Green-before-red is a **process failure**. If it happens, the test is deleted an
 
 ## 3. ★ Safety Testing
 
-`core/safety.py` holds INV-1..INV-9. It **imports nothing from the project** (ADR-6) — this prevents circular weakening under refactor.
+`core/safety.py` holds the **kept** invariants — INV-3, 4, 6, 7, 8, 9. It **imports nothing from the project** (ADR-6) — this prevents circular weakening under refactor. INV-1, 2 and 5 are retired (`00a §3.1`); the module names each retirement in a comment so a documented retirement can never be confused with a silent deletion.
 
 ### Rules
 
@@ -47,7 +47,7 @@ Green-before-red is a **process failure**. If it happens, the test is deleted an
 
 | Test | Why it will be attacked |
 |---|---|
-| **INV-1 no-bypass** | EPIC 9's tests cannot run without an ICR. The path of least resistance is to stub `icr = 8.3` in a fixture. **Don't.** Test the refusal path. The gate *is* the feature. |
+| **Generator isolation (REQ-055)** | The fastest way to make a model look good is to let it see the answer key — usually by accident, via a shared config object. **This test is the credibility of every number the build produces.** |
 | **INV-7 regression guard** | 100 meals, 20 rescued → `get_hypo_events()` returns exactly 20. This exists **specifically** to catch a future refactor that drops invalid rows. It will look like dead weight. **It is not.** |
 | **INV-8 confounding** | Requires deliberately constructing a dataset where insulin *appears* to raise glucose. Someone will call it unrealistic. **It is the realistic case.** |
 | **INV-9 write-before-return** | Requires mocking a persistence failure and asserting **nothing** is returned. Easy to weaken into "logs a warning." |

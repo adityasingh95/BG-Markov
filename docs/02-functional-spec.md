@@ -82,7 +82,12 @@ Computed as **reported mealtime + 120 min** — *not* `logged_at + 120`.
 - Captures `bg_before`, `units`, `bg_after`, `food_in_window`, computed `iob_at_start`.
 - She should be actively encouraged to log these.
 
-## 4. Risk Readout (F-4) — REQ-040, INV-2
+## 4. Risk Readout (F-4) — REQ-058
+
+> **INV-2 retired** (`00a §3.1`). There is no patient surface; the readout is
+> built for the researcher and carries the non-clinical-use banner. The language
+> rules below are **retained in full** — they describe how to present a
+> probability honestly, which does not depend on who is reading it.
 
 ### F-4.1 Gating **[SAFETY]**
 - **Below Gate 1 she sees nothing.** No preview, no "beta" number, no greyed-out placeholder with a real value behind it.
@@ -99,7 +104,11 @@ Given a planned meal + bolus, she sees the 2-hour risk.
 ### F-4.3 Baseline conflict — REQ-046
 If the clinical baseline and the ordinal model differ by more than one state, **both are shown** and the conflict is flagged. **The system does not pick a winner.**
 
-## 5. Bolus Calculator (F-5) — REQ-041..043, INV-1/3/4
+## 5. Bolus Calculator (F-5) — REQ-042, 043, 058
+
+> **INV-1 retired** (`00a §3.1`) — ICR is declared, so §5.1's hard block is gone.
+> **INV-3 and INV-4 are unchanged and under test.** The output is a number in a
+> study, not a dose.
 
 ### F-5.1 Gating **[SAFETY]**
 **Hard-disabled until Gate 2** (ICR confirmed AND ISF confirmed or derived). No preview. No silent background computation.

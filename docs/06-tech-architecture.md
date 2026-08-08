@@ -38,7 +38,7 @@
 │  │                                                  │  │
 │  │  api/           routes, templates                │  │
 │  │  ─────────────────────────────────────────────   │  │
-│  │  core/safety.py     INV-1..9  ← ZERO INTERNAL    │  │
+│  │  core/safety.py     INV-3,4,6,7,8,9  ← ZERO      │  │
 │  │  core/gates.py      Gate 0/1/2   DEPENDENCIES    │  │
 │  │  core/guardrails.py                              │  │
 │  │  ─────────────────────────────────────────────   │  │
@@ -170,4 +170,15 @@ Acceptable **only** if:
 | ADR-7 | **Gates evaluated per-request, never cached** | A cached "gate passed" is a silent safety failure | **No** |
 | ADR-8 | **`logged_at` distinct from `datetime`** | See §4 | **No — retrofitting is impossible** |
 | ADR-9 | No auth in v1; FDE is the boundary | Localhost, single user | Yes — mandatory before any non-localhost bind |
-| ADR-10 | **No ML in the dose calculation** | The clinical formula is causal; the model is not | **No** |
+| ADR-10 | **No ML in the dose calculation** | The clinical formula is causal; the model is not | **No** — and in research mode the causal/predictive split is part of what is under test |
+| **ADR-11** | **The data generator is a separate package, unreachable from `core/`, `features/`, `models/`, `prescribe/`** | A model that can read the generator's ground-truth parameters proves nothing. REQ-055, enforced by S-310 | **No** |
+
+> **Research mode (`00a`).** ADR-9's honest position gets simpler, not weaker:
+> there is no patient data here at all, only synthetic data from a seeded
+> generator. **ADR-6, 7, 8 and 10 are unchanged** — they are validity properties,
+> not clinical protections. ADR-11 is added.
+>
+> `data_gen/` sits alongside `data/` in the component view and writes into SQLite
+> through the same repositories, so the pipeline cannot tell synthetic rows from
+> logged ones. That is deliberate: **nothing downstream may depend on the data
+> being synthetic.**

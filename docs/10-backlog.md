@@ -11,29 +11,52 @@
 
 ---
 
-# ★ BUILD ORDER
+# ★ BUILD ORDER — REORDERED FOR RESEARCH MODE
+
+**The original order shipped logging first because three months of a real
+person's adherence stood between EPIC 1 and any result. There is no such clock
+now, so the model is the bottleneck and the order inverts.** See `00a §5`.
 
 ```
-EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
+EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3a (Generator + Durability)
                                               │
-                                      ★ SHIP — LOGGING LIVE
-                                        Gate 1 clock starts
+                                      ★ DATA AVAILABLE
                                               │
-                              ┌───────────────┴─── ~3 months of data ───┐
-                              ▼                                          ▼
         EPIC 4 (Features) → EPIC 5 (Baseline) → EPIC 6 (Model)
                                               → EPIC 7 (Validation)
                                               → EPIC 8 (Guardrails/Output)
-                                                        │
-                                                        ▼
-                                              EPIC 9 (Prescriptive — Gate 2)
+                                              → EPIC 9 (Prescriptive)
+                                              → EPIC 10 (Results)
+                                              │
+                                      EPIC 3b (Logging UI) — LAST, optional
 ```
 
-### Three hard rules
+### Four hard rules
 
-1. **Ship EPIC 3 first.** The model was the whole design conversation but it is **not the bottleneck** — three months of her logging is. **Every week spent on the ordinal model before logging is live is a week added to the END of the project.**
-2. **S-304 (restore drill) runs in month one, before there is real data to lose.** The story is not done until the drill has been **executed**.
-3. **EPIC 9 does not start until S-703 (gate enforcement) is merged and green.** The bolus calculator is five lines and it is the most dangerous code in the system. **The gates must exist before the thing they gate.**
+1. **The generator is not part of the system under test.** It lives in its own
+   package. No module under `core/`, `features/`, `models/` or `prescribe/` may
+   import it or read its ground-truth parameters (REQ-055, tested in S-310).
+   **A model that can see the answer key proves nothing.**
+2. **S-501 (the clinical baseline) is still built before any ML.** It takes an
+   afternoon and it is the bar the model must beat. If the ordinal model cannot
+   beat it, **that is the finding** — carbs and insulin explain nearly
+   everything, and the baseline stands alone.
+3. **S-304 (restore drill) still runs early.** A lost run is a re-run you did not
+   budget for. The story is not done until the drill has been **executed**.
+4. **EPIC 7 (validation) is not optional and does not come last.** The leakage
+   suite must be provably working *before* any headline number is quoted. A
+   result produced ahead of S-701 is not a result.
+
+### What moved and why
+
+| Story | Was | Now | Why |
+|---|---|---|---|
+| **EPIC 3a** (new) | — | Right after EPIC 2 | The generator is the data source; nothing downstream runs without it. |
+| S-301, S-302, S-303, S-307 | EPIC 3, critical path | **EPIC 3b, last, optional** | A logging UI for a subject who does not exist. Retained as spec; build only if real logging is ever wanted. |
+| S-304 (backup/restore) | EPIC 3 | **EPIC 3a** | Still cheap, still early. |
+| S-305, S-306 (hypo rescue, correction events) | EPIC 3 | **EPIC 3a** — generator emits these | They are *data shapes* the generator must produce, not UI. **INV-7 and H-3 both depend on them.** |
+| EPIC 9 | Blocked on S-703 + endocrinologist | **Unblocked** | Gate 2 opens on declared parameters. INV-3/INV-4 are under test, not gating. |
+| **EPIC 10** (new) | — | Last | Writes the answers to H-1..H-5 down. Without it the build produces artefacts, not conclusions. |
 
 ---
 
@@ -48,12 +71,13 @@ EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
 **TDD:** `axe` passes. Usable at 200% zoom. Every numeric field asserts `inputmode`.
 
 ### S-103 [SAFETY] — Config loader
-**AC:** Frozen pydantic model; mutation raises. `icr: null` permitted at load but sets `prescriptive_enabled = False`. Unknown keys raise. `isf <= 0` raises. `max_bolus_u > 25` raises.
-**TDD:** Property — any config with `icr is None` ⇒ `prescriptive_enabled == False`. Config cannot raise `max_bolus_u` above the hard-coded ceiling.
+**AC:** Frozen pydantic model; mutation raises. Unknown keys raise. `isf <= 0` raises. **`max_bolus_u > 15` raises** — the config ceiling equals `MAX_BOLUS_U` (INV-3). Declared parameters (`00a §4`) load with their provenance; `isf_source` accepts `declared`.
+**TDD:** Config cannot raise `max_bolus_u` above the INV-3 ceiling — **assert 16 raises and 15 does not.** Mutation of a loaded config raises. A parameter without provenance raises.
+**Note:** the original AC permitted `max_bolus_u` up to 25, above the 15 U invariant. Corrected — see decision log DL-005.
 
 ### S-104 [SAFETY] — Safety invariants module
-**AC:** INV-1..9, each **one named function** in `core/safety.py`. Raises `SafetyViolation` — **never `assert`**. **Zero internal project imports** (ADR-6).
-**TDD:** Positive + negative per invariant. **AST test: no `assert` in `core/safety.py`.** Grep test: no other module re-implements an invariant.
+**AC:** The **kept** invariants — INV-3, 4, 6, 7, 8, 9 — each **one named function** in `core/safety.py`. Raises `SafetyViolation` — **never `assert`**. **Zero internal project imports** (ADR-6). Retired invariants (INV-1, 2, 5) have **no function**; the module carries a comment naming each retirement and pointing at `00a §3.1`.
+**TDD:** Positive + negative per kept invariant. **AST test: no `assert` in `core/safety.py`.** Grep test: no other module re-implements an invariant. **Test that the retired numbers are absent as functions** — so a later reader cannot mistake a silent deletion for a documented retirement.
 
 ### S-105 [SAFETY] — ★ Forbidden-pattern test suite
 **AC:** All patterns in `09-test-plan.md` §6 have a failing-on-violation test.
@@ -90,7 +114,57 @@ EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
 
 ---
 
-## EPIC 3 — Logging & Durability ★ THE CRITICAL PATH
+## EPIC 3a — Data Generator & Durability ★ THE CRITICAL PATH
+
+**The data source for the whole build.** Nothing downstream runs without it.
+
+### S-308 — ★ Synthetic subject generator — REQ-055, `00a §5`
+**The generator defines ground truth.** Everything measurable about H-2 and H-3
+comes from knowing the answer in advance.
+
+**AC:**
+- Emits `meal_event`, `bolus_log`, `basal_log` and `correction_event` rows conforming to `04-data-model.md`.
+- Configured with **true** `ICR`, `ISF`, `β_carb`, `β_ins`, noise levels and a hypo rate. These are the answer key.
+- **Dosing is confounded by design** — bolus chosen as a function of carbs and `pre_bg`, per `07 §7`. This is H-2 and it must not be optional.
+- Reproducible from a seed. The seed is recorded with every dataset.
+- Emits **`logged_at` distinct from `datetime`**, with a realistic transcription lag distribution.
+
+**TDD:**
+- Same seed ⇒ byte-identical dataset. Different seed ⇒ different.
+- **★ `median(logged_at − datetime) > 0`.** A generator emitting `logged_at == datetime` is not exercising ADR-8, and every timestamp test downstream would pass vacuously.
+- Confounding is present: `corr(total_bolus, post_bg) > 0` in the emitted data.
+- Lows occur at the configured rate, ±tolerance.
+
+**Adversarial:** the temptation is a generator that emits clean, well-dosed,
+unconfounded meals — because it is easier to write and the model scores well on
+it. **That generator answers no question.** RQ-1 exists for exactly this.
+
+### S-309 — Generator emits rescues and correction events — REQ-012, 013, INV-7
+**AC:** Hypo-rescued meals emitted with `hypo_treatment = true` **and** the pre-rescue BG recorded (see decision log DL-008). Standalone correction events emitted with `food_in_window` both true and false.
+**TDD:** A dataset of 100 meals with 20 rescued ⇒ `get_hypo_events()` returns exactly 20. **★ The INV-7 regression guard, now with a generator that can actually produce the condition.**
+
+### S-310 [SAFETY] — ★ Generator isolation — REQ-055
+**AC:** No module under `core/`, `features/`, `models/` or `prescribe/` imports the generator package or reads its ground-truth parameters.
+**TDD:** **AST/import-graph test** asserting the dependency never exists. Attempting the import in a test fixture fails the suite.
+**Adversarial:** the fastest way to make a model look good is to let it see the answer key — usually by accident, via a shared config object. **This test is the entire credibility of every number the build produces.**
+
+### S-304 [SAFETY] — ★ Backup + restore drill — REQ-050, 051, 052
+**AC:** `app.db` **never** in a synced folder. Hourly `sqlite3 .backup` → synced folder. Nightly CSV. `cli restore-drill`.
+**TDD:** Backup during an active write yields a valid DB. Restored snapshot is byte-identical.
+**★ THE STORY IS NOT DONE UNTIL THE DRILL HAS BEEN RUN FOR REAL.** A lost run is a re-run you did not budget for.
+
+---
+
+## EPIC 3b — Logging UI ★ DEPRIORITISED — BUILD LAST, IF AT ALL
+
+> **There is no patient.** These stories describe a logging surface for a subject
+> who does not exist. They are **retained as specification** — they are the
+> reference for what a real logging flow would have to do, and `05b`'s
+> accessibility requirements remain the standard — but they are **not on the
+> critical path** and may never be built.
+>
+> If real logging is ever wanted, this epic is where it starts, and `00a §8`
+> applies: restoring clinical use is not a matter of flipping a flag.
 
 ### S-301 — Meal log form — REQ-001, 002
 **AC: A repeat meal is ≤4 taps + 2 numbers.** Optional fields collapsed, never blocking. `localStorage` draft-save.
@@ -104,25 +178,20 @@ EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
 **AC:** <15s. `post_bg_time` reported. Prompt shows **reported mealtime + 120**.
 **TDD:** Log at 09:40 for an 08:00 meal ⇒ prompt says **10:00 AM**, not 11:40. Retrospective entry **asks**, never assumes.
 
-### S-304 [SAFETY] — ★ Backup + restore drill — REQ-050, 051, 052
-**AC:** `app.db` **never** in a synced folder. Hourly `sqlite3 .backup` → synced folder. Nightly CSV. `cli restore-drill`.
-**TDD:** Backup during an active write yields a valid DB. Restored snapshot is byte-identical.
-**★ THE STORY IS NOT DONE UNTIL THE DRILL HAS BEEN RUN FOR REAL. Month one. Before there is data to lose. BA logs the date.**
-
 ### S-305 [SAFETY] — Hypo rescue capture — REQ-012, INV-7
-**TDD:** Rescued meal absent from training, present in `get_hypo_events()`.
+> **Moved to EPIC 3a (S-309).** The generator must *produce* rescued meals; the
+> UI capture path is EPIC 3b. **INV-7's regression guard is not deferred** — it
+> runs against generated data from S-309 onward.
 
 ### S-306 — Correction-event capture — REQ-013
 **The highest-value data in the system** — the only causally clean read on ISF.
+> **Generator side moved to EPIC 3a (S-309).** The UI prompt path stays here.
 **AC:** Prompted when a correction bolus has no meal. +4h follow-up. `iob_at_start` computed.
 **TDD:** `food_in_window = true` ⇒ excluded from ISF derivation.
 
-### S-307 — Operator adherence dashboard — REQ-053
+### S-307 — Researcher dashboard — REQ-053
 **AC:** Valid rate, exclusions by reason, **`median(logged_at − datetime)`**, days-since-last-log, meals-to-Gate-1.
-**TDD:** The lag metric is computed from the two distinct columns, not fabricated.
-
-# ★ SHIP HERE — logging live. The Gate 1 clock starts.
-### Everything below runs **in parallel** with ~3 months of data collection.
+**TDD:** The lag metric is computed from the two distinct columns, not fabricated. **Against synthetic data this metric checks the generator** (S-308), not adherence.
 
 ---
 
@@ -161,9 +230,14 @@ EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
 **AC:** Only `iob_at_start < 0.5` **and** `food_in_window = false`. **≥5 events required.** Never silently swaps. Derived ISF ≤ 0 raises.
 **TDD:** 4 events ⇒ default retained, derived value *reported*. 5 ⇒ applied, `isf_source = derived`.
 
-### S-503 [SAFETY] — ★ ICR/ISF constrained OLS — REQ-032, INV-8
-**AC:** Sign-constrained `β_carb ≥ 0`, `β_ins ≥ 0`. If the **unconstrained** fit gives `β_ins < 0`, **log a prominent warning naming confounding-by-indication**, then constrain. Cross-check against correction events; **on disagreement, prefer the correction events.**
-**TDD:** **★ Construct a dataset where bolus positively correlates with post-meal BG (the realistic case). Assert `β_ins ≥ 0` and the warning fired.** The single most important test in the model epics.
+### S-503 [SAFETY] — ★ ICR/ISF constrained OLS — REQ-032, REQ-056, INV-8
+**★ This is H-2. The single most important story in the build.**
+**AC:** Sign-constrained `β_carb ≥ 0`, `β_ins ≥ 0`. If the **unconstrained** fit gives `β_ins < 0`, **log a prominent warning naming confounding-by-indication**, then constrain. Cross-check against correction events; **on disagreement, prefer the correction events.** **`β_ins == 0` exactly is a distinct outcome** — it makes `ICR = ISF/β_carb` undefined and must raise, not divide (decision log DL-009).
+**TDD:**
+- **★ Take the confounded dataset from S-308 — where bolus positively correlates with post-meal BG — assert the unconstrained fit gives `β_ins < 0`, the warning fired, and the constrained fit gives `β_ins ≥ 0`.**
+- **Parameter recovery (REQ-056):** constrained `β_ins` is compared against the generator's true ISF, with an error bar. Recovery within tolerance is the H-2 result; failure is equally reportable.
+- `β_ins == 0` ⇒ raises rather than producing `ICR = 0`.
+- **RQ-3:** sweep the generator's confounding strength; report where the constraint stops recovering the true sign.
 
 ---
 
@@ -185,20 +259,23 @@ EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
 ## EPIC 7 — Validation
 
 ### S-701 [SAFETY] — ★ Temporal CV — REQ-034
-**TDD:** `max(train.datetime) < min(test.datetime)` **every fold.** **No `date` in both train and test in any fold** (basal is constant within a day ⇒ day-level leakage). Grep — `shuffle=True` appears nowhere.
-**Adversarial:** **If the model performs suspiciously well, this is why. Investigate before celebrating.**
+**★ No headline number may be quoted before this is merged and green.**
+**TDD:** `max(train.datetime) < min(test.datetime)` **every fold.** **No `date` in both train and test in any fold** (basal is constant within a day ⇒ day-level leakage). Grep — `shuffle=True` appears nowhere. **`elapsed_min` and `post_bg` never appear in the feature vector** (decision log DL-006).
+**★ H-5 — the suite must be shown to bite:** deliberately introduce a leak (a shuffled split, a shared day across folds, `post_bg` in the features) and **assert the suite catches each one.** A leakage suite never tested against an actual leak is decoration.
+**Adversarial:** **If the model performs suspiciously well, this is why.** Synthetic data leaks more easily than real data — the generator knows the answer. Investigate before celebrating.
 
 ### S-702 — Metric suite — REQ-035
 **AC:** Hypo recall @ fixed FAR (**primary**), Brier, reliability diagram, MAE, Clarke grid, off-by-one. **Plain accuracy is NOT reported.**
 **TDD:** Golden — published Clarke pairs land in documented zones. Grep — `accuracy_score` absent from the reporting module.
 
-### S-703 [SAFETY] — ★ Gate enforcement — REQ-040, 041, INV-1, INV-2
-**EPIC 9 is blocked until this is merged and green.**
-**AC:** Gates evaluated from **live data on every call. Never cached** (ADR-7).
+### S-703 — ★ Gate enforcement — REQ-057, `03 §3`
+**No longer blocks EPIC 9.** The gates are now a **readiness ladder** — they label
+how much a result can be claimed, not who may see it.
+**AC:** Gates evaluated from **live data on every call. Never cached** (ADR-7 — unchanged). Every `prediction_log` row records the gate state at the time.
 **TDD:**
-- `icr = None` ⇒ `recommend_bolus()` raises `GateNotPassed`. **No fixture, mock, flag, or env var bypasses it.**
-- n=149 ⇒ patient output raises. n=150 with metrics passing ⇒ renders.
-- **n=200 but hypo recall below baseline ⇒ STILL BLOCKED.** Volume alone never opens Gate 1.
+- **n=200 but hypo recall below baseline ⇒ Gate 1 STILL CLOSED.** Volume alone never opens it. **Unchanged, and it is the whole point** — the gate is a claim about the model, and row count is not evidence for it.
+- **Gates close as well as open** (decision log DL-004): a gate that opened, then had its condition falsified by a refit, reports CLOSED on the next evaluation. **A closing gate suppresses ML output but leaves the clinical baseline visible.**
+- No fixture, mock, flag or env var alters a computed gate state. A stubbed gate produces a mislabelled result.
 
 ---
 
@@ -213,30 +290,53 @@ EPIC 1 (Foundation) → EPIC 2 (Data) → EPIC 3 (Logging + Durability)
 ### S-803 [SAFETY] — Kill switch — REQ-047
 **TDD:** Bad run ⇒ trips, output suppressed, baseline shown. **A subsequent good prediction does NOT silently re-enable it.**
 
-### S-804 [SAFETY] — Patient risk readout — REQ-040, INV-2
-**AC:** **Hypo risk is the headline.** Plain language. Refusal is a rendered state. Never advice.
-**TDD:** n=149 ⇒ surface raises. No bypass.
+### S-804 — Risk readout — REQ-058
+> **INV-2 retired** (`00a §3.1`) — there is no patient surface, so there is
+> nothing to gate. The readout is built for the researcher.
+**AC:** **Hypo risk is the headline** — unchanged, because it is the primary metric. Plain language alongside the raw distribution. Refusal is a rendered state, never a blank. **Carries the non-clinical-use banner** (REQ-058). Never phrased as advice.
+**TDD:** A refusal renders as a refusal, not as a missing number. **The banner is present on every rendering path that shows a number** — including the refusal and conflict paths.
 
 ### S-805 — Shadow-mode dashboard
 Calibration, hypo recall, Clarke grid, predictions vs actuals, `β_insulin < 0` warnings.
 
 ---
 
-## EPIC 9 — Prescriptive (Gate 2)
+## EPIC 9 — Prescriptive
 
-> **BLOCKED until S-703 is merged and green.**
-> **BLOCKED until the endocrinologist confirms ICR (OQ-1) and ISF (OQ-2).**
-> Five lines of code. The most dangerous code in the system.
+> **UNBLOCKED** (`00a §3.1`). INV-1 is retired and Gate 2 opens on declared
+> parameters, so nothing gates this epic.
+>
+> **This does not make it a dose calculator.** Its output is a number in a study.
+> INV-3 and INV-4 are **kept in full** — not as protection for anyone, but
+> because they are the behaviour under test (H-4), and because a 40 U output is
+> how you find out the arithmetic is wrong.
 
-### S-901 [SAFETY] — Bolus calculator — REQ-041..043
-**AC:** The clinical formula. **No ML in this path.** INV-1/3/4 enforced. Full arithmetic displayed. Framed as a suggestion for review.
+### S-901 [SAFETY] — Bolus calculator — REQ-042, 043, 058
+**AC:** The clinical formula per `07 §11`, **including the cap in the function itself**. **No ML in this path** (ADR-10 — unchanged). INV-3/4 enforced. Full arithmetic displayed. Carries the non-clinical-use banner.
 **TDD:**
 - **INV-4:** BG 79 ⇒ refuses. BG 80 ⇒ computes.
 - **INV-3:** `carbs_g = 900` (typo for 90) ⇒ **capped at 15 U AND flagged implausible.** Assert **both** the cap and the flag.
 - **INV-3:** Negative computed dose ⇒ returns 0.0.
-- **INV-1:** `icr = None` ⇒ raises. **Assert no fixture, mock, or config bypasses.**
+- **Rounding is explicit** (decision log DL-007): components are **not** rounded before summing. Assert the exact total, then the displayed value.
 - Golden: 5 hand-computed doses to 2 dp.
-- Property: non-decreasing in carbs; non-increasing in IOB.
+- Property: non-decreasing in carbs; non-increasing in IOB; never negative; never > 15.
+
+---
+
+## EPIC 10 — Results ★ NEW
+
+> Without this epic the build produces artefacts and no conclusions. **A result
+> that was never written down did not happen.**
+
+### S-1001 — Answer H-1..H-5
+**AC:** One section per hypothesis. Each states the claim, the evidence, the number **with its interval**, and the verdict — including "not answerable at this n" where that is the honest outcome.
+**TDD:** Every claim in the write-up resolves to a test or a recorded metric. **An unsourced number fails the build.**
+
+### S-1002 — Parameter recovery report — REQ-056
+**AC:** Derived ISF and ICR against the generator's true values, with error bars. Correction-event estimate vs. OLS estimate vs. truth (H-3).
+
+### S-1003 — Reproduction record
+**AC:** Seed, generator parameters, model version, data hash and `00a §4` parameter version recorded for every quoted result. **A result whose seed was not recorded cannot be reproduced and must not be quoted.**
 
 ---
 
@@ -244,3 +344,6 @@ Calibration, hypo recall, Clarke grid, predictions vs actuals, `β_insulin < 0` 
 
 BA maintains **REQ-nnn → story → test → status** in `docs/traceability.md`.
 **Any REQ without a covering test is a visible gap.**
+
+Hypotheses trace too: **H-n → story → test → result** (`01-prd.md` §1). An
+unanswered hypothesis at EPIC 10 is a visible gap in the same way.

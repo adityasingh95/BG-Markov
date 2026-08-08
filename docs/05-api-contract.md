@@ -126,8 +126,8 @@ Daily Tresiba dose. Effective basal returns the EWMA value plus `titration_locko
 
 ### `POST /api/predict` **[SAFETY]**
 
-**INV-2:** below Gate 1 → `403 GATE_NOT_PASSED` for the patient. Operator receives output labelled shadow mode.
-**INV-9:** the prediction is written to `prediction_log` **before** the response is sent. If the write fails, **no response is returned.**
+~~**INV-2:** below Gate 1 → `403 GATE_NOT_PASSED` for the patient.~~ **RETIRED** (`00a §3.1`) — no patient surface. Output is always returned to the researcher, **labelled with its gate state and model version** so a preliminary result is never mistaken for a Gate 1 one.
+**INV-9:** the prediction is written to `prediction_log` **before** the response is sent. If the write fails, **no response is returned.** **Unchanged** — an incomplete log cannot be analysed afterwards, and the log is the only real validation set.
 
 **200 — normal:**
 ```json
@@ -162,7 +162,12 @@ Daily Tresiba dose. Effective basal returns the EWMA value plus `titration_locko
 
 ### `POST /api/bolus-recommendation`
 
-**INV-1:** `icr is None` → **`403 GATE_NOT_PASSED`. No fixture, mock, config flag, or env var bypasses this.**
+~~**INV-1:** `icr is None` → `403 GATE_NOT_PASSED`.~~ **RETIRED** (`00a §3.1`) — ICR is a declared parameter (8.3), so the endpoint is reachable.
+
+**The response is a number in a study, not a dose.** It carries the
+non-clinical-use banner (REQ-058). **INV-3 and INV-4 below are unchanged** — they
+are the behaviour under test (H-4), and an out-of-range output is how the
+arithmetic announces it is wrong.
 
 ```json
 { "carbs_g": 60, "current_bg": 190 }

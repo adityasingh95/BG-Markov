@@ -141,7 +141,7 @@ She cannot feel a low. **The low is the point.** Do not bury it under a "time in
 |---|---|
 | "About a 1 in 7 chance of going low" | `P(State 2) = 0.14` |
 | "This is an estimate" | "You will be at 130" |
-| "Test your blood sugar as usual" | Anything implying she can test less **(INV-5)** |
+| "Test your blood sugar as usual" | Anything implying testing less — **copy rule, `00a §6`.** INV-5 is retired as an invariant; the rule costs nothing and stays. |
 | "Not confident enough to predict this one" | A fabricated number to fill the space |
 | Show the risk | Give advice |
 
