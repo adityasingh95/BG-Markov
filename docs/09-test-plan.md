@@ -131,7 +131,7 @@ Every story in `10-backlog.md` carries a **TDD strategy** block. Those are a **f
 - [ ] Every touched invariant: **positive + negative + no-bypass** tests passing.
 - [ ] `[SAFETY]` stories: PR contains a **written argument** for why the invariant holds. A green build is not sufficient.
 - [ ] Forbidden-pattern tests green.
-- [ ] BA has updated the traceability matrix.
+- [ ] BA has updated the traceability matrix (`docs/traceability.md`) and the decision log.
 
 ---
 
@@ -139,7 +139,12 @@ Every story in `10-backlog.md` carries a **TDD strategy** block. Those are a **f
 
 The most likely failure of this project is **not a crash**.
 
-It is a model that looks good on retrospective data, **gets trusted**, and is quietly wrong about a low — in a woman who cannot feel one.
+It is a model that looks good on retrospective data and is quietly wrong about a low.
+
+**Research mode does not soften this — it sharpens it.** With no patient outcome
+to contradict a bad model, and a generator that will hand you a beautiful score
+the moment you let it leak, the test suite is the *only* thing standing between
+this build and a confident wrong conclusion.
 
 Every test in `tests/safety/` and `tests/leakage/` exists to make that failure **loud instead of silent.**
 

@@ -9,9 +9,14 @@
 
 > **A repeat meal must be loggable in ≤4 taps + 2 numbers. A post-meal reading in <15 seconds.**
 
-Gate 1 needs 150 valid meals ≈ 3 months at realistic adherence. **Every second added to the logging flow pushes that out and raises the chance she abandons it.**
-
-If any requirement below conflicts with this one, **this one wins.** A system with complete data fields and 40 records is a failed system.
+> **Research mode (`00a`).** Data comes from the generator, not from a person, so
+> **this requirement no longer gates anything** and the flows in §1–§3 move to
+> EPIC 3b (last, optional). They are retained as specification: they define the
+> shape of the data the generator must emit, and they are the reference if real
+> logging is ever built.
+>
+> **§4 onward are live** — the readout, the calculator, review and researcher
+> functions are all built in this build.
 
 ---
 
@@ -89,16 +94,18 @@ Computed as **reported mealtime + 120 min** — *not* `logged_at + 120`.
 > rules below are **retained in full** — they describe how to present a
 > probability honestly, which does not depend on who is reading it.
 
-### F-4.1 Gating **[SAFETY]**
-- **Below Gate 1 she sees nothing.** No preview, no "beta" number, no greyed-out placeholder with a real value behind it.
-- Below Gate 1, output is **operator-only** and labelled shadow mode.
+### F-4.1 Labelling — replaces gating
+Output is never withheld from the researcher. It is **always labelled** with the
+gate state it was produced under and the model version that produced it, so a
+preliminary number is never mistaken for a Gate 1 one. A number without that
+label is not quotable (S-1003).
 
-### F-4.2 The readout (post Gate 1)
-Given a planned meal + bolus, she sees the 2-hour risk.
+### F-4.2 The readout
+Given a planned meal + bolus, the 2-hour risk is shown.
 
 - **Hypo risk is the headline.** Not a footnote below "target range" — the headline. This is why the system exists.
 - Plain language: *"About a 1 in 7 chance of going low"*, not `P(State 2) = 0.14`.
-- **Uncertainty is shown, not hidden.** If a guardrail fires (`07` §9), it says *"not confident enough to predict this"* — **a refusal is a valid output.**
+- **Uncertainty is shown, not hidden.** If a guardrail fires (`07` §10), it says *"not confident enough to predict this"* — **a refusal is a valid output.**
 - **Never phrased as advice.** "Here is the risk," never "you should."
 
 ### F-4.3 Baseline conflict — REQ-046
@@ -110,12 +117,15 @@ If the clinical baseline and the ordinal model differ by more than one state, **
 > **INV-3 and INV-4 are unchanged and under test.** The output is a number in a
 > study, not a dose.
 
-### F-5.1 Gating **[SAFETY]**
-**Hard-disabled until Gate 2** (ICR confirmed AND ISF confirmed or derived). No preview. No silent background computation.
+### F-5.1 No gate — but no dose either
+INV-1 is retired, so the calculator is buildable from the start. **What it
+returns is a number in a study.** Every surface showing it carries the
+non-clinical-use banner (REQ-058), and no model output enters this path
+(ADR-10).
 
-### F-5.2 The calculator (post Gate 2)
+### F-5.2 The calculator
 - Inputs: carbs, current BG. **IOB is computed, never entered.**
-- Output shows the **full arithmetic**, so she can check it by hand:
+- Output shows the **full arithmetic**, so it can be checked by hand:
 
 ```
 Carbs:       60 g ÷ 8.3      =  7.2 U
@@ -132,13 +142,23 @@ Suggested:                      7.9 U
 
 ## 6. History & Review (F-6)
 
-### F-6.1 Patient view
-- Recent meals, readings, simple 7/30-day time-in-range.
-- **No model output below Gate 1.**
-- Editable within 24 h (she will mistype a BG). Edits are audit-logged.
+### F-6.1 Daily log view — S-311
+**The cheapest bug-finder in the build.** A read-only, day-by-day listing of
+every row the generator emitted: meals with their macros, boluses, the
+pre- and post-meal readings, `elapsed_min`, validity and every exclusion reason,
+rescues with the glucose that triggered them.
 
-### F-6.2 Operator view — REQ-053
-**Adherence dashboard — the one he will actually live in:**
+- Both timestamps shown side by side — reported `datetime` and `logged_at` — so a
+  generator emitting them identically is **visible at a glance** rather than only
+  caught by a test.
+- Invalid rows shown, not hidden. They are most of what you want to look at.
+- Filterable by date, validity and exclusion reason. `GET /api/meals`.
+
+Looking at the data is how you find out the generator is wrong, and no test
+catches "these numbers are implausible."
+
+### F-6.2 Researcher dashboard — REQ-053
+**The aggregate view, over the daily one:**
 - % of meals with an in-window post-reading
 - % invalid, **by exclusion reason**
 - **`median(logged_at − datetime)`** — the transcription-lag / recall-bias metric. If it climbs, the data is degrading.
@@ -149,9 +169,9 @@ Suggested:                      7.9 U
 - Gate status: valid-meal count, what is blocking each gate.
 - Any `β_insulin < 0` warnings from the unconstrained fit — **a signal about the data, not a nuisance.**
 
-## 7. Operator Functions (F-7)
+## 7. Researcher Functions (F-7)
 
-- Log on her behalf (attributed to `operator`).
+- Run the generator with a chosen seed and parameter set.
 - Manage the dish table; resolve queued free-text dishes.
 - Update clinical constants — **versioned, never overwritten** (REQ-054).
 - `cli refit`; promote or reject a candidate model.

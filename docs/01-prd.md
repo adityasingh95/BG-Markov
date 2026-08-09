@@ -38,7 +38,7 @@ decision resolves in that direction, and that has not changed.
 
 ### What makes this hard
 
-- **Data is scarce.** ~3 meals/day. Gate 1 needs 150 valid meals ≈ 3 months. This is a small-n problem and must be modelled as one.
+- **Data is scarce.** ~150 meals is the working sample size — the amount a real subject would produce in about three months. **The generator could emit a million rows; it must not.** The scarcity is the experimental condition, not an accident, and a result obtained at n=10,000 answers a question nobody asked.
 - **The data is confounded.** Bolus is *chosen in response to* carbs and pre-meal BG. Naively fitted, the model learns that insulin **raises** glucose. Inverting that into dosing advice is a hypo pathway. (See `07` §7.)
 - **Inputs are noisy.** Self-reported carbs carry 20–50% error. Fingersticks carry ±15%. This caps achievable accuracy regardless of model choice.
 - **The stakes are asymmetric.** A missed hyper is a bad afternoon. A missed hypo, in someone who cannot feel it, is not.
@@ -58,14 +58,17 @@ have to be true before any such surface existed, and they are the reference for
 
 ## 3. Scope — v1
 
-- Meal, bolus, basal, exercise, and correction-event logging on a laptop (localhost).
+- **Synthetic subject generator** with declared ground truth, confounded dosing, and a known hypo rate (`00a §5`). Isolated from everything below (REQ-055).
+- Storage for meals, boluses, basal, exercise and correction events; validity engine.
 - Derived features: IOB (Fiasp curve), effective basal (Tresiba EWMA), exercise encoding.
-- Clinical baseline model.
-- Ordinal logistic risk model, gated.
-- Validation harness: temporal CV, calibration, Clarke grid, hypo recall.
-- Shadow-mode prediction log and operator dashboard.
-- Bolus calculator — **gated on the endocrinologist, not on code.**
+- Clinical baseline model — the bar.
+- Constrained parameter estimation (ICR/ISF), and ISF from correction events.
+- Ordinal logistic risk model.
+- Validation harness: forward-chaining temporal CV, leakage suite, calibration, Clarke grid, hypo recall.
+- Prediction log, output guardrails, kill switch, researcher dashboard.
+- Bolus calculator — **unblocked; its output is a number in a study, not a dose.**
 - Backup with a tested restore path.
+- **Results write-up** answering H-1..H-5 (EPIC 10).
 
 ## 4. Non-Goals
 

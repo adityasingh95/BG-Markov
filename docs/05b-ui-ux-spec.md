@@ -7,13 +7,18 @@ Jinja2 + HTMX + Pico.css. No build step. No React.
 
 ---
 
-## 1. The Two Users
+## 1. Users
 
-| | Patient | Operator |
+> **Research mode (`00a`).** There is one user — the researcher — and §3's logging
+> flow moves to EPIC 3b. **§2 (accessibility) and §5 (language) stay in force**
+> for every screen this build does produce: they are how a probability gets
+> presented honestly, which does not depend on who is reading it.
+
+| | Researcher | Patient *(not built)* |
 |---|---|---|
-| Age / context | 59, on a phone browser, sometimes at BG 55 | Developer, at the laptop |
-| Priority | **Speed and forgiveness** | Density and diagnostics |
-| Sees model output | **Only after Gate 1** | Always, labelled shadow mode |
+| Context | At the laptop, reading metrics and generated data | Would be 59, on a phone, sometimes at BG 55 |
+| Priority | Density and diagnostics | Speed and forgiveness |
+| Sees model output | Always, labelled with gate state and model version | — no patient surface exists |
 
 ---
 
@@ -41,6 +46,8 @@ She may be logging **while cognitively impaired by a low.** Design for that case
 > **A repeat meal: ≤4 taps + 2 numbers. This is a *tested* requirement (S-301), not an aspiration.**
 
 She eats from a repertoire of 30–60 dishes. **Most meals are repeats.** The favourites row is not polish — **it is the adherence mechanism.** If logging takes 90 seconds she stops in three weeks and the project ends with 40 records.
+
+> **Not built in this build** (EPIC 3b). Retained because the repertoire is real: **the generator draws from the same 30–60 dish table**, which is what makes its carbohydrate distribution realistic rather than uniform noise.
 
 ```
 ┌──────────────────────────────────────┐
@@ -147,7 +154,7 @@ She cannot feel a low. **The low is the point.** Do not bury it under a "time in
 
 ### 5.3 Refusal is a valid output
 
-When a guardrail fires (`07` §9):
+When a guardrail fires (`07` §10):
 
 ```
 ┌──────────────────────────────────────┐

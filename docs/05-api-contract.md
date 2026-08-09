@@ -17,7 +17,7 @@ FastAPI. Server-rendered Jinja + HTMX for UI routes; JSON for data routes. Bound
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `GATE_NOT_PASSED` | 403 | Feature blocked by Gate 1 or 2. **Not bypassable.** |
+| ~~`GATE_NOT_PASSED`~~ | 403 | **RETIRED** (`00a §3.1`) — no feature is gated from the researcher. Gate state is returned as a **label** on the result, never as a refusal. |
 | `SAFETY_VIOLATION` | 422 | An INV-n was violated |
 | `GUARDRAIL_REFUSED` | 200 | **A refusal is a valid outcome**, not an error. Body carries the reason. |
 | `VALIDATION_ERROR` | 422 | Schema/field validation |
@@ -118,7 +118,9 @@ Daily Tresiba dose. Effective basal returns the EWMA value plus `titration_locko
   "clean_events_count": 3, "events_needed_for_gate2": 5 }
 ```
 
-`implied_isf` is **reported, not applied.** ISF only changes once ≥5 clean events exist (`07` §6), and the change is surfaced to the operator, never silent.
+`implied_isf` is **reported, not applied.** ISF only changes once ≥5 clean events exist (`07` §6), and the change is surfaced to the researcher, never silent. `events_needed_for_gate2` is retained as a **readiness count**, not a clinical gate.
+
+**This endpoint is H-3.** The derived value is compared against the generator's true ISF (REQ-056) — the whole point of collecting unconfounded corrections is to find out whether they recover it.
 
 ---
 
@@ -143,7 +145,7 @@ Daily Tresiba dose. Effective basal returns the EWMA value plus `titration_locko
 }
 ```
 
-**200 — guardrail refusal (`07` §9). A refusal is a valid outcome:**
+**200 — guardrail refusal (`07` §10). A refusal is a valid outcome:**
 ```json
 { "refused": true, "reason": "diffuse_posterior",
   "message": "Not confident enough to predict this one.",
@@ -191,16 +193,21 @@ arithmetic announces it is wrong.
 
 ---
 
-## 6. Operator
+## 6. Researcher
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/operator/gates` | Gate status; what blocks each; valid-meal count |
-| `GET /api/operator/adherence` | Valid rate, exclusions by reason, **`median(logged_at − datetime)`**, days-since-last-log |
+| `GET /api/meals?date=&valid=&reason=` | **The daily log view** (F-6.1, S-311). Every row the generator emitted, with both timestamps, validity and all exclusion reasons. |
+| `GET /api/operator/gates` | Gate status; what each is waiting on; valid-meal count |
+| `GET /api/operator/adherence` | Valid rate, exclusions by reason, **`median(logged_at − datetime)`**, days-since-last-log. Against synthetic data this checks the **generator**. |
 | `GET /api/operator/shadow` | Predictions vs actuals, calibration, hypo recall, Clarke grid |
 | `GET /api/operator/warnings` | Unconstrained `β_insulin < 0` warnings, drift, backup failures |
+| `GET /api/operator/recovery` | **Derived ISF/ICR vs the generator's truth, with error bars** (REQ-056, H-3) |
 | `POST /api/operator/profile` | New **versioned** profile row. Never an update. |
 | `POST /api/operator/kill-switch/rearm` | **Manual only.** Never automatic. |
+
+Route prefix kept as `/api/operator/` so existing references resolve; the
+audience is the researcher (`01-prd.md` §2).
 
 ## 7. Dishes
 
@@ -211,7 +218,8 @@ arithmetic announces it is wrong.
 ```
 python -m cli refit          # monthly. Candidate model; promotion is manual.
 python -m cli drift-check    # weekly. May trip the kill switch.
-python -m cli export         # full CSV. Her data must outlive the code.
+python -m cli export         # full CSV. The data and results must outlive the code.
+python -m cli generate       # ★ emit a synthetic dataset from a seed + parameter set
 python -m cli backup         # hourly (cron)
 python -m cli restore-drill  # ★ RUN IN MONTH ONE, before there is data to lose
 python -m cli derive-isf     # ISF from correction events

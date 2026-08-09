@@ -148,6 +148,18 @@ it. **That generator answers no question.** RQ-1 exists for exactly this.
 **TDD:** **AST/import-graph test** asserting the dependency never exists. Attempting the import in a test fixture fails the suite.
 **Adversarial:** the fastest way to make a model look good is to let it see the answer key — usually by accident, via a shared config object. **This test is the entire credibility of every number the build produces.**
 
+### S-311 — ★ Daily log view — REQ-053, `02 §6.1`
+**The cheapest bug-finder in the build**, and the only one that catches
+"these numbers are implausible" — which no assertion does.
+
+**AC:** Read-only, day-by-day listing of every emitted row: meals with macros,
+boluses, pre/post readings, `elapsed_min`, validity and **all** exclusion
+reasons, rescues with their triggering glucose. **Both timestamps shown side by
+side.** Invalid rows shown, not hidden. Filterable by date, validity, reason.
+`GET /api/meals`.
+**TDD:** A generator emitting `logged_at == datetime` is **visible in the view**, not
+only caught by S-308's assertion. Invalid rows appear. All exclusion reasons render, not just the first.
+
 ### S-304 [SAFETY] — ★ Backup + restore drill — REQ-050, 051, 052
 **AC:** `app.db` **never** in a synced folder. Hourly `sqlite3 .backup` → synced folder. Nightly CSV. `cli restore-drill`.
 **TDD:** Backup during an active write yields a valid DB. Restored snapshot is byte-identical.
