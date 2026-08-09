@@ -336,7 +336,8 @@ Calibration, hypo recall, Clarke grid, predictions vs actuals, `β_insulin < 0` 
 **AC:** Derived ISF and ICR against the generator's true values, with error bars. Correction-event estimate vs. OLS estimate vs. truth (H-3).
 
 ### S-1003 — Reproduction record
-**AC:** Seed, generator parameters, model version, data hash and `00a §4` parameter version recorded for every quoted result. **A result whose seed was not recorded cannot be reproduced and must not be quoted.**
+**AC:** Seed, generator parameters, model version, data hash, `00a §4` parameter version, **and the gate state at the time of the run** recorded for every quoted result.
+**TDD:** **Gate state is stamped, never read live** (DL-004) — a run recorded at Gate 1 still reports Gate 1 after a refit closes the gate. **A result whose seed was not recorded cannot be reproduced and must not be quoted.**
 
 ---
 

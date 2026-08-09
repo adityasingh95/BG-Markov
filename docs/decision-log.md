@@ -2,10 +2,9 @@
 
 *Owner: BA. Every deviation from spec, with rationale and who approved it.*
 
-**Reading this log:** entries marked **PENDING CONFIRMATION** were applied on the
-recommendation of the agent, not on an explicit ruling. They are correct as far
-as the pack's own internal logic goes, but they were not signed off. Each names
-its reversal.
+**Reading this log:** every entry below is either an operator ruling or a
+correction the pack's own precedence forced. Entries that were applied on
+recommendation and later confirmed say so. Each still names its reversal.
 
 ---
 
@@ -73,8 +72,8 @@ shared config object, by accident.
 **Open risk RQ-1:** a generator too clean to be a real test. The easy generator
 to write emits well-dosed unconfounded meals and flatters the model.
 
-## DL-004 — Gates may close, not only advance **PENDING CONFIRMATION**
-**Type:** contradiction resolution · **Conflict:** `03 §3` vs. ADR-7 and `08`
+## DL-004 — Gates may close, not only advance
+**Type:** contradiction resolution · **Approved by:** operator · **Conflict:** `03 §3` vs. ADR-7 and `08`
 
 `03 §3` said *"gates only ever advance"*; ADR-7 (marked irreversible) and `08`'s
 "Gates are never cached" scenario said a live re-evaluation returns CLOSED when
@@ -86,7 +85,12 @@ leaves the clinical baseline visible** rather than blanking the surface. This
 honours ADR-7, which is marked non-reversible, and reuses the fallback path §4
 already requires.
 
+**Consequence, accepted:** a result's gate label can change under it after a
+refit. **S-1003 therefore stamps the gate state onto each recorded run** rather
+than reading it live — a number quoted as Gate 1 must stay quotable as Gate 1.
+
 **Reversal:** restore "gates latch open" in `03 §3` and delete the `08` scenario.
+Defensible if stability of results between refits ever matters more than ADR-7.
 
 ## DL-005 — `max_bolus_u` config ceiling lowered from 25 to 15
 **Type:** contradiction resolution · **Conflict:** S-103 AC vs. INV-3
@@ -97,8 +101,8 @@ the invariant. **A config ceiling above a safety invariant is a defect in the
 unsafe direction**, and the pack's own precedence resolves it: the ceiling is now
 15. Not treated as a judgement call.
 
-## DL-006 — `elapsed_min` stays out of the feature vector **PENDING CONFIRMATION**
-**Type:** contradiction resolution · **Conflict:** `04 §5` escape hatch vs. `09 §7`
+## DL-006 — `elapsed_min` stays out of the feature vector
+**Type:** contradiction resolution · **Approved by:** operator · **Conflict:** `04 §5` escape hatch vs. `09 §7`
 
 `09 §7` requires a test that `elapsed_min` never enters the feature vector;
 `04 §5` said to add it as a feature if too many meals fall outside the window.
